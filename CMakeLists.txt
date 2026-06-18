@@ -18,6 +18,7 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS
     QuickControls2
     Sql
     Test
+    Widgets
 )
 find_package(KF6Kirigami REQUIRED)
 find_package(KF6SyntaxHighlighting REQUIRED)
@@ -71,6 +72,7 @@ target_link_libraries(artemis PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Sql
+    Qt6::Widgets
     KF6::Kirigami
     KF6::SyntaxHighlighting
 )

@@ -1,6 +1,6 @@
 #include "app/AppController.h"
 
-#include <QGuiApplication>
+#include <QApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QDebug>
@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
     QGuiApplication::setApplicationName(QStringLiteral("Artemis"));
     QGuiApplication::setApplicationVersion(QStringLiteral(ARTEMIS_VERSION));
 
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
     QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
 
     Artemis::AppController controller;

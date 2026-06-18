@@ -5,7 +5,8 @@ pkgdesc="Native KDE AI coding client for Codex"
 arch=('x86_64')
 url="https://github.com/tylxr59/Artemis"
 license=('MIT')
-depends=('qt6-base' 'qt6-declarative' 'kirigami' 'syntax-highlighting' 'git')
+depends=('qt6-base' 'qt6-declarative' 'kirigami' 'syntax-highlighting'
+         'plasma-integration' 'git')
 optdepends=('codex: OpenAI Codex CLI provider')
 makedepends=('cmake' 'ninja' 'extra-cmake-modules')
 provides=('artemis')

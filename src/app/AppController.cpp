@@ -3,6 +3,7 @@
 
 #include <QDesktopServices>
 #include <QDir>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -10,6 +11,8 @@
 #include <QProcess>
 #include <QUrl>
 #include <QUuid>
+
+#include <utility>
 
 namespace Artemis {
 
@@ -74,6 +77,17 @@ bool AppController::fullAccessAcknowledged() const {
 }
 QString AppController::databasePath() const { return m_database.path(); }
 QString AppController::worktreeRoot() const { return Paths::worktreeRoot(); }
+
+void AppController::chooseProjectFolder()
+{
+    const QString path = QFileDialog::getExistingDirectory(
+        nullptr,
+        tr("Add project folder"),
+        QDir::homePath(),
+        QFileDialog::ShowDirsOnly);
+    if (!path.isEmpty())
+        addProject(path);
+}
 
 void AppController::loadProjects()
 {
@@ -146,7 +160,7 @@ void AppController::selectProject(int index)
     refreshGit();
 }
 
-void AppController::loadThreads()
+void AppController::loadThreads(const QString &threadToSelect)
 {
     m_threads.clear();
     emit threadsChanged();
@@ -171,7 +185,7 @@ void AppController::loadThreads()
          {QStringLiteral("limit"), 100},
          {QStringLiteral("sortKey"), QStringLiteral("updated_at")},
          {QStringLiteral("sortDirection"), QStringLiteral("desc")}},
-        [this, project, bindingById](const QJsonObject &result, const QString &error) {
+        [this, project, bindingById, threadToSelect](const QJsonObject &result, const QString &error) {
         if (!error.isEmpty()) {
             setStatus(error);
             return;
@@ -200,6 +214,19 @@ void AppController::loadThreads()
         }
         m_threads = rows;
         emit threadsChanged();
+        if (!threadToSelect.isEmpty()) {
+            for (int i = 0; i < m_threads.size(); ++i) {
+                if (m_threads.at(i).toMap().value(QStringLiteral("id")).toString() != threadToSelect)
+                    continue;
+                selectThread(i);
+                if (!m_pendingPrompt.isEmpty()) {
+                    const QString prompt = std::exchange(m_pendingPrompt, {});
+                    m_pendingModelId.clear();
+                    sendPrompt(prompt);
+                }
+                break;
+            }
+        }
     });
 }
 
@@ -275,6 +302,9 @@ void AppController::createThread(bool worktree, const QString &modelId)
         setStatus(QStringLiteral("Managed worktrees require a Git repository"));
         return;
     }
+    if (m_threadCreationPending)
+        return;
+    m_threadCreationPending = true;
     if (!worktree) {
         beginThread(project.path, QStringLiteral("local"), modelId, false);
         return;
@@ -285,6 +315,7 @@ void AppController::createThread(bool worktree, const QString &modelId)
     setStatus(QStringLiteral("Creating managed worktree…"));
     m_git.createWorktree(project.path, destination, [this, destination, modelId](const GitResult &result) {
         if (!result.ok()) {
+            m_threadCreationPending = false;
             setStatus(QString::fromUtf8(result.error));
             return;
         }
@@ -298,7 +329,10 @@ void AppController::beginThread(const QString &workspace, const QString &locatio
     const auto project = m_projects.row(m_selectedProject);
     ThreadConfiguration config{project.path, workspace, modelId, {}, PermissionProfile::FullAccess, false};
     m_codex.startThread(config, [this, project, workspace, location, saveWorktree](const QJsonObject &result, const QString &error) {
+        m_threadCreationPending = false;
         if (!error.isEmpty()) {
+            m_pendingPrompt.clear();
+            m_pendingModelId.clear();
             setStatus(error);
             return;
         }
@@ -311,15 +345,24 @@ void AppController::beginThread(const QString &workspace, const QString &locatio
                                     QString::fromUtf8(head.output).trimmed());
         }
         loadProjects();
-        loadThreads();
+        loadThreads(id);
         setStatus(QStringLiteral("Thread created"));
     });
 }
 
-void AppController::sendPrompt(const QString &text)
+void AppController::sendPrompt(const QString &text, const QString &modelId)
 {
-    if (text.trimmed().isEmpty() || selectedThreadId().isEmpty())
+    const QString prompt = text.trimmed();
+    if (prompt.isEmpty())
         return;
+    if (selectedThreadId().isEmpty()) {
+        if (selectedProjectPath().isEmpty() || !m_codex.ready() || m_threadCreationPending)
+            return;
+        m_pendingPrompt = prompt;
+        m_pendingModelId = modelId;
+        createThread(false, modelId);
+        return;
+    }
     if (!fullAccessAcknowledged()) {
         emit fullAccessRequired();
         return;
@@ -335,10 +378,10 @@ void AppController::sendPrompt(const QString &text)
         });
         return;
     }
-    m_conversation.append({selectedThreadId(), QStringLiteral("user"), QStringLiteral("You"), text, {}});
+    m_conversation.append({selectedThreadId(), QStringLiteral("user"), QStringLiteral("You"), prompt, {}});
     m_activeThreadId = selectedThreadId();
     setTurnRunning(true);
-    m_codex.sendTurn(selectedThreadId(), text, {}, [this](const QJsonObject &, const QString &error) {
+    m_codex.sendTurn(selectedThreadId(), prompt, {}, [this](const QJsonObject &, const QString &error) {
         if (!error.isEmpty()) {
             setTurnRunning(false);
             setStatus(error);
@@ -412,6 +455,8 @@ void AppController::acknowledgeFullAccess()
 {
     m_database.setSetting(QStringLiteral("fullAccessAcknowledged"), QStringLiteral("true"));
     emit fullAccessAcknowledgedChanged();
+    if (!m_pendingPrompt.isEmpty() && selectedThreadId().isEmpty())
+        createThread(false, m_pendingModelId);
 }
 
 void AppController::generateCommitMessage(const QString &modelId)

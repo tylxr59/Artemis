@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Dialogs
-import QtCore
 import org.kde.kirigami as Kirigami
 import org.artemis
 
@@ -20,15 +18,6 @@ Kirigami.ApplicationWindow {
     property bool navigationVisible: width >= 780
     readonly property bool hasProject: appController.selectedProjectPath.length > 0
     readonly property bool hasThread: appController.selectedThreadId.length > 0
-
-    FileDialog {
-        id: projectDialog
-        title: "Add project folder"
-        fileMode: FileDialog.OpenFile
-        currentFolder: StandardPaths.standardLocations(StandardPaths.HomeLocation)[0]
-        options: FileDialog.ShowDirsOnly
-        onAccepted: appController.addProject(selectedFile)
-    }
 
     FullAccessDialog {
         id: fullAccessDialog
@@ -185,7 +174,7 @@ Kirigami.ApplicationWindow {
                     Button {
                         text: "Add"
                         icon.name: "folder-new"
-                        onClicked: projectDialog.open()
+                        onClicked: appController.chooseProjectFolder()
                         Accessible.name: "Add project folder"
                     }
                 }
@@ -229,7 +218,7 @@ Kirigami.ApplicationWindow {
                                     opacity: 0.65
                                 }
                                 Kirigami.Icon {
-                                    source: projectDelegate.isGit ? "vcs-normal" : "folder"
+                                    source: "folder"
                                     Layout.preferredWidth: 18
                                     Layout.preferredHeight: 18
                                 }
@@ -312,7 +301,7 @@ Kirigami.ApplicationWindow {
                                 Layout.bottomMargin: Kirigami.Units.smallSpacing
                                 visible: appController.threads.length === 0
                                 text: appController.providerReady
-                                      ? "No threads yet. Use + to start one."
+                                      ? "No chats yet. Send a message to start one."
                                       : "Codex is offline."
                                 wrapMode: Text.Wrap
                                 opacity: 0.55
@@ -407,39 +396,29 @@ Kirigami.ApplicationWindow {
                         visible: conversationList.count === 0
                         text: !root.hasProject ? "Start with a project"
                               : !appController.providerReady ? "Codex is offline"
-                              : root.hasThread ? "What would you like to build?"
-                              : "Start a new thread"
+                              : "What would you like to build?"
                         explanation: !root.hasProject
                                      ? "Add a project folder to give Artemis a workspace."
                                      : !appController.providerReady
                                        ? "Open Diagnostics to inspect the Codex connection."
-                                       : root.hasThread
-                                         ? (appController.selectedProjectIsGit
-                                            ? "Describe a task below. File changes will appear in the Changes pane."
-                                            : "Describe a task below. Git review is unavailable for this folder.")
-                                         : "Create a local thread, or use a worktree to isolate changes."
+                                       : appController.selectedProjectIsGit
+                                         ? "Describe a task below. File changes will appear in the Changes pane."
+                                         : "Describe a task below. Git review is unavailable for this folder."
                     }
 
                     Button {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.top: parent.verticalCenter
                         anchors.topMargin: Kirigami.Units.gridUnit * 4
-                        visible: conversationList.count === 0
-                                 && (!root.hasProject
-                                     || (root.hasProject && appController.providerReady && !root.hasThread))
-                        text: !root.hasProject ? "Add project folder" : "Create thread"
-                        icon.name: !root.hasProject ? "folder-new" : "list-add"
-                        onClicked: {
-                            if (!root.hasProject)
-                                projectDialog.open()
-                            else
-                                newThreadMenu.open()
-                        }
+                        visible: conversationList.count === 0 && !root.hasProject
+                        text: "Add project folder"
+                        icon.name: "folder-new"
+                        onClicked: appController.chooseProjectFolder()
                     }
                 }
 
                 Frame {
-                    visible: root.hasThread
+                    visible: root.hasProject && appController.providerReady
                     Layout.fillWidth: true
                     Layout.maximumWidth: 840
                     Layout.alignment: Qt.AlignHCenter
@@ -457,7 +436,7 @@ Kirigami.ApplicationWindow {
                                              ? "Add guidance while Artemis is working…"
                                              : "Describe a task, ask a question, or paste an error…"
                             wrapMode: TextEdit.Wrap
-                            enabled: root.hasThread
+                            enabled: root.hasProject && appController.providerReady
                             Keys.onPressed: event => {
                                 if ((event.modifiers & Qt.ControlModifier)
                                         && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)) {
@@ -502,9 +481,10 @@ Kirigami.ApplicationWindow {
                                               ? "Send guidance" : "Send (Ctrl+Enter)"
                                 ToolTip.visible: hovered
                                 enabled: composer.text.trim().length > 0
-                                         && root.hasThread
+                                         && root.hasProject
+                                         && appController.providerReady
                                 onClicked: {
-                                    appController.sendPrompt(composer.text)
+                                    appController.sendPrompt(composer.text, modelPicker.currentValue || "")
                                     composer.clear()
                                 }
                             }

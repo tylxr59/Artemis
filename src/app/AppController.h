@@ -56,12 +56,13 @@ public:
     QString databasePath() const;
     QString worktreeRoot() const;
 
+    Q_INVOKABLE void chooseProjectFolder();
     Q_INVOKABLE void addProject(const QString &path);
     Q_INVOKABLE void removeSelectedProject();
     Q_INVOKABLE void selectProject(int index);
     Q_INVOKABLE void selectThread(int index);
     Q_INVOKABLE void createThread(bool worktree, const QString &modelId);
-    Q_INVOKABLE void sendPrompt(const QString &text);
+    Q_INVOKABLE void sendPrompt(const QString &text, const QString &modelId = {});
     Q_INVOKABLE void interruptTurn();
     Q_INVOKABLE void refreshGit();
     Q_INVOKABLE void acknowledgeFullAccess();
@@ -90,7 +91,7 @@ signals:
 
 private:
     void loadProjects();
-    void loadThreads();
+    void loadThreads(const QString &threadToSelect = {});
     void loadModels();
     void setStatus(const QString &text);
     void setTurnRunning(bool running);
@@ -119,6 +120,9 @@ private:
     QString m_commitThreadId;
     QString m_commitDraftBuffer;
     QString m_activeThreadId;
+    QString m_pendingPrompt;
+    QString m_pendingModelId;
+    bool m_threadCreationPending = false;
 };
 
 } // namespace Artemis

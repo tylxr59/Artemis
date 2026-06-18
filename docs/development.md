@@ -6,7 +6,7 @@ On Arch Linux:
 
 ```bash
 sudo pacman -S --needed cmake ninja extra-cmake-modules \
-  qt6-base qt6-declarative kirigami syntax-highlighting
+  qt6-base qt6-declarative kirigami syntax-highlighting plasma-integration
 ```
 
 Install and authenticate Codex separately:
