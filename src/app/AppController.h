@@ -66,7 +66,7 @@ public:
     Q_INVOKABLE void interruptTurn();
     Q_INVOKABLE void refreshGit();
     Q_INVOKABLE void generateCommitMessage(const QString &modelId);
-    Q_INVOKABLE void commitAll(const QString &message);
+    Q_INVOKABLE void commitAllAndPush(const QString &message);
     Q_INVOKABLE void commitFeatureBranch(const QString &message, const QString &branch,
                                          const QString &remote);
     Q_INVOKABLE QString suggestBranch(const QString &message) const;

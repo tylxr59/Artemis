@@ -94,7 +94,7 @@ void GitService::createWorktree(const QString &projectPath, const QString &desti
         std::move(handler));
 }
 
-void GitService::commitAll(const QString &path, const QString &message, Handler handler)
+void GitService::commitAllAndPush(const QString &path, const QString &message, Handler handler)
 {
     const auto add = runSync(path, {QStringLiteral("add"), QStringLiteral("-A")});
     if (!add.ok()) {
@@ -102,7 +102,55 @@ void GitService::commitAll(const QString &path, const QString &message, Handler 
             handler(add);
         return;
     }
-    run(path, {QStringLiteral("commit"), QStringLiteral("-m"), message}, std::move(handler));
+    const auto commit = runSync(path, {QStringLiteral("commit"), QStringLiteral("-m"), message});
+    if (!commit.ok()) {
+        const auto status = runSync(path, {QStringLiteral("status"),
+                                           QStringLiteral("--porcelain")});
+        if (!status.ok() || !status.output.trimmed().isEmpty()) {
+            if (handler)
+                handler(commit);
+            return;
+        }
+    }
+    pushCurrentBranch(path, commit.output, std::move(handler));
+}
+
+void GitService::pushCurrentBranch(const QString &path, const QByteArray &commitOutput,
+                                   Handler handler)
+{
+    const auto branchResult = runSync(path, {QStringLiteral("branch"),
+                                             QStringLiteral("--show-current")});
+    const auto branch = QString::fromUtf8(branchResult.output).trimmed();
+    if (!branchResult.ok() || branch.isEmpty()) {
+        if (handler) {
+            handler({-1, commitOutput,
+                     QByteArray("Changes are committed locally, but the current branch could not "
+                                "be determined; nothing was pushed.")});
+        }
+        return;
+    }
+
+    const auto upstream = runSync(path, {QStringLiteral("rev-parse"),
+                                         QStringLiteral("--abbrev-ref"),
+                                         QStringLiteral("--symbolic-full-name"),
+                                         QStringLiteral("@{upstream}")});
+    if (upstream.ok()) {
+        run(path, {QStringLiteral("push")}, std::move(handler));
+        return;
+    }
+
+    const auto origin = runSync(path, {QStringLiteral("remote"), QStringLiteral("get-url"),
+                                       QStringLiteral("origin")});
+    if (!origin.ok()) {
+        if (handler) {
+            handler({-1, commitOutput,
+                     QByteArray("Changes are committed locally, but this branch has no upstream "
+                                "and the 'origin' remote is not configured; nothing was pushed.")});
+        }
+        return;
+    }
+    run(path, {QStringLiteral("push"), QStringLiteral("--set-upstream"),
+               QStringLiteral("origin"), branch}, std::move(handler));
 }
 
 void GitService::createBranchCommitPush(const QString &path, const QString &branch,

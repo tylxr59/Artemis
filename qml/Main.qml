@@ -89,7 +89,7 @@ Kirigami.ApplicationWindow {
                 onClicked: root.reviewVisible = !root.reviewVisible
             }
             Button {
-                text: "Commit"
+                text: "Commit & push"
                 visible: appController.selectedProjectIsGit
                 enabled: appController.gitStatusText.length > 0
                 onClicked: {
@@ -109,7 +109,7 @@ Kirigami.ApplicationWindow {
                     id: commitMenu
                     y: commitMenuButton.height
                     MenuItem {
-                        text: "Commit all changes"
+                        text: "Commit and push all changes"
                         onTriggered: {
                             commitDialog.featureMode = false
                             commitDialog.open()

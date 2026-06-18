@@ -2,9 +2,12 @@
 #include "persistence/Database.h"
 
 #include <QDir>
+#include <QEventLoop>
+#include <QFile>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimer>
 
 using namespace Artemis;
 
@@ -43,6 +46,87 @@ private slots:
         QVERIFY(!database.projects().isEmpty());
         QVERIFY(database.setSetting(QStringLiteral("test"), QStringLiteral("value"), &error));
         QCOMPARE(database.setting(QStringLiteral("test")), QStringLiteral("value"));
+    }
+
+    void commitAllPushesCurrentBranch()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const auto remotePath = root.filePath(QStringLiteral("remote.git"));
+        const auto workPath = root.filePath(QStringLiteral("work"));
+        QVERIFY(GitService::runSync(root.path(), {QStringLiteral("init"),
+                                                  QStringLiteral("--bare"),
+                                                  remotePath}).ok());
+        QDir().mkpath(workPath);
+        QVERIFY(GitService::runSync(workPath, {QStringLiteral("init")}).ok());
+        QVERIFY(GitService::runSync(workPath, {QStringLiteral("config"),
+                                               QStringLiteral("user.name"),
+                                               QStringLiteral("Artemis Test")}).ok());
+        QVERIFY(GitService::runSync(workPath, {QStringLiteral("config"),
+                                               QStringLiteral("user.email"),
+                                               QStringLiteral("artemis@example.invalid")}).ok());
+        QVERIFY(GitService::runSync(workPath, {QStringLiteral("switch"),
+                                               QStringLiteral("-c"),
+                                               QStringLiteral("main")}).ok());
+        QVERIFY(GitService::runSync(workPath, {QStringLiteral("remote"),
+                                               QStringLiteral("add"),
+                                               QStringLiteral("origin"),
+                                               remotePath}).ok());
+
+        QFile file(QDir(workPath).filePath(QStringLiteral("change.txt")));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("published by Artemis\n");
+        file.close();
+
+        GitService service;
+        GitResult result;
+        QEventLoop loop;
+        QTimer timeout;
+        timeout.setSingleShot(true);
+        connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
+        timeout.start(10000);
+        service.commitAllAndPush(workPath, QStringLiteral("Publish test change"),
+                                 [&result, &loop](const GitResult &value) {
+            result = value;
+            loop.quit();
+        });
+        loop.exec();
+
+        QVERIFY2(timeout.isActive(), "Timed out waiting for Git push");
+        QVERIFY2(result.ok(), result.error.constData());
+        const auto local = GitService::runSync(workPath, {QStringLiteral("rev-parse"),
+                                                          QStringLiteral("HEAD")});
+        const auto remote = GitService::runSync(remotePath, {QStringLiteral("rev-parse"),
+                                                             QStringLiteral("refs/heads/main")});
+        QVERIFY(local.ok());
+        QVERIFY(remote.ok());
+        QCOMPARE(local.output.trimmed(), remote.output.trimmed());
+
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Append));
+        file.write("already committed locally\n");
+        file.close();
+        QVERIFY(GitService::runSync(workPath, {QStringLiteral("add"),
+                                               QStringLiteral("-A")}).ok());
+        QVERIFY(GitService::runSync(workPath, {QStringLiteral("commit"),
+                                               QStringLiteral("-m"),
+                                               QStringLiteral("Local-only commit")}).ok());
+
+        result = {};
+        timeout.start(10000);
+        service.commitAllAndPush(workPath, QStringLiteral("No new changes"),
+                                 [&result, &loop](const GitResult &value) {
+            result = value;
+            loop.quit();
+        });
+        loop.exec();
+
+        QVERIFY2(timeout.isActive(), "Timed out waiting to push an existing commit");
+        QVERIFY2(result.ok(), result.error.constData());
+        const auto recoveredLocal = GitService::runSync(
+            workPath, {QStringLiteral("rev-parse"), QStringLiteral("HEAD")});
+        const auto recoveredRemote = GitService::runSync(
+            remotePath, {QStringLiteral("rev-parse"), QStringLiteral("refs/heads/main")});
+        QCOMPARE(recoveredLocal.output.trimmed(), recoveredRemote.output.trimmed());
     }
 };
 

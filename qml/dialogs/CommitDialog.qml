@@ -8,7 +8,7 @@ Dialog {
     required property var controller
     property bool featureMode: false
     property string selectedModelId: modelPicker.currentValue || ""
-    title: featureMode ? "Commit to feature branch" : "Commit changes"
+    title: featureMode ? "Commit to feature branch" : "Commit and push changes"
     modal: true
     anchors.centerIn: parent
     width: Math.min(parent ? parent.width - 40 : 720, 720)
@@ -99,7 +99,7 @@ Dialog {
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }
             Button {
-                text: root.featureMode ? "Create, commit, and push" : "Commit all changes"
+                text: root.featureMode ? "Create, commit, and push" : "Commit and push all changes"
                 enabled: messageEdit.text.trim().length > 0 && !busy.running
                 onClicked: {
                     busy.running = true
@@ -107,7 +107,7 @@ Dialog {
                     if (root.featureMode)
                         root.controller.commitFeatureBranch(messageEdit.text, branchEdit.text, remoteEdit.text)
                     else
-                        root.controller.commitAll(messageEdit.text)
+                        root.controller.commitAllAndPush(messageEdit.text)
                 }
             }
         }

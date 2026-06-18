@@ -10,7 +10,7 @@ Current vertical slice:
 - Streamed agent activity
 - Git status and diff review
 - AI-generated commit messages
-- Commit-all and feature-branch push workflows
+- Commit-and-push workflows for the current or a new feature branch
 - SQLite persistence and diagnostics
 
 See [development documentation](docs/development.md) for setup and build steps.

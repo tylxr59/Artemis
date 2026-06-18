@@ -613,10 +613,11 @@ QString AppController::cleanCommitDraft(const QString &raw) const
     return text;
 }
 
-void AppController::commitAll(const QString &message)
+void AppController::commitAllAndPush(const QString &message)
 {
-    m_git.commitAll(selectedWorkspacePath(), message, [this](const GitResult &result) {
-        const auto output = QString::fromUtf8(result.ok() ? result.output : result.error).trimmed();
+    m_git.commitAllAndPush(selectedWorkspacePath(), message, [this](const GitResult &result) {
+        const auto output = QString::fromUtf8(result.ok()
+            ? result.output + result.error : result.error).trimmed();
         emit commitFinished(result.ok(), output);
         setStatus(output);
         refreshGit();
@@ -634,7 +635,8 @@ void AppController::commitFeatureBranch(const QString &message, const QString &b
     m_git.createBranchCommitPush(selectedWorkspacePath(), branch, message,
                                  remote.isEmpty() ? QStringLiteral("origin") : remote,
                                  [this](const GitResult &result) {
-        const auto output = QString::fromUtf8(result.ok() ? result.output : result.error).trimmed();
+        const auto output = QString::fromUtf8(result.ok()
+            ? result.output + result.error : result.error).trimmed();
         emit commitFinished(result.ok(), output);
         setStatus(output);
         refreshGit();
