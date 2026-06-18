@@ -383,11 +383,15 @@ Kirigami.ApplicationWindow {
                     model: appController.conversation
                     clip: true
                     spacing: Kirigami.Units.largeSpacing
-                    leftMargin: Math.max(Kirigami.Units.largeSpacing, (width - 760) / 2)
+                    leftMargin: Math.max(Kirigami.Units.largeSpacing, (width - 840) / 2)
                     rightMargin: leftMargin
                     topMargin: Kirigami.Units.largeSpacing
                     bottomMargin: Kirigami.Units.largeSpacing
-                    delegate: ConversationDelegate { width: conversationList.width - conversationList.leftMargin - conversationList.rightMargin }
+                    delegate: ConversationDelegate {
+                        width: Math.min(840, conversationList.width
+                                             - conversationList.leftMargin
+                                             - conversationList.rightMargin)
+                    }
                     onCountChanged: positionViewAtEnd()
 
                     Kirigami.PlaceholderMessage {

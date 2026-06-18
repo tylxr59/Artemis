@@ -16,6 +16,48 @@
 
 namespace Artemis {
 
+namespace {
+
+QJsonObject commitDraftObject(const QString &text)
+{
+    bool inString = false;
+    bool escaped = false;
+    int depth = 0;
+    qsizetype start = -1;
+    QJsonObject result;
+
+    for (qsizetype i = 0; i < text.size(); ++i) {
+        const auto character = text.at(i);
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (character == QChar(u'\\')) {
+                escaped = true;
+            } else if (character == QChar(u'"')) {
+                inString = false;
+            }
+            continue;
+        }
+        if (character == QChar(u'"')) {
+            inString = true;
+        } else if (character == QChar(u'{')) {
+            if (depth++ == 0)
+                start = i;
+        } else if (character == QChar(u'}') && depth > 0 && --depth == 0 && start >= 0) {
+            const auto candidate = text.mid(start, i - start + 1);
+            const auto document = QJsonDocument::fromJson(candidate.toUtf8());
+            if (document.isObject()
+                && document.object().contains(QStringLiteral("subject"))) {
+                result = document.object();
+            }
+            start = -1;
+        }
+    }
+    return result;
+}
+
+} // namespace
+
 AppController::AppController(QObject *parent)
     : QObject(parent)
 {
@@ -278,14 +320,32 @@ void AppController::selectThread(int index)
             for (const auto &itemValue : turn.value(QStringLiteral("items")).toArray()) {
                 const auto item = itemValue.toObject();
                 const auto type = item.value(QStringLiteral("type")).toString();
-                QString content = item.value(QStringLiteral("text")).toString();
+                const auto content = CodexClient::itemContent(item);
                 if (content.isEmpty())
-                    content = item.value(QStringLiteral("content")).toString();
-                if (!content.isEmpty())
-                    m_conversation.append({selectedThreadId(),
-                        type == QStringLiteral("userMessage") ? QStringLiteral("user") : QStringLiteral("assistant"),
-                        type == QStringLiteral("userMessage") ? QStringLiteral("You") : QStringLiteral("Artemis"),
-                        content, {}});
+                    continue;
+                QString eventType;
+                QString title;
+                if (type == QStringLiteral("userMessage")) {
+                    eventType = QStringLiteral("user");
+                    title = QStringLiteral("You");
+                } else if (type == QStringLiteral("agentMessage")) {
+                    eventType = QStringLiteral("assistant");
+                    title = QStringLiteral("Artemis");
+                } else if (type == QStringLiteral("reasoning")) {
+                    eventType = QStringLiteral("reasoning");
+                    title = QStringLiteral("Reasoning");
+                } else if (type == QStringLiteral("commandExecution")) {
+                    eventType = QStringLiteral("command");
+                    title = QStringLiteral("Ran command");
+                } else if (type == QStringLiteral("fileChange")) {
+                    eventType = QStringLiteral("file");
+                    title = QStringLiteral("File changes");
+                } else {
+                    continue;
+                }
+                m_conversation.append({selectedThreadId(), eventType, title, content,
+                    {{QStringLiteral("lifecycle"), QStringLiteral("completed")},
+                     {QStringLiteral("itemId"), item.value(QStringLiteral("id")).toString()}}});
             }
         }
     });
@@ -434,8 +494,14 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
                                       const QVariantMap &metadata)
 {
     if (threadId == m_commitThreadId) {
-        if (type == QStringLiteral("assistant"))
-            m_commitDraftBuffer += content;
+        if (type == QStringLiteral("assistant")) {
+            if (metadata.value(QStringLiteral("lifecycle")).toString()
+                == QStringLiteral("completed")) {
+                m_commitDraftBuffer = content;
+            } else {
+                m_commitDraftBuffer += content;
+            }
+        }
         if (type == QStringLiteral("status")) {
             emit commitDraftReady(cleanCommitDraft(m_commitDraftBuffer));
             m_commitThreadId.clear();
@@ -532,12 +598,17 @@ QString AppController::cleanCommitDraft(const QString &raw) const
     if (text.startsWith(QStringLiteral("```"))) {
         text.remove(QRegularExpression(QStringLiteral("^```(?:json)?\\s*|\\s*```$")));
     }
-    const auto document = QJsonDocument::fromJson(text.toUtf8());
-    if (document.isObject()) {
-        const auto object = document.object();
+    auto object = commitDraftObject(text);
+    if (object.isEmpty()) {
+        const auto document = QJsonDocument::fromJson(text.toUtf8());
+        if (document.isObject())
+            object = document.object();
+    }
+    if (!object.isEmpty()) {
         const auto subject = object.value(QStringLiteral("subject")).toString().trimmed();
         const auto body = object.value(QStringLiteral("body")).toString().trimmed();
-        return body.isEmpty() ? subject : subject + QStringLiteral("\n\n") + body;
+        if (!subject.isEmpty())
+            return body.isEmpty() ? subject : subject + QStringLiteral("\n\n") + body;
     }
     return text;
 }

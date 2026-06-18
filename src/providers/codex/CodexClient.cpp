@@ -47,6 +47,30 @@ QJsonObject sandboxPolicy(PermissionProfile profile)
     return {{QStringLiteral("type"), QStringLiteral("dangerFullAccess")}};
 }
 
+void appendText(const QJsonValue &value, QStringList &parts)
+{
+    if (value.isString()) {
+        const auto text = value.toString().trimmed();
+        if (!text.isEmpty())
+            parts.push_back(text);
+        return;
+    }
+    if (value.isArray()) {
+        for (const auto &entry : value.toArray())
+            appendText(entry, parts);
+        return;
+    }
+    if (!value.isObject())
+        return;
+
+    const auto object = value.toObject();
+    for (const auto &key : {QStringLiteral("text"), QStringLiteral("output_text"),
+                            QStringLiteral("summary"), QStringLiteral("content")}) {
+        if (object.contains(key))
+            appendText(object.value(key), parts);
+    }
+}
+
 } // namespace
 
 CodexClient::CodexClient(QObject *parent)
@@ -254,7 +278,8 @@ void CodexClient::handleNotification(const QString &method, const QJsonObject &p
     } else if (method == QStringLiteral("item/agentMessage/delta")) {
         emit domainEvent(params.value(QStringLiteral("threadId")).toString(),
                          QStringLiteral("assistant"), QStringLiteral("Artemis"),
-                         params.value(QStringLiteral("delta")).toString(), {});
+                         params.value(QStringLiteral("delta")).toString(),
+                         {{QStringLiteral("delta"), true}});
     } else if (method == QStringLiteral("turn/diff/updated")) {
         emit domainEvent(params.value(QStringLiteral("threadId")).toString(),
                          QStringLiteral("diff"), QStringLiteral("Changes"),
@@ -283,27 +308,38 @@ void CodexClient::normalizeItem(const QString &lifecycle, const QJsonObject &par
 {
     const auto item = params.value(QStringLiteral("item")).toObject();
     const auto type = item.value(QStringLiteral("type")).toString();
+    const auto itemId = item.value(QStringLiteral("id")).toString();
     QString domainType = QStringLiteral("activity");
     QString title = type;
     if (type == QStringLiteral("commandExecution")) {
         domainType = QStringLiteral("command");
         title = lifecycle == QStringLiteral("started") ? QStringLiteral("Running command")
-                                                        : QStringLiteral("Command completed");
+                                                        : QStringLiteral("Ran command");
     } else if (type == QStringLiteral("fileChange")) {
         domainType = QStringLiteral("file");
         title = QStringLiteral("File changes");
     } else if (type == QStringLiteral("agentMessage")) {
+        if (lifecycle == QStringLiteral("started"))
+            return;
         domainType = QStringLiteral("assistant");
         title = QStringLiteral("Artemis");
     } else if (type == QStringLiteral("userMessage")) {
-        domainType = QStringLiteral("user");
-        title = QStringLiteral("You");
+        return;
+    } else if (type == QStringLiteral("reasoning")) {
+        if (lifecycle == QStringLiteral("started"))
+            return;
+        domainType = QStringLiteral("reasoning");
+        title = QStringLiteral("Reasoning");
     }
+    const auto content = itemContent(item);
+    if (content.isEmpty())
+        return;
     emit domainEvent(params.value(QStringLiteral("threadId")).toString(), domainType,
-                     title, itemContent(item), {{QStringLiteral("lifecycle"), lifecycle}});
+                     title, content, {{QStringLiteral("lifecycle"), lifecycle},
+                                      {QStringLiteral("itemId"), itemId}});
 }
 
-QString CodexClient::itemContent(const QJsonObject &item) const
+QString CodexClient::itemContent(const QJsonObject &item)
 {
     for (const auto &key : {QStringLiteral("text"), QStringLiteral("command"),
                             QStringLiteral("aggregatedOutput"), QStringLiteral("diff")}) {
@@ -314,7 +350,11 @@ QString CodexClient::itemContent(const QJsonObject &item) const
     const auto content = item.value(QStringLiteral("content"));
     if (content.isString())
         return content.toString();
-    return QString::fromUtf8(QJsonDocument(item).toJson(QJsonDocument::Indented));
+    QStringList parts;
+    appendText(item.value(QStringLiteral("summary")), parts);
+    appendText(content, parts);
+    parts.removeDuplicates();
+    return parts.join(QLatin1Char('\n'));
 }
 
 void CodexClient::listModels(ResultHandler handler)

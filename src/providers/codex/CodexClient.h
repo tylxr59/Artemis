@@ -33,6 +33,7 @@ public:
     QString version() const;
 
     void request(const QString &method, const QJsonObject &params, ResultHandler handler = {});
+    static QString itemContent(const QJsonObject &item);
 
 signals:
     void versionChanged();
@@ -50,7 +51,6 @@ private:
     void handleLine(const QByteArray &line);
     void handleNotification(const QString &method, const QJsonObject &params);
     void normalizeItem(const QString &lifecycle, const QJsonObject &params);
-    QString itemContent(const QJsonObject &item) const;
     void setReady(bool ready);
 
     QProcess m_process;

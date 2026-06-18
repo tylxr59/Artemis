@@ -43,6 +43,18 @@ void ConversationModel::append(const ConversationEvent &event)
 {
     if (!m_threadId.isEmpty() && event.threadId != m_threadId)
         return;
+    const auto itemId = event.metadata.value(QStringLiteral("itemId")).toString();
+    if (!itemId.isEmpty()) {
+        for (int row = m_events.size() - 1; row >= 0; --row) {
+            auto &existing = m_events[row];
+            if (existing.metadata.value(QStringLiteral("itemId")).toString() != itemId)
+                continue;
+            existing = event;
+            const auto idx = index(row);
+            emit dataChanged(idx, idx, {TypeRole, TitleRole, ContentRole, MetadataRole});
+            return;
+        }
+    }
     const int row = m_events.size();
     beginInsertRows({}, row, row);
     m_events.push_back(event);
@@ -51,6 +63,25 @@ void ConversationModel::append(const ConversationEvent &event)
 
 void ConversationModel::appendOrMergeDelta(const ConversationEvent &event)
 {
+    const bool completed = event.metadata.value(QStringLiteral("lifecycle")).toString()
+                           == QStringLiteral("completed");
+    if (completed) {
+        for (int row = m_events.size() - 1; row >= 0; --row) {
+            auto &existing = m_events[row];
+            if (existing.type != QStringLiteral("assistant"))
+                continue;
+            if (existing.content == event.content)
+                return;
+            if (event.content.startsWith(existing.content)) {
+                existing.content = event.content;
+                existing.metadata = event.metadata;
+                const auto idx = index(row);
+                emit dataChanged(idx, idx, {ContentRole, MetadataRole});
+                return;
+            }
+            break;
+        }
+    }
     if (!m_events.isEmpty() && event.type == QStringLiteral("assistant")
         && m_events.last().type == event.type && m_events.last().title == event.title) {
         m_events.last().content += event.content;
