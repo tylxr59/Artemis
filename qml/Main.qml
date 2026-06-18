@@ -427,16 +427,32 @@ Kirigami.ApplicationWindow {
                     model: appController.conversation
                     clip: true
                     spacing: Kirigami.Units.largeSpacing
-                    leftMargin: Math.max(Kirigami.Units.largeSpacing, (width - 840) / 2)
-                    rightMargin: leftMargin
                     topMargin: Kirigami.Units.largeSpacing
                     bottomMargin: Kirigami.Units.largeSpacing
-                    delegate: ConversationDelegate {
-                        width: Math.min(840, conversationList.width
-                                             - conversationList.leftMargin
-                                             - conversationList.rightMargin)
+                    delegate: Item {
+                        id: conversationRow
+                        required property string eventType
+                        required property string title
+                        required property string content
+                        required property var metadata
+
+                        readonly property real horizontalGutter: Kirigami.Units.largeSpacing
+                        width: conversationList.width
+                        implicitHeight: conversationDelegate.implicitHeight
+
+                        ConversationDelegate {
+                            id: conversationDelegate
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: Math.min(840, parent.width
+                                                 - conversationRow.horizontalGutter * 2)
+                            eventType: conversationRow.eventType
+                            title: conversationRow.title
+                            content: conversationRow.content
+                            metadata: conversationRow.metadata
+                        }
                     }
                     onCountChanged: positionViewAtEnd()
+                    onWidthChanged: forceLayout()
 
                     Kirigami.PlaceholderMessage {
                         anchors.centerIn: parent
