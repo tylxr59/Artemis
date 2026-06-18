@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Artemis
+GenericName=AI Coding Client
+Comment=Native KDE client for AI-assisted software development
+Exec=artemis
+Icon=applications-development
+Terminal=false
+Categories=Development;IDE;
+StartupNotify=true

@@ -1,0 +1,17 @@
+# Codex protocol notes
+
+Artemis requires Codex CLI 0.141.0 or newer.
+
+Startup:
+
+1. Run `codex --version`.
+2. Start `codex app-server --listen stdio://`.
+3. Send `initialize`.
+4. Send the `initialized` notification.
+5. Load models and project-matching threads.
+
+The client tolerates unknown JSON fields and unknown notification methods.
+Requests have a 60-second transport timeout. A crashed process is restarted
+with exponential backoff capped at 16 seconds.
+
+Coding threads are persistent. Commit-message threads are ephemeral.
