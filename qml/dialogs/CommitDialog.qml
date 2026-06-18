@@ -7,7 +7,6 @@ Dialog {
     id: root
     required property var controller
     property bool featureMode: false
-    property string selectedModelId: modelPicker.currentValue || ""
     title: featureMode ? "Commit to feature branch" : "Commit and push changes"
     modal: true
     anchors.centerIn: parent
@@ -44,19 +43,17 @@ Dialog {
 
         RowLayout {
             Layout.fillWidth: true
-            ComboBox {
-                id: modelPicker
+            Label {
                 Layout.fillWidth: true
-                model: root.controller.models
-                textRole: "name"
-                valueRole: "id"
+                text: "Generated with the commit model configured in Settings"
+                opacity: 0.65
             }
             Button {
                 text: "Generate"
                 onClicked: {
                     busy.running = true
                     resultLabel.text = ""
-                    root.controller.generateCommitMessage(root.selectedModelId)
+                    root.controller.generateCommitMessage()
                 }
             }
             BusyIndicator { id: busy; running: false }

@@ -19,8 +19,24 @@ Kirigami.ApplicationWindow {
     readonly property bool hasProject: appController.selectedProjectPath.length > 0
     readonly property bool hasThread: appController.selectedThreadId.length > 0
 
+    function modelIndex(modelId) {
+        const exact = modelPicker.indexOfValue(modelId)
+        if (exact >= 0)
+            return exact
+        for (let i = 0; i < appController.models.length; ++i) {
+            if (appController.models[i].isDefault)
+                return i
+        }
+        return appController.models.length > 0 ? 0 : -1
+    }
+
     CommitDialog {
         id: commitDialog
+        controller: appController
+    }
+
+    SettingsDialog {
+        id: settingsDialog
         controller: appController
     }
 
@@ -95,7 +111,7 @@ Kirigami.ApplicationWindow {
                 onClicked: {
                     commitDialog.featureMode = false
                     commitDialog.open()
-                    appController.generateCommitMessage(commitDialog.selectedModelId)
+                    appController.generateCommitMessage()
                 }
             }
             ToolButton {
@@ -113,7 +129,7 @@ Kirigami.ApplicationWindow {
                         onTriggered: {
                             commitDialog.featureMode = false
                             commitDialog.open()
-                            appController.generateCommitMessage(commitDialog.selectedModelId)
+                            appController.generateCommitMessage()
                         }
                     }
                     MenuItem {
@@ -129,7 +145,7 @@ Kirigami.ApplicationWindow {
                         onTriggered: {
                             commitDialog.featureMode = true
                             commitDialog.open()
-                            appController.generateCommitMessage(commitDialog.selectedModelId)
+                            appController.generateCommitMessage()
                         }
                     }
                 }
@@ -146,16 +162,36 @@ Kirigami.ApplicationWindow {
         contentItem: navigationPane
     }
 
-    RowLayout {
+    SplitView {
+        id: workspaceSplit
         anchors.fill: parent
-        spacing: 0
+        orientation: Qt.Horizontal
+
+        handle: Rectangle {
+            implicitWidth: 5
+            color: SplitHandle.pressed
+                   ? Kirigami.Theme.highlightColor
+                   : SplitHandle.hovered
+                     ? Qt.alpha(Kirigami.Theme.highlightColor, 0.55)
+                     : Qt.alpha(Kirigami.Theme.textColor, 0.18)
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: 1
+                height: parent.height
+                color: Kirigami.Theme.textColor
+                opacity: 0.28
+            }
+        }
 
         Pane {
             id: navigationPane
             visible: root.navigationVisible || navigationDrawer.visible
-            Layout.preferredWidth: 310
-            Layout.fillHeight: true
+            SplitView.preferredWidth: 310
+            SplitView.minimumWidth: root.navigationVisible ? 220 : 0
+            SplitView.maximumWidth: root.navigationVisible ? 480 : 0
             padding: Kirigami.Units.largeSpacing
+            clip: true
 
             ColumnLayout {
                 anchors.fill: parent
@@ -169,11 +205,12 @@ Kirigami.ApplicationWindow {
                         font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
                         Layout.fillWidth: true
                     }
-                    Button {
-                        text: "Add"
+                    ToolButton {
                         icon.name: "folder-new"
                         onClicked: appController.chooseProjectFolder()
                         Accessible.name: "Add project folder"
+                        ToolTip.text: Accessible.name
+                        ToolTip.visible: hovered
                     }
                 }
                 TextField {
@@ -203,6 +240,7 @@ Kirigami.ApplicationWindow {
 
                         ItemDelegate {
                             Layout.fillWidth: true
+                            Layout.maximumWidth: projectList.width
                             highlighted: projectDelegate.selected
                             leftPadding: Kirigami.Units.smallSpacing
                             rightPadding: Kirigami.Units.smallSpacing
@@ -256,6 +294,7 @@ Kirigami.ApplicationWindow {
                                     required property int index
                                     required property var modelData
                                     Layout.fillWidth: true
+                                    Layout.maximumWidth: projectList.width
                                     leftPadding: Kirigami.Units.gridUnit * 2
                                     highlighted: appController.selectedThreadId === modelData.id
                                     contentItem: RowLayout {
@@ -331,45 +370,50 @@ Kirigami.ApplicationWindow {
                     MenuItem {
                         text: "New local thread"
                         onTriggered: appController.createThread(
-                                         false, "", permissionPicker.currentValue)
+                                         false, appController.codingModelId,
+                                         permissionPicker.currentValue)
                     }
                     MenuItem {
                         text: "New worktree thread"
                         enabled: appController.selectedProjectIsGit
                         onTriggered: appController.createThread(
-                                         true, "", permissionPicker.currentValue)
+                                         true, appController.codingModelId,
+                                         permissionPicker.currentValue)
                     }
                 }
                 Kirigami.Separator { Layout.fillWidth: true }
                 RowLayout {
                     Layout.fillWidth: true
                     ToolButton {
-                        text: "Terminal"
                         icon.name: "utilities-terminal"
                         enabled: root.hasProject
                         onClicked: appController.openTerminal()
+                        Accessible.name: "Open terminal"
+                        ToolTip.text: Accessible.name
+                        ToolTip.visible: hovered
                     }
                     Item { Layout.fillWidth: true }
                     ToolButton {
-                        text: "Diagnostics"
+                        icon.name: "settings-configure"
+                        onClicked: settingsDialog.open()
+                        Accessible.name: "Settings"
+                        ToolTip.text: Accessible.name
+                        ToolTip.visible: hovered
+                    }
+                    ToolButton {
                         icon.name: "tools-report-bug"
                         onClicked: diagnosticsDialog.open()
+                        Accessible.name: "Diagnostics"
+                        ToolTip.text: Accessible.name
+                        ToolTip.visible: hovered
                     }
                 }
             }
         }
 
-        Rectangle {
-            visible: root.navigationVisible
-            Layout.preferredWidth: 1
-            Layout.fillHeight: true
-            color: Kirigami.Theme.textColor
-            opacity: 0.18
-        }
-
         Pane {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            SplitView.fillWidth: true
+            SplitView.minimumWidth: 360
             padding: 0
 
             ColumnLayout {
@@ -457,7 +501,9 @@ Kirigami.ApplicationWindow {
                                 model: appController.models
                                 textRole: "name"
                                 valueRole: "id"
+                                currentIndex: root.modelIndex(appController.codingModelId)
                                 enabled: !appController.turnRunning
+                                onActivated: appController.codingModelId = currentValue || ""
                             }
                             ComboBox {
                                 id: permissionPicker
@@ -501,7 +547,7 @@ Kirigami.ApplicationWindow {
                                          && appController.providerReady
                                 onClicked: {
                                     appController.sendPrompt(composer.text,
-                                                             modelPicker.currentValue || "",
+                                                             appController.codingModelId,
                                                              permissionPicker.currentValue)
                                     composer.clear()
                                 }
@@ -512,24 +558,16 @@ Kirigami.ApplicationWindow {
             }
         }
 
-        Rectangle {
-            visible: root.reviewVisible && appController.selectedProjectIsGit
-            Layout.preferredWidth: 1
-            Layout.fillHeight: true
-            color: Kirigami.Theme.textColor
-            opacity: 0.18
-        }
-
         ReviewPane {
             visible: root.reviewVisible && appController.selectedProjectIsGit
-            Layout.preferredWidth: Math.max(390, root.width * 0.32)
-            Layout.maximumWidth: 620
-            Layout.fillHeight: true
+            SplitView.preferredWidth: Math.min(620, Math.max(390, root.width * 0.32))
+            SplitView.minimumWidth: visible ? 300 : 0
+            SplitView.maximumWidth: visible ? 700 : 0
             controller: appController
             onCommitRequested: {
                 commitDialog.featureMode = false
                 commitDialog.open()
-                appController.generateCommitMessage(commitDialog.selectedModelId)
+                appController.generateCommitMessage()
             }
         }
     }

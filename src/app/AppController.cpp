@@ -87,6 +87,9 @@ bool AppController::initialize()
         setStatus(QStringLiteral("Database error: %1").arg(error));
         return false;
     }
+    m_codingModelId = m_database.setting(QStringLiteral("coding_model"));
+    m_commitModelId = m_database.setting(QStringLiteral("commit_model"));
+    m_titleModelId = m_database.setting(QStringLiteral("title_model"));
     loadProjects();
     m_codex.start();
     return true;
@@ -96,6 +99,9 @@ ProjectTreeModel *AppController::projects() { return &m_projects; }
 ConversationModel *AppController::conversation() { return &m_conversation; }
 QVariantList AppController::threads() const { return m_threads; }
 QVariantList AppController::models() const { return m_models; }
+QString AppController::codingModelId() const { return m_codingModelId; }
+QString AppController::commitModelId() const { return m_commitModelId; }
+QString AppController::titleModelId() const { return m_titleModelId; }
 int AppController::selectedProjectIndex() const { return m_selectedProject; }
 QString AppController::selectedProjectPath() const { return m_projects.row(m_selectedProject).path; }
 QString AppController::selectedProjectName() const { return m_projects.row(m_selectedProject).name; }
@@ -233,13 +239,16 @@ void AppController::loadThreads(const QString &threadToSelect)
         for (const auto &entry : result.value(QStringLiteral("data")).toArray()) {
             const auto thread = entry.toObject();
             const auto id = thread.value(QStringLiteral("id")).toString();
-            const auto title = thread.value(QStringLiteral("name")).toString(
-                thread.value(QStringLiteral("title")).toString(QStringLiteral("Untitled thread")));
+            const auto name = thread.value(QStringLiteral("name")).toString();
+            const auto title = name.isEmpty()
+                ? thread.value(QStringLiteral("title")).toString(QStringLiteral("Untitled thread"))
+                : name;
             const auto cwd = thread.value(QStringLiteral("cwd")).toString(project.path);
             const auto binding = bindingById.value(id);
             const bool known = !binding.isEmpty();
             rows.push_back(QVariantMap{{QStringLiteral("id"), id},
                                        {QStringLiteral("title"), title},
+                                       {QStringLiteral("named"), !name.isEmpty()},
                                        {QStringLiteral("cwd"), cwd},
                                        {QStringLiteral("model"), thread.value(QStringLiteral("model")).toString()},
                                        {QStringLiteral("external"), known
@@ -247,9 +256,12 @@ void AppController::loadThreads(const QString &threadToSelect)
                                        {QStringLiteral("location"), known
                                             ? binding.value(QStringLiteral("location")).toString()
                                             : (cwd == project.path ? QStringLiteral("local") : QStringLiteral("worktree"))}});
-            m_database.bindThread(project.id, id, cwd,
-                                  cwd == project.path ? QStringLiteral("local") : QStringLiteral("worktree"),
-                                  true);
+            if (!known) {
+                m_database.bindThread(project.id, id, cwd,
+                                      cwd == project.path ? QStringLiteral("local")
+                                                          : QStringLiteral("worktree"),
+                                      true);
+            }
         }
         m_threads = rows;
         emit threadsChanged();
@@ -266,7 +278,7 @@ void AppController::loadThreads(const QString &threadToSelect)
                 if (!m_pendingPrompt.isEmpty()) {
                     const QString prompt = std::exchange(m_pendingPrompt, {});
                     m_pendingModelId.clear();
-                    startPromptTurn(selectedThreadId(), prompt, m_pendingPermissionProfile);
+                    startPromptTurn(selectedThreadId(), prompt, m_pendingPermissionProfile, true);
                 }
                 break;
             }
@@ -418,12 +430,24 @@ void AppController::beginThread(const QString &workspace, const QString &locatio
                                     QString::fromUtf8(head.output).trimmed());
         }
         loadProjects();
+        m_threads.prepend(QVariantMap{
+            {QStringLiteral("id"), id},
+            {QStringLiteral("title"), QStringLiteral("Untitled thread")},
+            {QStringLiteral("named"), false},
+            {QStringLiteral("cwd"), workspace},
+            {QStringLiteral("model"), m_pendingModelId.isEmpty()
+                ? m_codingModelId : m_pendingModelId},
+            {QStringLiteral("external"), false},
+            {QStringLiteral("location"), location}});
+        m_selectedThread = 0;
+        m_conversation.setThread(id);
+        emit threadsChanged();
+        emit selectedThreadChanged();
         if (!m_pendingPrompt.isEmpty()) {
             const QString prompt = std::exchange(m_pendingPrompt, {});
             m_pendingModelId.clear();
-            startPromptTurn(id, prompt, permissionProfile);
+            startPromptTurn(id, prompt, permissionProfile, true);
         } else {
-            loadThreads(id);
             setStatus(QStringLiteral("Thread created"));
         }
     });
@@ -455,24 +479,29 @@ void AppController::sendPrompt(const QString &text, const QString &modelId,
         });
         return;
     }
-    startPromptTurn(selectedThreadId(), prompt, permissionProfile(permissionMode));
+    const bool generateTitle = m_selectedThread >= 0
+        && !m_threads.at(m_selectedThread).toMap().value(QStringLiteral("named")).toBool();
+    startPromptTurn(selectedThreadId(), prompt, permissionProfile(permissionMode), generateTitle);
 }
 
 void AppController::startPromptTurn(const QString &threadId, const QString &prompt,
-                                    PermissionProfile permissionProfile)
+                                    PermissionProfile permissionProfile, bool generateTitle)
 {
     m_conversation.setThread(threadId);
     m_conversation.append({threadId, QStringLiteral("user"), QStringLiteral("You"), prompt, {}});
     m_activeThreadId = threadId;
     setTurnRunning(true);
     m_codex.sendTurn(threadId, prompt, {}, permissionProfile,
-                     [this, threadId, prompt](const QJsonObject &, const QString &error) {
+                     [this, threadId, prompt, generateTitle](const QJsonObject &,
+                                                             const QString &error) {
         if (!error.isEmpty()) {
             setTurnRunning(false);
             setStatus(error);
             emit promptRestoreRequested(prompt);
             return;
         }
+        if (generateTitle)
+            generateThreadTitle(threadId, prompt);
         loadThreads(threadId);
     });
 }
@@ -493,6 +522,23 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
                                       const QString &title, const QString &content,
                                       const QVariantMap &metadata)
 {
+    if (m_titleTargets.contains(threadId)) {
+        if (type == QStringLiteral("assistant")) {
+            if (metadata.value(QStringLiteral("lifecycle")).toString()
+                == QStringLiteral("completed")) {
+                m_titleDraftBuffers[threadId] = content;
+            } else {
+                m_titleDraftBuffers[threadId] += content;
+            }
+        }
+        if (type == QStringLiteral("status")) {
+            const auto targetThreadId = m_titleTargets.take(threadId);
+            const auto title = cleanTitleDraft(m_titleDraftBuffers.take(threadId));
+            if (!title.isEmpty())
+                applyThreadTitle(targetThreadId, title);
+        }
+        return;
+    }
     if (threadId == m_commitThreadId) {
         if (type == QStringLiteral("assistant")) {
             if (metadata.value(QStringLiteral("lifecycle")).toString()
@@ -545,18 +591,18 @@ void AppController::refreshGit()
     });
 }
 
-void AppController::generateCommitMessage(const QString &modelId)
+void AppController::generateCommitMessage()
 {
     if (!selectedProjectIsGit())
         return;
     setStatus(QStringLiteral("Preparing commit snapshot…"));
-    m_git.generateCommitSnapshot(selectedWorkspacePath(), [this, modelId](const GitResult &snapshot) {
+    m_git.generateCommitSnapshot(selectedWorkspacePath(), [this](const GitResult &snapshot) {
         if (!snapshot.ok()) {
             setStatus(QString::fromUtf8(snapshot.error));
             return;
         }
-    const auto workspace = selectedWorkspacePath();
-    ThreadConfiguration config{selectedProjectPath(), workspace, modelId, {},
+        const auto workspace = selectedWorkspacePath();
+        ThreadConfiguration config{selectedProjectPath(), workspace, m_commitModelId, {},
                                    PermissionProfile::ReadOnly, true};
         m_codex.startThread(config, [this, snapshot](const QJsonObject &result, const QString &error) {
             if (!error.isEmpty()) {
@@ -576,6 +622,64 @@ void AppController::generateCommitMessage(const QString &modelId)
             });
             setStatus(QStringLiteral("Generating commit message…"));
         });
+    });
+}
+
+void AppController::generateThreadTitle(const QString &threadId, const QString &prompt)
+{
+    ThreadConfiguration config{selectedProjectPath(), selectedWorkspacePath(), m_titleModelId, {},
+                               PermissionProfile::ReadOnly, true};
+    m_codex.startThread(config, [this, threadId, prompt](const QJsonObject &result,
+                                                         const QString &error) {
+        if (!error.isEmpty()) {
+            setStatus(QStringLiteral("Could not generate thread title: %1").arg(error));
+            return;
+        }
+        const auto titleThreadId = result.value(QStringLiteral("thread")).toObject()
+                                       .value(QStringLiteral("id")).toString();
+        if (titleThreadId.isEmpty())
+            return;
+        m_titleTargets.insert(titleThreadId, threadId);
+        m_titleDraftBuffers.insert(titleThreadId, {});
+        const auto titlePrompt = QStringLiteral(
+            "Create a concise title for a software-development conversation from the user's "
+            "first message below. Return JSON only as {\"title\":\"...\"}. Use 3 to 7 words, "
+            "sentence case, no punctuation at the end, and describe the concrete task.\n\n%1")
+            .arg(prompt.left(12000));
+        m_codex.sendTurn(titleThreadId, titlePrompt, {}, PermissionProfile::ReadOnly,
+            [this, titleThreadId](const QJsonObject &, const QString &turnError) {
+                if (turnError.isEmpty())
+                    return;
+                m_titleTargets.remove(titleThreadId);
+                m_titleDraftBuffers.remove(titleThreadId);
+                setStatus(QStringLiteral("Could not generate thread title: %1").arg(turnError));
+            });
+    });
+}
+
+void AppController::applyThreadTitle(const QString &threadId, const QString &title)
+{
+    m_codex.request(QStringLiteral("thread/name/set"),
+                    {{QStringLiteral("threadId"), threadId},
+                     {QStringLiteral("name"), title}},
+                    [this, threadId, title](const QJsonObject &, const QString &error) {
+        if (!error.isEmpty()) {
+            setStatus(QStringLiteral("Could not name thread: %1").arg(error));
+            return;
+        }
+        for (int i = 0; i < m_threads.size(); ++i) {
+            auto row = m_threads.at(i).toMap();
+            if (row.value(QStringLiteral("id")).toString() != threadId)
+                continue;
+            row.insert(QStringLiteral("title"), title);
+            row.insert(QStringLiteral("named"), true);
+            m_threads[i] = row;
+            emit threadsChanged();
+            if (i == m_selectedThread)
+                emit selectedThreadChanged();
+            break;
+        }
+        loadThreads(threadId);
     });
 }
 
@@ -611,6 +715,49 @@ QString AppController::cleanCommitDraft(const QString &raw) const
             return body.isEmpty() ? subject : subject + QStringLiteral("\n\n") + body;
     }
     return text;
+}
+
+QString AppController::cleanTitleDraft(const QString &raw) const
+{
+    QString text = raw.trimmed();
+    if (text.startsWith(QStringLiteral("```")))
+        text.remove(QRegularExpression(QStringLiteral("^```(?:json)?\\s*|\\s*```$")));
+    const auto document = QJsonDocument::fromJson(text.toUtf8());
+    if (document.isObject())
+        text = document.object().value(QStringLiteral("title")).toString().trimmed();
+    text = text.section(QChar(u'\n'), 0, 0).trimmed();
+    if (text.startsWith(QChar(u'"')) && text.endsWith(QChar(u'"')) && text.size() > 1)
+        text = text.mid(1, text.size() - 2).trimmed();
+    return text.left(80);
+}
+
+void AppController::setModelSetting(const QString &key, QString &storage,
+                                    const QString &modelId)
+{
+    if (storage == modelId)
+        return;
+    QString error;
+    if (!m_database.setSetting(key, modelId, &error)) {
+        setStatus(QStringLiteral("Could not save settings: %1").arg(error));
+        return;
+    }
+    storage = modelId;
+    emit settingsChanged();
+}
+
+void AppController::setCodingModelId(const QString &modelId)
+{
+    setModelSetting(QStringLiteral("coding_model"), m_codingModelId, modelId);
+}
+
+void AppController::setCommitModelId(const QString &modelId)
+{
+    setModelSetting(QStringLiteral("commit_model"), m_commitModelId, modelId);
+}
+
+void AppController::setTitleModelId(const QString &modelId)
+{
+    setModelSetting(QStringLiteral("title_model"), m_titleModelId, modelId);
 }
 
 void AppController::commitAllAndPush(const QString &message)

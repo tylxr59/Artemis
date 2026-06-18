@@ -10,6 +10,8 @@ Current vertical slice:
 - Streamed agent activity
 - Git status and diff review
 - AI-generated commit messages
+- Separate persisted model settings for coding, commit messages, and thread titles
+- AI-generated thread names after the first message
 - Commit-and-push workflows for the current or a new feature branch
 - SQLite persistence and diagnostics
 

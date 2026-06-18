@@ -56,6 +56,7 @@ qt_add_qml_module(artemis
         qml/components/ConversationDelegate.qml
         qml/components/ReviewPane.qml
         qml/dialogs/CommitDialog.qml
+        qml/dialogs/SettingsDialog.qml
         qml/pages/DiagnosticsPage.qml
 )
 

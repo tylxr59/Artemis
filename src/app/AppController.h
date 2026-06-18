@@ -7,6 +7,7 @@
 #include "providers/codex/CodexClient.h"
 
 #include <QObject>
+#include <QHash>
 #include <QVariantList>
 
 namespace Artemis {
@@ -17,6 +18,9 @@ class AppController : public QObject {
     Q_PROPERTY(ConversationModel *conversation READ conversation CONSTANT)
     Q_PROPERTY(QVariantList threads READ threads NOTIFY threadsChanged)
     Q_PROPERTY(QVariantList models READ models NOTIFY modelsChanged)
+    Q_PROPERTY(QString codingModelId READ codingModelId WRITE setCodingModelId NOTIFY settingsChanged)
+    Q_PROPERTY(QString commitModelId READ commitModelId WRITE setCommitModelId NOTIFY settingsChanged)
+    Q_PROPERTY(QString titleModelId READ titleModelId WRITE setTitleModelId NOTIFY settingsChanged)
     Q_PROPERTY(int selectedProjectIndex READ selectedProjectIndex WRITE selectProject NOTIFY selectedProjectChanged)
     Q_PROPERTY(QString selectedProjectPath READ selectedProjectPath NOTIFY selectedProjectChanged)
     Q_PROPERTY(QString selectedProjectName READ selectedProjectName NOTIFY selectedProjectChanged)
@@ -39,6 +43,9 @@ public:
     ConversationModel *conversation();
     QVariantList threads() const;
     QVariantList models() const;
+    QString codingModelId() const;
+    QString commitModelId() const;
+    QString titleModelId() const;
     int selectedProjectIndex() const;
     QString selectedProjectPath() const;
     QString selectedProjectName() const;
@@ -65,7 +72,7 @@ public:
                                 const QString &permissionMode);
     Q_INVOKABLE void interruptTurn();
     Q_INVOKABLE void refreshGit();
-    Q_INVOKABLE void generateCommitMessage(const QString &modelId);
+    Q_INVOKABLE void generateCommitMessage();
     Q_INVOKABLE void commitAllAndPush(const QString &message);
     Q_INVOKABLE void commitFeatureBranch(const QString &message, const QString &branch,
                                          const QString &remote);
@@ -73,10 +80,14 @@ public:
     Q_INVOKABLE QString validateBranch(const QString &branch) const;
     Q_INVOKABLE void openProjectFolder();
     Q_INVOKABLE void openTerminal();
+    void setCodingModelId(const QString &modelId);
+    void setCommitModelId(const QString &modelId);
+    void setTitleModelId(const QString &modelId);
 
 signals:
     void threadsChanged();
     void modelsChanged();
+    void settingsChanged();
     void selectedProjectChanged();
     void selectedThreadChanged();
     void turnRunningChanged();
@@ -100,11 +111,15 @@ private:
                      const QString &modelId, PermissionProfile permissionProfile,
                      bool saveWorktree);
     void startPromptTurn(const QString &threadId, const QString &prompt,
-                         PermissionProfile permissionProfile);
+                         PermissionProfile permissionProfile, bool generateTitle = false);
+    void generateThreadTitle(const QString &threadId, const QString &prompt);
+    void applyThreadTitle(const QString &threadId, const QString &title);
+    void setModelSetting(const QString &key, QString &storage, const QString &modelId);
     PermissionProfile permissionProfile(const QString &mode) const;
     QString selectedWorkspacePath() const;
     QString commitPrompt(const QByteArray &snapshot) const;
     QString cleanCommitDraft(const QString &raw) const;
+    QString cleanTitleDraft(const QString &raw) const;
 
     Database m_database;
     ProjectTreeModel m_projects;
@@ -121,11 +136,16 @@ private:
     QString m_gitStatus;
     QString m_commitThreadId;
     QString m_commitDraftBuffer;
+    QHash<QString, QString> m_titleTargets;
+    QHash<QString, QString> m_titleDraftBuffers;
     QString m_activeThreadId;
     QString m_pendingPrompt;
     QString m_pendingModelId;
     PermissionProfile m_pendingPermissionProfile = PermissionProfile::FullAccess;
     bool m_threadCreationPending = false;
+    QString m_codingModelId;
+    QString m_commitModelId;
+    QString m_titleModelId;
 };
 
 } // namespace Artemis

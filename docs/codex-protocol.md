@@ -14,4 +14,5 @@ The client tolerates unknown JSON fields and unknown notification methods.
 Requests have a 60-second transport timeout. A crashed process is restarted
 with exponential backoff capped at 16 seconds.
 
-Coding threads are persistent. Commit-message threads are ephemeral.
+Coding threads are persistent. Commit-message and thread-title generation
+threads are ephemeral. Generated titles are applied with `thread/name/set`.
