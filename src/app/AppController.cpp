@@ -72,9 +72,6 @@ QString AppController::providerVersion() const { return m_codex.version(); }
 QString AppController::statusText() const { return m_status; }
 QString AppController::diffText() const { return m_diff; }
 QString AppController::gitStatusText() const { return m_gitStatus; }
-bool AppController::fullAccessAcknowledged() const {
-    return m_database.setting(QStringLiteral("fullAccessAcknowledged")) == QStringLiteral("true");
-}
 QString AppController::databasePath() const { return m_database.path(); }
 QString AppController::worktreeRoot() const { return Paths::worktreeRoot(); }
 
@@ -218,11 +215,16 @@ void AppController::loadThreads(const QString &threadToSelect)
             for (int i = 0; i < m_threads.size(); ++i) {
                 if (m_threads.at(i).toMap().value(QStringLiteral("id")).toString() != threadToSelect)
                     continue;
-                selectThread(i);
+                if (threadToSelect == m_activeThreadId) {
+                    m_selectedThread = i;
+                    emit selectedThreadChanged();
+                } else {
+                    selectThread(i);
+                }
                 if (!m_pendingPrompt.isEmpty()) {
                     const QString prompt = std::exchange(m_pendingPrompt, {});
                     m_pendingModelId.clear();
-                    sendPrompt(prompt);
+                    startPromptTurn(selectedThreadId(), prompt, m_pendingPermissionProfile);
                 }
                 break;
             }
@@ -289,12 +291,18 @@ void AppController::selectThread(int index)
     });
 }
 
-void AppController::createThread(bool worktree, const QString &modelId)
+PermissionProfile AppController::permissionProfile(const QString &mode) const
 {
-    if (!fullAccessAcknowledged()) {
-        emit fullAccessRequired();
-        return;
-    }
+    if (mode == QStringLiteral("approval-required"))
+        return PermissionProfile::ReadOnly;
+    if (mode == QStringLiteral("auto-accept-edits"))
+        return PermissionProfile::WorkspaceWrite;
+    return PermissionProfile::FullAccess;
+}
+
+void AppController::createThread(bool worktree, const QString &modelId,
+                                 const QString &permissionMode)
+{
     const auto project = m_projects.row(m_selectedProject);
     if (project.id < 0 || !m_codex.ready())
         return;
@@ -305,32 +313,37 @@ void AppController::createThread(bool worktree, const QString &modelId)
     if (m_threadCreationPending)
         return;
     m_threadCreationPending = true;
+    const auto profile = permissionProfile(permissionMode);
     if (!worktree) {
-        beginThread(project.path, QStringLiteral("local"), modelId, false);
+        beginThread(project.path, QStringLiteral("local"), modelId, profile, false);
         return;
     }
     const auto token = QUuid::createUuid().toString(QUuid::WithoutBraces);
     const auto destination = QDir(Paths::worktreeRoot())
         .filePath(QStringLiteral("%1/%2").arg(project.id).arg(token));
     setStatus(QStringLiteral("Creating managed worktree…"));
-    m_git.createWorktree(project.path, destination, [this, destination, modelId](const GitResult &result) {
+    m_git.createWorktree(project.path, destination,
+                         [this, destination, modelId, profile](const GitResult &result) {
         if (!result.ok()) {
             m_threadCreationPending = false;
             setStatus(QString::fromUtf8(result.error));
             return;
         }
-        beginThread(destination, QStringLiteral("worktree"), modelId, true);
+        beginThread(destination, QStringLiteral("worktree"), modelId, profile, true);
     });
 }
 
 void AppController::beginThread(const QString &workspace, const QString &location,
-                                const QString &modelId, bool saveWorktree)
+                                const QString &modelId, PermissionProfile permissionProfile,
+                                bool saveWorktree)
 {
     const auto project = m_projects.row(m_selectedProject);
-    ThreadConfiguration config{project.path, workspace, modelId, {}, PermissionProfile::FullAccess, false};
-    m_codex.startThread(config, [this, project, workspace, location, saveWorktree](const QJsonObject &result, const QString &error) {
+    ThreadConfiguration config{project.path, workspace, modelId, {}, permissionProfile, false};
+    m_codex.startThread(config, [this, project, workspace, location, permissionProfile, saveWorktree](const QJsonObject &result, const QString &error) {
         m_threadCreationPending = false;
         if (!error.isEmpty()) {
+            if (!m_pendingPrompt.isEmpty())
+                emit promptRestoreRequested(m_pendingPrompt);
             m_pendingPrompt.clear();
             m_pendingModelId.clear();
             setStatus(error);
@@ -345,12 +358,19 @@ void AppController::beginThread(const QString &workspace, const QString &locatio
                                     QString::fromUtf8(head.output).trimmed());
         }
         loadProjects();
-        loadThreads(id);
-        setStatus(QStringLiteral("Thread created"));
+        if (!m_pendingPrompt.isEmpty()) {
+            const QString prompt = std::exchange(m_pendingPrompt, {});
+            m_pendingModelId.clear();
+            startPromptTurn(id, prompt, permissionProfile);
+        } else {
+            loadThreads(id);
+            setStatus(QStringLiteral("Thread created"));
+        }
     });
 }
 
-void AppController::sendPrompt(const QString &text, const QString &modelId)
+void AppController::sendPrompt(const QString &text, const QString &modelId,
+                               const QString &permissionMode)
 {
     const QString prompt = text.trimmed();
     if (prompt.isEmpty())
@@ -360,11 +380,8 @@ void AppController::sendPrompt(const QString &text, const QString &modelId)
             return;
         m_pendingPrompt = prompt;
         m_pendingModelId = modelId;
-        createThread(false, modelId);
-        return;
-    }
-    if (!fullAccessAcknowledged()) {
-        emit fullAccessRequired();
+        m_pendingPermissionProfile = permissionProfile(permissionMode);
+        createThread(false, modelId, permissionMode);
         return;
     }
     if (m_turnRunning) {
@@ -378,14 +395,25 @@ void AppController::sendPrompt(const QString &text, const QString &modelId)
         });
         return;
     }
-    m_conversation.append({selectedThreadId(), QStringLiteral("user"), QStringLiteral("You"), prompt, {}});
-    m_activeThreadId = selectedThreadId();
+    startPromptTurn(selectedThreadId(), prompt, permissionProfile(permissionMode));
+}
+
+void AppController::startPromptTurn(const QString &threadId, const QString &prompt,
+                                    PermissionProfile permissionProfile)
+{
+    m_conversation.setThread(threadId);
+    m_conversation.append({threadId, QStringLiteral("user"), QStringLiteral("You"), prompt, {}});
+    m_activeThreadId = threadId;
     setTurnRunning(true);
-    m_codex.sendTurn(selectedThreadId(), prompt, {}, [this](const QJsonObject &, const QString &error) {
+    m_codex.sendTurn(threadId, prompt, {}, permissionProfile,
+                     [this, threadId, prompt](const QJsonObject &, const QString &error) {
         if (!error.isEmpty()) {
             setTurnRunning(false);
             setStatus(error);
+            emit promptRestoreRequested(prompt);
+            return;
         }
+        loadThreads(threadId);
     });
 }
 
@@ -451,14 +479,6 @@ void AppController::refreshGit()
     });
 }
 
-void AppController::acknowledgeFullAccess()
-{
-    m_database.setSetting(QStringLiteral("fullAccessAcknowledged"), QStringLiteral("true"));
-    emit fullAccessAcknowledgedChanged();
-    if (!m_pendingPrompt.isEmpty() && selectedThreadId().isEmpty())
-        createThread(false, m_pendingModelId);
-}
-
 void AppController::generateCommitMessage(const QString &modelId)
 {
     if (!selectedProjectIsGit())
@@ -481,7 +501,8 @@ void AppController::generateCommitMessage(const QString &modelId)
                                    .value(QStringLiteral("id")).toString();
             m_commitDraftBuffer.clear();
             m_codex.sendTurn(m_commitThreadId, commitPrompt(snapshot.output), {},
-                             [this](const QJsonObject &, const QString &turnError) {
+                PermissionProfile::ReadOnly,
+                [this](const QJsonObject &, const QString &turnError) {
                 if (!turnError.isEmpty()) {
                     setStatus(turnError);
                     m_commitThreadId.clear();

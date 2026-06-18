@@ -6,6 +6,49 @@
 
 namespace Artemis {
 
+namespace {
+
+QString approvalPolicy(PermissionProfile profile)
+{
+    switch (profile) {
+    case PermissionProfile::ReadOnly:
+        return QStringLiteral("untrusted");
+    case PermissionProfile::WorkspaceWrite:
+        return QStringLiteral("on-request");
+    case PermissionProfile::FullAccess:
+        return QStringLiteral("never");
+    }
+    return QStringLiteral("never");
+}
+
+QString sandboxMode(PermissionProfile profile)
+{
+    switch (profile) {
+    case PermissionProfile::ReadOnly:
+        return QStringLiteral("read-only");
+    case PermissionProfile::WorkspaceWrite:
+        return QStringLiteral("workspace-write");
+    case PermissionProfile::FullAccess:
+        return QStringLiteral("danger-full-access");
+    }
+    return QStringLiteral("danger-full-access");
+}
+
+QJsonObject sandboxPolicy(PermissionProfile profile)
+{
+    switch (profile) {
+    case PermissionProfile::ReadOnly:
+        return {{QStringLiteral("type"), QStringLiteral("readOnly")}};
+    case PermissionProfile::WorkspaceWrite:
+        return {{QStringLiteral("type"), QStringLiteral("workspaceWrite")}};
+    case PermissionProfile::FullAccess:
+        return {{QStringLiteral("type"), QStringLiteral("dangerFullAccess")}};
+    }
+    return {{QStringLiteral("type"), QStringLiteral("dangerFullAccess")}};
+}
+
+} // namespace
+
 CodexClient::CodexClient(QObject *parent)
     : AgentProvider(parent)
 {
@@ -34,6 +77,39 @@ CodexClient::CodexClient(QObject *parent)
         if (!m_stopping)
             scheduleRestart(QStringLiteral("Codex app-server exited with code %1").arg(code));
     });
+}
+
+CodexClient::~CodexClient()
+{
+    m_stopping = true;
+
+    const auto stopProcess = [this](QProcess *process) {
+        disconnect(process, nullptr, this, nullptr);
+        if (process->state() == QProcess::NotRunning)
+            return;
+
+        process->closeWriteChannel();
+        if (process->waitForFinished(1000))
+            return;
+
+        process->terminate();
+        if (process->waitForFinished(1000))
+            return;
+
+        process->kill();
+        process->waitForFinished(1000);
+    };
+
+    stopProcess(&m_process);
+    const auto childProcesses = findChildren<QProcess *>(QString(), Qt::FindDirectChildrenOnly);
+    for (auto *process : childProcesses)
+        stopProcess(process);
+
+    for (auto &pending : m_pending) {
+        if (pending.timeout)
+            pending.timeout->stop();
+    }
+    m_pending.clear();
 }
 
 ProviderCapabilities CodexClient::capabilities() const
@@ -260,8 +336,8 @@ void CodexClient::startThread(const ThreadConfiguration &configuration, ResultHa
 {
     QJsonObject params{{QStringLiteral("cwd"), configuration.workspacePath},
                        {QStringLiteral("ephemeral"), configuration.ephemeral},
-                       {QStringLiteral("approvalPolicy"), QStringLiteral("never")},
-                       {QStringLiteral("sandbox"), QStringLiteral("danger-full-access")}};
+                       {QStringLiteral("approvalPolicy"), approvalPolicy(configuration.permissionProfile)},
+                       {QStringLiteral("sandbox"), sandboxMode(configuration.permissionProfile)}};
     if (!configuration.modelId.isEmpty())
         params.insert(QStringLiteral("model"), configuration.modelId);
     request(QStringLiteral("thread/start"), params, std::move(handler));
@@ -274,7 +350,8 @@ void CodexClient::resumeThread(const QString &threadId, ResultHandler handler)
 }
 
 void CodexClient::sendTurn(const QString &threadId, const QString &text,
-                           const QStringList &images, ResultHandler handler)
+                           const QStringList &images, PermissionProfile permissionProfile,
+                           ResultHandler handler)
 {
     QJsonArray input;
     input.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("text")},
@@ -283,7 +360,10 @@ void CodexClient::sendTurn(const QString &threadId, const QString &text,
         input.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("localImage")},
                                  {QStringLiteral("path"), image}});
     request(QStringLiteral("turn/start"),
-            {{QStringLiteral("threadId"), threadId}, {QStringLiteral("input"), input}},
+            {{QStringLiteral("threadId"), threadId},
+             {QStringLiteral("input"), input},
+             {QStringLiteral("approvalPolicy"), approvalPolicy(permissionProfile)},
+             {QStringLiteral("sandboxPolicy"), sandboxPolicy(permissionProfile)}},
             std::move(handler));
 }
 

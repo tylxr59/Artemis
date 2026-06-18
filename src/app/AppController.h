@@ -29,7 +29,6 @@ class AppController : public QObject {
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
     Q_PROPERTY(QString diffText READ diffText NOTIFY diffChanged)
     Q_PROPERTY(QString gitStatusText READ gitStatusText NOTIFY diffChanged)
-    Q_PROPERTY(bool fullAccessAcknowledged READ fullAccessAcknowledged NOTIFY fullAccessAcknowledgedChanged)
     Q_PROPERTY(QString databasePath READ databasePath CONSTANT)
     Q_PROPERTY(QString worktreeRoot READ worktreeRoot CONSTANT)
 public:
@@ -52,7 +51,6 @@ public:
     QString statusText() const;
     QString diffText() const;
     QString gitStatusText() const;
-    bool fullAccessAcknowledged() const;
     QString databasePath() const;
     QString worktreeRoot() const;
 
@@ -61,11 +59,12 @@ public:
     Q_INVOKABLE void removeSelectedProject();
     Q_INVOKABLE void selectProject(int index);
     Q_INVOKABLE void selectThread(int index);
-    Q_INVOKABLE void createThread(bool worktree, const QString &modelId);
-    Q_INVOKABLE void sendPrompt(const QString &text, const QString &modelId = {});
+    Q_INVOKABLE void createThread(bool worktree, const QString &modelId,
+                                  const QString &permissionMode);
+    Q_INVOKABLE void sendPrompt(const QString &text, const QString &modelId,
+                                const QString &permissionMode);
     Q_INVOKABLE void interruptTurn();
     Q_INVOKABLE void refreshGit();
-    Q_INVOKABLE void acknowledgeFullAccess();
     Q_INVOKABLE void generateCommitMessage(const QString &modelId);
     Q_INVOKABLE void commitAll(const QString &message);
     Q_INVOKABLE void commitFeatureBranch(const QString &message, const QString &branch,
@@ -84,10 +83,9 @@ signals:
     void providerReadyChanged();
     void statusTextChanged();
     void diffChanged();
-    void fullAccessAcknowledgedChanged();
     void commitDraftReady(const QString &message);
     void commitFinished(bool success, const QString &message);
-    void fullAccessRequired();
+    void promptRestoreRequested(const QString &text);
 
 private:
     void loadProjects();
@@ -99,7 +97,11 @@ private:
                            const QString &title, const QString &content,
                            const QVariantMap &metadata);
     void beginThread(const QString &workspace, const QString &location,
-                     const QString &modelId, bool saveWorktree);
+                     const QString &modelId, PermissionProfile permissionProfile,
+                     bool saveWorktree);
+    void startPromptTurn(const QString &threadId, const QString &prompt,
+                         PermissionProfile permissionProfile);
+    PermissionProfile permissionProfile(const QString &mode) const;
     QString selectedWorkspacePath() const;
     QString commitPrompt(const QByteArray &snapshot) const;
     QString cleanCommitDraft(const QString &raw) const;
@@ -122,6 +124,7 @@ private:
     QString m_activeThreadId;
     QString m_pendingPrompt;
     QString m_pendingModelId;
+    PermissionProfile m_pendingPermissionProfile = PermissionProfile::FullAccess;
     bool m_threadCreationPending = false;
 };
 

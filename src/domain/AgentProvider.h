@@ -67,7 +67,8 @@ public:
     virtual void startThread(const ThreadConfiguration &configuration, ResultHandler handler) = 0;
     virtual void resumeThread(const QString &threadId, ResultHandler handler) = 0;
     virtual void sendTurn(const QString &threadId, const QString &text,
-                          const QStringList &images, ResultHandler handler) = 0;
+                          const QStringList &images, PermissionProfile permissionProfile,
+                          ResultHandler handler) = 0;
     virtual void steerTurn(const QString &threadId, const QString &text, ResultHandler handler) = 0;
     virtual void interruptTurn(const QString &threadId, ResultHandler handler) = 0;
 

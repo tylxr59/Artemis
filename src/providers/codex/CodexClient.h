@@ -15,6 +15,7 @@ class CodexClient final : public AgentProvider {
     Q_PROPERTY(QString version READ version NOTIFY versionChanged)
 public:
     explicit CodexClient(QObject *parent = nullptr);
+    ~CodexClient() override;
 
     ProviderCapabilities capabilities() const override;
     void start() override;
@@ -23,7 +24,8 @@ public:
     void startThread(const ThreadConfiguration &configuration, ResultHandler handler) override;
     void resumeThread(const QString &threadId, ResultHandler handler) override;
     void sendTurn(const QString &threadId, const QString &text,
-                  const QStringList &images, ResultHandler handler) override;
+                  const QStringList &images, PermissionProfile permissionProfile,
+                  ResultHandler handler) override;
     void steerTurn(const QString &threadId, const QString &text, ResultHandler handler) override;
     void interruptTurn(const QString &threadId, ResultHandler handler) override;
 

@@ -19,11 +19,6 @@ Kirigami.ApplicationWindow {
     readonly property bool hasProject: appController.selectedProjectPath.length > 0
     readonly property bool hasThread: appController.selectedThreadId.length > 0
 
-    FullAccessDialog {
-        id: fullAccessDialog
-        onAccepted: appController.acknowledgeFullAccess()
-    }
-
     CommitDialog {
         id: commitDialog
         controller: appController
@@ -31,7 +26,10 @@ Kirigami.ApplicationWindow {
 
     Connections {
         target: appController
-        function onFullAccessRequired() { fullAccessDialog.open() }
+        function onPromptRestoreRequested(text) {
+            if (composer.text.length === 0)
+                composer.text = text
+        }
     }
 
     header: ToolBar {
@@ -332,12 +330,14 @@ Kirigami.ApplicationWindow {
                     id: newThreadMenu
                     MenuItem {
                         text: "New local thread"
-                        onTriggered: appController.createThread(false, "")
+                        onTriggered: appController.createThread(
+                                         false, "", permissionPicker.currentValue)
                     }
                     MenuItem {
                         text: "New worktree thread"
                         enabled: appController.selectedProjectIsGit
-                        onTriggered: appController.createThread(true, "")
+                        onTriggered: appController.createThread(
+                                         true, "", permissionPicker.currentValue)
                     }
                 }
                 Kirigami.Separator { Layout.fillWidth: true }
@@ -455,12 +455,24 @@ Kirigami.ApplicationWindow {
                                 valueRole: "id"
                                 enabled: !appController.turnRunning
                             }
-                            Label {
-                                text: "Full access"
-                                color: Kirigami.Theme.negativeTextColor
-                                ToolTip.text: "Codex can run commands and modify files without approval prompts."
-                                ToolTip.visible: accessHover.hovered
-                                HoverHandler { id: accessHover }
+                            ComboBox {
+                                id: permissionPicker
+                                Layout.preferredWidth: 170
+                                model: [
+                                    { value: "approval-required", label: "Supervised" },
+                                    { value: "auto-accept-edits", label: "Auto-accept edits" },
+                                    { value: "full-access", label: "Full access" }
+                                ]
+                                textRole: "label"
+                                valueRole: "value"
+                                currentIndex: 2
+                                enabled: !appController.turnRunning
+                                ToolTip.text: currentValue === "approval-required"
+                                              ? "Ask before commands and file changes."
+                                              : currentValue === "auto-accept-edits"
+                                                ? "Auto-approve edits, ask before other actions."
+                                                : "Allow commands and edits without prompts."
+                                ToolTip.visible: hovered
                             }
                             Label {
                                 text: appController.statusText
@@ -484,7 +496,9 @@ Kirigami.ApplicationWindow {
                                          && root.hasProject
                                          && appController.providerReady
                                 onClicked: {
-                                    appController.sendPrompt(composer.text, modelPicker.currentValue || "")
+                                    appController.sendPrompt(composer.text,
+                                                             modelPicker.currentValue || "",
+                                                             permissionPicker.currentValue)
                                     composer.clear()
                                 }
                             }

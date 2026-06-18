@@ -15,5 +15,5 @@ Current vertical slice:
 
 See [development documentation](docs/development.md) for setup and build steps.
 
-Codex CLI 0.141.0 or newer must be installed and authenticated. Artemis defaults
-to full-access agent execution after showing a one-time security acknowledgement.
+Codex CLI 0.141.0 or newer must be installed and authenticated. The composer
+offers supervised, auto-accept edits, and full-access execution modes.
