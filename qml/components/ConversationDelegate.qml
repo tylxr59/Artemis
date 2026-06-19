@@ -222,13 +222,22 @@ Item {
                 Layout.topMargin: root.eventType === "user" || root.eventType === "error"
                                   ? 0 : Kirigami.Units.largeSpacing
                 text: root.content
-                textFormat: TextEdit.PlainText
+                textFormat: root.eventType === "assistant"
+                            ? TextEdit.MarkdownText : TextEdit.PlainText
                 visible: root.content.length > 0
                 readOnly: true
                 wrapMode: TextEdit.Wrap
                 selectByMouse: true
                 background: null
                 font.family: Kirigami.Theme.defaultFont.family
+                onLinkActivated: function(link) {
+                    Qt.openUrlExternally(link)
+                }
+
+                HoverHandler {
+                    cursorShape: messageText.hoveredLink.length > 0
+                                 ? Qt.PointingHandCursor : Qt.IBeamCursor
+                }
             }
         }
     }
