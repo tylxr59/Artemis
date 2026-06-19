@@ -160,21 +160,42 @@ Pane {
                                 RowLayout {
                                     anchors.fill: parent
                                     spacing: Kirigami.Units.smallSpacing
-                                    Kirigami.Icon {
-                                        source: planStep.modelData.status === "completed"
-                                                ? "task-complete"
-                                                : planStep.modelData.status === "in_progress"
-                                                  || planStep.modelData.status === "inProgress"
-                                                  ? "media-playback-start"
-                                                  : "media-playback-pause"
+                                    Item {
                                         Layout.preferredWidth: 18
                                         Layout.preferredHeight: 18
-                                        color: planStep.modelData.status === "completed"
-                                               ? Kirigami.Theme.positiveTextColor
-                                               : planStep.modelData.status === "in_progress"
-                                                 || planStep.modelData.status === "inProgress"
-                                                 ? Kirigami.Theme.highlightColor
-                                                 : Kirigami.Theme.textColor
+
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: 14
+                                            height: 14
+                                            visible: planStep.modelData.status === "completed"
+                                            color: "transparent"
+                                            border.width: 1
+                                            border.color: Kirigami.Theme.textColor
+                                            radius: 1
+
+                                            Kirigami.Icon {
+                                                anchors.centerIn: parent
+                                                width: 12
+                                                height: 12
+                                                source: "checkmark"
+                                                color: Kirigami.Theme.highlightColor
+                                            }
+                                        }
+
+                                        Kirigami.Icon {
+                                            anchors.fill: parent
+                                            visible: planStep.modelData.status !== "completed"
+                                            source: planStep.modelData.status === "in_progress"
+                                                    || planStep.modelData.status === "inProgress"
+                                                    ? "media-playback-start"
+                                                    : "media-playback-pause"
+                                            color: planStep.modelData.status === "in_progress"
+                                                   || planStep.modelData.status === "inProgress"
+                                                   ? Kirigami.Theme.highlightColor
+                                                   : Kirigami.Theme.textColor
+                                        }
+
                                         opacity: planStep.modelData.status === "pending" ? 0.45 : 1
                                     }
                                     Label {
