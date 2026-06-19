@@ -112,6 +112,16 @@ private slots:
                  QStringLiteral("completed output"));
         QCOMPARE(events.at(1).value(QStringLiteral("content")).toString(),
                  QStringLiteral("Final answer"));
+        const auto emptyContentThread = QStringLiteral("thread-null-content-%1").arg(
+            QUuid::createUuid().toString(QUuid::WithoutBraces));
+        QVERIFY(database.saveConversationEvent(
+            emptyContentThread, QStringLiteral("status"),
+            QStringLiteral("Turn completed"), QString{},
+            {{QStringLiteral("turnId"), QStringLiteral("turn-without-status")}}, &error));
+        const auto emptyContentEvents = database.conversationEvents(emptyContentThread);
+        QCOMPARE(emptyContentEvents.size(), 1);
+        QCOMPARE(emptyContentEvents.constFirst().value(QStringLiteral("content")).toString(),
+                 QStringLiteral(""));
         QVERIFY(database.referencedAttachmentPaths().contains(
             QStringLiteral("/tmp/artemis-reference.png")));
         QVERIFY(database.setSetting(QStringLiteral("test"), QStringLiteral("value"), &error));

@@ -303,6 +303,9 @@ bool Database::saveConversationEvent(const QString &threadId, const QString &typ
                                      const QString &title, const QString &content,
                                      const QVariantMap &metadata, QString *error)
 {
+    // QJsonValue::toString() returns a null QString when an optional protocol
+    // field is absent. QSQLITE binds that as SQL NULL rather than empty text.
+    const auto storedContent = content.isNull() ? QStringLiteral("") : content;
     QString eventKey;
     const auto itemId = metadata.value(QStringLiteral("itemId")).toString();
     const auto turnId = metadata.value(QStringLiteral("turnId")).toString();
@@ -324,7 +327,7 @@ bool Database::saveConversationEvent(const QString &threadId, const QString &typ
     query.addBindValue(eventKey.isEmpty() ? QVariant{} : QVariant{eventKey});
     query.addBindValue(type);
     query.addBindValue(title);
-    query.addBindValue(content);
+    query.addBindValue(storedContent);
     query.addBindValue(QString::fromUtf8(
         QJsonDocument(QJsonObject::fromVariantMap(metadata)).toJson(QJsonDocument::Compact)));
     if (!query.exec()) {
