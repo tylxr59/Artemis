@@ -222,6 +222,10 @@ Item {
                         id: fileHeader
                         Layout.fillWidth: true
                         Layout.preferredHeight: root.compact ? 38 : 42
+                        leftInset: 0
+                        rightInset: 0
+                        topInset: 0
+                        bottomInset: 0
                         leftPadding: Kirigami.Units.smallSpacing
                         rightPadding: Kirigami.Units.largeSpacing
                         topPadding: 0
