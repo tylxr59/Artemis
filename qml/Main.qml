@@ -239,33 +239,6 @@ Kirigami.ApplicationWindow {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
-            Rectangle {
-                Layout.preferredWidth: connectionRow.implicitWidth + Kirigami.Units.largeSpacing
-                Layout.preferredHeight: connectionRow.implicitHeight + Kirigami.Units.smallSpacing
-                radius: height / 2
-                color: Qt.alpha(appController.providerReady
-                                ? Kirigami.Theme.positiveTextColor
-                                : Kirigami.Theme.negativeTextColor, 0.12)
-                RowLayout {
-                    id: connectionRow
-                    anchors.centerIn: parent
-                    spacing: Kirigami.Units.smallSpacing
-                    Rectangle {
-                        Layout.preferredWidth: 7
-                        Layout.preferredHeight: 7
-                        radius: 4
-                        color: appController.providerReady
-                               ? Kirigami.Theme.positiveTextColor
-                               : Kirigami.Theme.negativeTextColor
-                    }
-                    Label {
-                        text: appController.providerReady ? "Codex connected" : "Codex offline"
-                        color: appController.providerReady
-                               ? Kirigami.Theme.positiveTextColor
-                               : Kirigami.Theme.negativeTextColor
-                    }
-                }
-            }
             ToolButton {
                 text: "Open folder"
                 icon.name: "folder-open"
@@ -713,6 +686,36 @@ Kirigami.ApplicationWindow {
                 Kirigami.Separator { Layout.fillWidth: true }
                 RowLayout {
                     Layout.fillWidth: true
+                    Rectangle {
+                        Layout.preferredWidth: connectionRow.implicitWidth
+                                               + Kirigami.Units.largeSpacing
+                        Layout.preferredHeight: connectionRow.implicitHeight
+                                                + Kirigami.Units.smallSpacing
+                        radius: height / 2
+                        color: Qt.alpha(appController.providerReady
+                                        ? Kirigami.Theme.positiveTextColor
+                                        : Kirigami.Theme.negativeTextColor, 0.12)
+                        RowLayout {
+                            id: connectionRow
+                            anchors.centerIn: parent
+                            spacing: Kirigami.Units.smallSpacing
+                            Rectangle {
+                                Layout.preferredWidth: 7
+                                Layout.preferredHeight: 7
+                                radius: 4
+                                color: appController.providerReady
+                                       ? Kirigami.Theme.positiveTextColor
+                                       : Kirigami.Theme.negativeTextColor
+                            }
+                            Label {
+                                text: appController.providerReady
+                                      ? "Codex connected" : "Codex offline"
+                                color: appController.providerReady
+                                       ? Kirigami.Theme.positiveTextColor
+                                       : Kirigami.Theme.negativeTextColor
+                            }
+                        }
+                    }
                     Item { Layout.fillWidth: true }
                     ToolButton {
                         icon.name: "settings-configure"
