@@ -71,9 +71,11 @@ public:
                           const QString &reasoningEffort, const QString &collaborationMode,
                           PermissionProfile permissionProfile,
                           ResultHandler handler) = 0;
-    virtual void steerTurn(const QString &threadId, const QString &text,
+    virtual void steerTurn(const QString &threadId, const QString &turnId,
+                           const QString &text,
                            const QStringList &images, ResultHandler handler) = 0;
-    virtual void interruptTurn(const QString &threadId, ResultHandler handler) = 0;
+    virtual void interruptTurn(const QString &threadId, const QString &turnId,
+                               ResultHandler handler) = 0;
 
 signals:
     void readyChanged(bool ready);

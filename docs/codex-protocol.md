@@ -17,3 +17,7 @@ with exponential backoff capped at 16 seconds.
 
 Coding threads are persistent. Commit-message and thread-title generation
 threads are ephemeral. Generated titles are applied with `thread/name/set`.
+
+Artemis tracks the active turn returned by `turn/start`. Messages submitted
+while that turn is running use `turn/steer` with `expectedTurnId`; cancellation
+uses `turn/interrupt` with the same id in `turnId`.

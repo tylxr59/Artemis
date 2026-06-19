@@ -117,6 +117,12 @@ AppController::AppController(QObject *parent)
     connect(&m_codex, &CodexClient::domainEvent, this, &AppController::handleDomainEvent);
     connect(&m_codex, &CodexClient::rawNotification, this,
             [this](const QString &method, const QJsonObject &params) {
+        if (method == QStringLiteral("turn/started")) {
+            const auto turn = params.value(QStringLiteral("turn")).toObject();
+            setActiveTurnId(params.value(QStringLiteral("threadId")).toString(),
+                            turn.value(QStringLiteral("id")).toString());
+            return;
+        }
         if (method != QStringLiteral("thread/tokenUsage/updated"))
             return;
         const auto threadId = params.value(QStringLiteral("threadId")).toString();
@@ -743,14 +749,8 @@ bool AppController::sendPrompt(const QString &text, const QVariantList &imageVal
             {{QStringLiteral("images"), images}}};
         m_conversation.append(userEvent);
         persistConversationEvent(userEvent);
-        m_codex.steerTurn(selectedThreadId(), prompt, images,
-                         [this, prompt, images](const QJsonObject &, const QString &error) {
-            if (!error.isEmpty())
-                setStatus(error);
-            if (!error.isEmpty())
-                emit promptRestoreRequested(prompt,
-                                            QVariantList(images.cbegin(), images.cend()));
-        });
+        m_pendingSteers.push_back({prompt, images});
+        sendPendingSteers();
         return true;
     }
     const bool generateTitle = m_selectedThread >= 0
@@ -759,6 +759,43 @@ bool AppController::sendPrompt(const QString &text, const QVariantList &imageVal
                     collaborationMode,
                     permissionProfile(permissionMode), generateTitle);
     return true;
+}
+
+void AppController::sendPendingSteers()
+{
+    if (m_activeThreadId.isEmpty() || m_activeTurnId.isEmpty()
+        || m_pendingSteers.isEmpty()) {
+        return;
+    }
+    const auto steer = m_pendingSteers.takeFirst();
+    m_codex.steerTurn(m_activeThreadId, m_activeTurnId, steer.prompt, steer.images,
+                      [this, steer](const QJsonObject &, const QString &error) {
+            if (!error.isEmpty())
+                setStatus(error);
+            if (!error.isEmpty()) {
+                emit promptRestoreRequested(
+                    steer.prompt,
+                    QVariantList(steer.images.cbegin(), steer.images.cend()));
+            }
+            sendPendingSteers();
+        });
+}
+
+void AppController::restorePendingSteers()
+{
+    while (!m_pendingSteers.isEmpty()) {
+        const auto steer = m_pendingSteers.takeFirst();
+        emit promptRestoreRequested(
+            steer.prompt, QVariantList(steer.images.cbegin(), steer.images.cend()));
+    }
+}
+
+void AppController::setActiveTurnId(const QString &threadId, const QString &turnId)
+{
+    if (threadId != m_activeThreadId || turnId.isEmpty())
+        return;
+    m_activeTurnId = turnId;
+    sendPendingSteers();
 }
 
 void AppController::copyText(const QString &text)
@@ -779,18 +816,24 @@ void AppController::startPromptTurn(const QString &threadId, const QString &prom
     m_conversation.append(userEvent);
     persistConversationEvent(userEvent);
     m_activeThreadId = threadId;
+    m_activeTurnId.clear();
     setTurnRunning(true);
     m_codex.sendTurn(threadId, prompt, images, modelId, reasoningEffort,
                      collaborationMode, permissionProfile,
-                     [this, threadId, prompt, images, generateTitle](const QJsonObject &,
-                                                                     const QString &error) {
+                     [this, threadId, prompt, images, generateTitle](
+                         const QJsonObject &result, const QString &error) {
         if (!error.isEmpty()) {
+            restorePendingSteers();
             setTurnRunning(false);
+            m_activeThreadId.clear();
+            m_activeTurnId.clear();
             setStatus(error);
             emit promptRestoreRequested(prompt,
                                         QVariantList(images.cbegin(), images.cend()));
             return;
         }
+        setActiveTurnId(threadId, result.value(QStringLiteral("turn")).toObject()
+                                     .value(QStringLiteral("id")).toString());
         if (generateTitle)
             generateThreadTitle(threadId, prompt.isEmpty()
                 ? QStringLiteral("Image attachment") : prompt);
@@ -839,13 +882,12 @@ QString AppController::pasteClipboardImage()
 
 void AppController::interruptTurn()
 {
-    if (!m_turnRunning || m_activeThreadId.isEmpty())
+    if (!m_turnRunning || m_activeThreadId.isEmpty() || m_activeTurnId.isEmpty())
         return;
-    m_codex.interruptTurn(m_activeThreadId, [this](const QJsonObject &, const QString &error) {
+    m_codex.interruptTurn(m_activeThreadId, m_activeTurnId,
+                          [this](const QJsonObject &, const QString &error) {
         if (!error.isEmpty())
             setStatus(error);
-        setTurnRunning(false);
-        m_activeThreadId.clear();
     });
 }
 
@@ -934,8 +976,10 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
         emit diffChanged();
     }
     if (type == QStringLiteral("status")) {
+        restorePendingSteers();
         setTurnRunning(false);
         m_activeThreadId.clear();
+        m_activeTurnId.clear();
         refreshGit();
     }
 }

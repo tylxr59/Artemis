@@ -28,9 +28,11 @@ public:
                   const QString &reasoningEffort, const QString &collaborationMode,
                   PermissionProfile permissionProfile,
                   ResultHandler handler) override;
-    void steerTurn(const QString &threadId, const QString &text,
+    void steerTurn(const QString &threadId, const QString &turnId,
+                   const QString &text,
                    const QStringList &images, ResultHandler handler) override;
-    void interruptTurn(const QString &threadId, ResultHandler handler) override;
+    void interruptTurn(const QString &threadId, const QString &turnId,
+                       ResultHandler handler) override;
 
     bool ready() const;
     QString version() const;

@@ -290,6 +290,82 @@ private slots:
         qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
     }
 
+    void codexActiveTurnRequestsIncludeTurnId()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto executable = directory.filePath(QStringLiteral("fake-codex"));
+        const auto requestsPath = directory.filePath(QStringLiteral("requests.jsonl"));
+        QFile script(executable);
+        QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Text));
+        script.write(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = \"--version\" ]; then\n"
+            "  echo 'codex-cli 0.141.0'\n"
+            "  exit 0\n"
+            "fi\n"
+            "while IFS= read -r request; do\n"
+            "  printf '%s\\n' \"$request\" >> \"$ARTEMIS_TEST_CODEX_REQUESTS\"\n"
+            "  id=$(printf '%s' \"$request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
+            "  if [ -n \"$id\" ]; then\n"
+            "    printf '{\"id\":%s,\"result\":{}}\\n' \"$id\"\n"
+            "  fi\n"
+            "done\n");
+        script.close();
+        QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                      | QFileDevice::ExeOwner));
+
+        qputenv("ARTEMIS_CODEX_EXECUTABLE", executable.toUtf8());
+        qputenv("ARTEMIS_TEST_CODEX_REQUESTS", requestsPath.toUtf8());
+        CodexClient client;
+        QSignalSpy readyChanges(&client, &CodexClient::readyChanged);
+        client.start();
+        QTRY_VERIFY_WITH_TIMEOUT(!readyChanges.isEmpty()
+                                     && readyChanges.constLast().constFirst().toBool(),
+                                 3000);
+
+        bool steerCompleted = false;
+        bool interruptCompleted = false;
+        client.steerTurn(QStringLiteral("thread-1"), QStringLiteral("turn-1"),
+                         QStringLiteral("Focus on tests"), {},
+                         [&steerCompleted](const QJsonObject &, const QString &error) {
+            QVERIFY2(error.isEmpty(), qPrintable(error));
+            steerCompleted = true;
+        });
+        client.interruptTurn(
+            QStringLiteral("thread-1"), QStringLiteral("turn-1"),
+            [&interruptCompleted](const QJsonObject &, const QString &error) {
+                QVERIFY2(error.isEmpty(), qPrintable(error));
+                interruptCompleted = true;
+            });
+        QTRY_VERIFY_WITH_TIMEOUT(steerCompleted && interruptCompleted, 3000);
+
+        QFile requests(requestsPath);
+        QVERIFY(requests.open(QIODevice::ReadOnly | QIODevice::Text));
+        QJsonObject steerParams;
+        QJsonObject interruptParams;
+        while (!requests.atEnd()) {
+            const auto document = QJsonDocument::fromJson(requests.readLine());
+            const auto request = document.object();
+            const auto method = request.value(QStringLiteral("method")).toString();
+            if (method == QStringLiteral("turn/steer"))
+                steerParams = request.value(QStringLiteral("params")).toObject();
+            else if (method == QStringLiteral("turn/interrupt"))
+                interruptParams = request.value(QStringLiteral("params")).toObject();
+        }
+        QCOMPARE(steerParams.value(QStringLiteral("threadId")).toString(),
+                 QStringLiteral("thread-1"));
+        QCOMPARE(steerParams.value(QStringLiteral("expectedTurnId")).toString(),
+                 QStringLiteral("turn-1"));
+        QCOMPARE(interruptParams.value(QStringLiteral("threadId")).toString(),
+                 QStringLiteral("thread-1"));
+        QCOMPARE(interruptParams.value(QStringLiteral("turnId")).toString(),
+                 QStringLiteral("turn-1"));
+
+        qunsetenv("ARTEMIS_TEST_CODEX_REQUESTS");
+        qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
+    }
+
     void commitAllPushesCurrentBranch()
     {
         QTemporaryDir root;

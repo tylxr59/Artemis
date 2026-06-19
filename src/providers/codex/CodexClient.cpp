@@ -496,7 +496,8 @@ void CodexClient::sendTurn(const QString &threadId, const QString &text,
     request(QStringLiteral("turn/start"), params, std::move(handler));
 }
 
-void CodexClient::steerTurn(const QString &threadId, const QString &text,
+void CodexClient::steerTurn(const QString &threadId, const QString &turnId,
+                            const QString &text,
                             const QStringList &images, ResultHandler handler)
 {
     QJsonArray input;
@@ -507,13 +508,18 @@ void CodexClient::steerTurn(const QString &threadId, const QString &text,
         input.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("localImage")},
                                  {QStringLiteral("path"), image}});
     request(QStringLiteral("turn/steer"),
-            {{QStringLiteral("threadId"), threadId}, {QStringLiteral("input"), input}},
+            {{QStringLiteral("threadId"), threadId},
+             {QStringLiteral("expectedTurnId"), turnId},
+             {QStringLiteral("input"), input}},
             std::move(handler));
 }
 
-void CodexClient::interruptTurn(const QString &threadId, ResultHandler handler)
+void CodexClient::interruptTurn(const QString &threadId, const QString &turnId,
+                                ResultHandler handler)
 {
-    request(QStringLiteral("turn/interrupt"), {{QStringLiteral("threadId"), threadId}},
+    request(QStringLiteral("turn/interrupt"),
+            {{QStringLiteral("threadId"), threadId},
+             {QStringLiteral("turnId"), turnId}},
             std::move(handler));
 }
 

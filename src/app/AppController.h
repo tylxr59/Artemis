@@ -169,6 +169,9 @@ private:
                          const QStringList &images, const QString &modelId,
                          const QString &reasoningEffort, const QString &collaborationMode,
                          PermissionProfile permissionProfile, bool generateTitle = false);
+    void setActiveTurnId(const QString &threadId, const QString &turnId);
+    void sendPendingSteers();
+    void restorePendingSteers();
     void generateThreadTitle(const QString &threadId, const QString &prompt);
     void applyThreadTitle(const QString &threadId, const QString &title);
     void setModelSetting(const QString &key, QString &storage, const QString &modelId);
@@ -203,6 +206,12 @@ private:
     QHash<QString, QString> m_titleDraftBuffers;
     QHash<QString, QString> m_assistantDraftBuffers;
     QString m_activeThreadId;
+    QString m_activeTurnId;
+    struct PendingSteer {
+        QString prompt;
+        QStringList images;
+    };
+    QList<PendingSteer> m_pendingSteers;
     QHash<QString, QVariantList> m_threadPlans;
     QHash<QString, QString> m_threadPlanExplanations;
     QHash<QString, QString> m_threadTasks;

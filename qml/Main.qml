@@ -1203,37 +1203,49 @@ Kirigami.ApplicationWindow {
                                     }
                                 }
                             }
-                            RoundButton {
-                                id: sendButton
+                            RowLayout {
                                 Layout.row: composerControls.compact ? 2 : 0
                                 Layout.column: composerControls.compact ? 1 : 6
                                 Layout.alignment: composerControls.compact
                                                   ? Qt.AlignRight : Qt.AlignCenter
-                                text: appController.turnRunning ? "■" : "↑"
-                                ToolTip.text: appController.turnRunning
-                                              ? "Stop" : "Send (Enter)"
-                                ToolTip.visible: hovered
-                                enabled: appController.turnRunning
-                                         || ((composer.text.trim().length > 0
+
+                                RoundButton {
+                                    visible: appController.turnRunning
+                                    text: "■"
+                                    Accessible.name: "Stop"
+                                    ToolTip.text: "Stop"
+                                    ToolTip.visible: hovered
+                                    onClicked: {
+                                        appController.interruptTurn()
+                                    }
+                                }
+
+                                RoundButton {
+                                    id: sendButton
+                                    text: "↑"
+                                    Accessible.name: appController.turnRunning
+                                                     ? "Add message" : "Send"
+                                    ToolTip.text: appController.turnRunning
+                                                  ? "Add message to current turn (Enter)"
+                                                  : "Send (Enter)"
+                                    ToolTip.visible: hovered
+                                    enabled: (composer.text.trim().length > 0
                                               || root.composerImages.length > 0)
                                              && root.hasProject
-                                             && appController.providerReady)
-                                onClicked: {
-                                    if (appController.turnRunning) {
-                                        appController.interruptTurn()
-                                        return
-                                    }
-                                    if (appController.sendPrompt(
-                                                composer.text,
-                                                root.composerImages,
-                                                modelPicker.currentValue
-                                                    || appController.codingModelId,
-                                                appController.codingReasoningEffort,
-                                                permissionPicker.currentValue,
-                                                collaborationModeButton.checked
-                                                    ? "plan" : "default")) {
-                                        composer.clear()
-                                        root.composerImages = []
+                                             && appController.providerReady
+                                    onClicked: {
+                                        if (appController.sendPrompt(
+                                                    composer.text,
+                                                    root.composerImages,
+                                                    modelPicker.currentValue
+                                                        || appController.codingModelId,
+                                                    appController.codingReasoningEffort,
+                                                    permissionPicker.currentValue,
+                                                    collaborationModeButton.checked
+                                                        ? "plan" : "default")) {
+                                            composer.clear()
+                                            root.composerImages = []
+                                        }
                                     }
                                 }
                             }
