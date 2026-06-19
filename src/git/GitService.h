@@ -38,6 +38,7 @@ public:
 
     void status(const QString &path, Handler handler);
     void diff(const QString &path, Handler handler);
+    void remoteUrl(const QString &path, const QString &remote, Handler handler);
     void commitAllAndPush(const QString &path, const QString &subject,
                           const QString &body, Handler handler);
     void createBranchCommitPush(const QString &path, const QString &branch,

@@ -103,9 +103,10 @@ Dialog {
         Label { text: "Repository"; font.bold: true }
         TextField {
             Layout.fillWidth: true
-            text: root.controller.selectedWorkspacePath
+            text: root.controller.gitRepositoryUrl
             readOnly: true
             selectByMouse: true
+            placeholderText: "No origin remote configured"
             Accessible.name: "Git repository"
         }
 

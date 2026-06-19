@@ -119,10 +119,6 @@ AppController::AppController(AgentProvider *provider, QObject *parent)
 
 void AppController::connectProvider()
 {
-    connect(this, &AppController::selectedProjectChanged,
-            this, &AppController::selectedWorkspaceChanged);
-    connect(this, &AppController::selectedThreadChanged,
-            this, &AppController::selectedWorkspaceChanged);
     m_turnElapsedUpdateTimer.setInterval(1000);
     connect(&m_turnElapsedUpdateTimer, &QTimer::timeout,
             this, &AppController::turnElapsedChanged);
@@ -322,6 +318,7 @@ bool AppController::hasTokenUsage() const
 }
 QString AppController::diffText() const { return m_diff; }
 QString AppController::gitStatusText() const { return m_gitStatus; }
+QString AppController::gitRepositoryUrl() const { return m_gitRepositoryUrl; }
 bool AppController::hasGitChanges() const { return m_hasGitChanges; }
 QString AppController::databasePath() const { return m_database.path(); }
 
@@ -1210,6 +1207,10 @@ void AppController::refreshGit()
 {
     const auto path = selectedWorkspacePath();
     m_hasGitChanges = false;
+    if (!m_gitRepositoryUrl.isEmpty()) {
+        m_gitRepositoryUrl.clear();
+        emit gitRepositoryUrlChanged();
+    }
     if (path.isEmpty() || !selectedProjectIsGit()) {
         m_diff.clear();
         m_gitStatus = QStringLiteral("This folder is not a Git repository.");
@@ -1230,6 +1231,15 @@ void AppController::refreshGit()
             return;
         m_diff = result.ok() ? QString::fromUtf8(result.output) : QString::fromUtf8(result.error);
         emit diffChanged();
+    });
+    m_git.remoteUrl(path, QStringLiteral("origin"), [this, path](const GitResult &result) {
+        if (path != selectedWorkspacePath())
+            return;
+        const auto url = result.ok() ? QString::fromUtf8(result.output).trimmed() : QString();
+        if (m_gitRepositoryUrl == url)
+            return;
+        m_gitRepositoryUrl = url;
+        emit gitRepositoryUrlChanged();
     });
 }
 

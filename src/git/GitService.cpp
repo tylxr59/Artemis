@@ -141,6 +141,12 @@ void GitService::diff(const QString &path, Handler handler)
                QStringLiteral("--binary"), QStringLiteral("HEAD")}, std::move(handler));
 }
 
+void GitService::remoteUrl(const QString &path, const QString &remote, Handler handler)
+{
+    run(path, {QStringLiteral("remote"), QStringLiteral("get-url"), remote},
+        std::move(handler));
+}
+
 void GitService::commitAllAndPush(const QString &path, const QString &subject,
                                   const QString &body, Handler handler)
 {

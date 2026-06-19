@@ -34,7 +34,6 @@ class AppController : public QObject {
     Q_PROPERTY(QString selectedProjectPath READ selectedProjectPath NOTIFY selectedProjectChanged)
     Q_PROPERTY(QString selectedProjectName READ selectedProjectName NOTIFY selectedProjectChanged)
     Q_PROPERTY(bool selectedProjectIsGit READ selectedProjectIsGit NOTIFY selectedProjectChanged)
-    Q_PROPERTY(QString selectedWorkspacePath READ selectedWorkspacePath NOTIFY selectedWorkspaceChanged)
     Q_PROPERTY(QString selectedThreadId READ selectedThreadId NOTIFY selectedThreadChanged)
     Q_PROPERTY(QString selectedThreadTitle READ selectedThreadTitle NOTIFY selectedThreadChanged)
     Q_PROPERTY(QVariantMap selectedThreadInfo READ selectedThreadInfo NOTIFY selectedThreadChanged)
@@ -62,6 +61,7 @@ class AppController : public QObject {
     Q_PROPERTY(bool hasTokenUsage READ hasTokenUsage NOTIFY tokenUsageChanged)
     Q_PROPERTY(QString diffText READ diffText NOTIFY diffChanged)
     Q_PROPERTY(QString gitStatusText READ gitStatusText NOTIFY diffChanged)
+    Q_PROPERTY(QString gitRepositoryUrl READ gitRepositoryUrl NOTIFY gitRepositoryUrlChanged)
     Q_PROPERTY(bool hasGitChanges READ hasGitChanges NOTIFY diffChanged)
     Q_PROPERTY(QString databasePath READ databasePath CONSTANT)
 public:
@@ -85,7 +85,6 @@ public:
     QString selectedProjectPath() const;
     QString selectedProjectName() const;
     bool selectedProjectIsGit() const;
-    QString selectedWorkspacePath() const;
     QString selectedThreadId() const;
     QString selectedThreadTitle() const;
     QVariantMap selectedThreadInfo() const;
@@ -113,6 +112,7 @@ public:
     bool hasTokenUsage() const;
     QString diffText() const;
     QString gitStatusText() const;
+    QString gitRepositoryUrl() const;
     bool hasGitChanges() const;
     QString databasePath() const;
 
@@ -162,7 +162,6 @@ signals:
     void settingsChanged();
     void selectedProjectChanged();
     void selectedThreadChanged();
-    void selectedWorkspaceChanged();
     void currentTasksChanged();
     void currentPlanChanged();
     void taskPanelRequested();
@@ -178,6 +177,7 @@ signals:
     void statusMessage(const QString &text);
     void tokenUsageChanged();
     void diffChanged();
+    void gitRepositoryUrlChanged();
     void commitDraftFinished(bool success, const QString &message);
     void commitFinished(bool success, const QString &message);
     void commitLockBlocked(const QString &message);
@@ -213,6 +213,7 @@ private:
     void applyThreadTitle(const QString &threadId, const QString &title);
     void setModelSetting(const QString &key, QString &storage, const QString &modelId);
     PermissionProfile permissionProfile(const QString &mode) const;
+    QString selectedWorkspacePath() const;
     QString commitPrompt(const QByteArray &snapshot, const QString &projectName,
                          const QString &branch) const;
     QString cleanCommitDraft(const QString &raw) const;
@@ -237,6 +238,7 @@ private:
     QHash<QString, QVariantMap> m_threadTokenUsage;
     QString m_diff;
     QString m_gitStatus;
+    QString m_gitRepositoryUrl;
     bool m_hasGitChanges = false;
     QString m_commitThreadId;
     QString m_commitDraftBuffer;
