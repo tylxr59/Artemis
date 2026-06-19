@@ -394,6 +394,8 @@ void CodexClient::startThread(const ThreadConfiguration &configuration, ResultHa
                        {QStringLiteral("sandbox"), sandboxMode(configuration.permissionProfile)}};
     if (!configuration.modelId.isEmpty())
         params.insert(QStringLiteral("model"), configuration.modelId);
+    if (!configuration.reasoningEffort.isEmpty())
+        params.insert(QStringLiteral("reasoningEffort"), configuration.reasoningEffort);
     request(QStringLiteral("thread/start"), params, std::move(handler));
 }
 

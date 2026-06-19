@@ -21,6 +21,7 @@ class AppController : public QObject {
     Q_PROPERTY(QVariantList threads READ threads NOTIFY threadsChanged)
     Q_PROPERTY(QVariantList models READ models NOTIFY modelsChanged)
     Q_PROPERTY(QString codingModelId READ codingModelId WRITE setCodingModelId NOTIFY settingsChanged)
+    Q_PROPERTY(QString codingReasoningEffort READ codingReasoningEffort WRITE setCodingReasoningEffort NOTIFY settingsChanged)
     Q_PROPERTY(QString commitModelId READ commitModelId WRITE setCommitModelId NOTIFY settingsChanged)
     Q_PROPERTY(QString titleModelId READ titleModelId WRITE setTitleModelId NOTIFY settingsChanged)
     Q_PROPERTY(int selectedProjectIndex READ selectedProjectIndex WRITE selectProject NOTIFY selectedProjectChanged)
@@ -50,6 +51,7 @@ public:
     QVariantList threads() const;
     QVariantList models() const;
     QString codingModelId() const;
+    QString codingReasoningEffort() const;
     QString commitModelId() const;
     QString titleModelId() const;
     int selectedProjectIndex() const;
@@ -78,9 +80,11 @@ public:
     Q_INVOKABLE void removeThread(int index);
     Q_INVOKABLE void selectProject(int index);
     Q_INVOKABLE void selectThread(int index);
-    Q_INVOKABLE void createThread(const QString &modelId, const QString &permissionMode);
+    Q_INVOKABLE void createThread(const QString &modelId, const QString &reasoningEffort,
+                                  const QString &permissionMode);
     Q_INVOKABLE bool sendPrompt(const QString &text, const QVariantList &images,
-                                const QString &modelId, const QString &permissionMode);
+                                const QString &modelId, const QString &reasoningEffort,
+                                const QString &permissionMode);
     Q_INVOKABLE QString pasteClipboardImage();
     Q_INVOKABLE void interruptTurn();
     Q_INVOKABLE void refreshGit();
@@ -93,6 +97,7 @@ public:
     Q_INVOKABLE void openProjectFolder();
     Q_INVOKABLE void openTerminal();
     void setCodingModelId(const QString &modelId);
+    void setCodingReasoningEffort(const QString &reasoningEffort);
     void setCommitModelId(const QString &modelId);
     void setTitleModelId(const QString &modelId);
 
@@ -121,7 +126,8 @@ private:
     void handleDomainEvent(const QString &threadId, const QString &type,
                            const QString &title, const QString &content,
                            const QVariantMap &metadata);
-    void beginThread(const QString &modelId, PermissionProfile permissionProfile);
+    void beginThread(const QString &modelId, const QString &reasoningEffort,
+                     PermissionProfile permissionProfile);
     void startPromptTurn(const QString &threadId, const QString &prompt,
                          const QStringList &images,
                          PermissionProfile permissionProfile, bool generateTitle = false);
@@ -164,6 +170,7 @@ private:
     PermissionProfile m_pendingPermissionProfile = PermissionProfile::FullAccess;
     bool m_threadCreationPending = false;
     QString m_codingModelId;
+    QString m_codingReasoningEffort;
     QString m_commitModelId;
     QString m_titleModelId;
 };

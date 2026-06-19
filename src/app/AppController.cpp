@@ -112,6 +112,7 @@ bool AppController::initialize()
         return false;
     }
     m_codingModelId = m_database.setting(QStringLiteral("coding_model"));
+    m_codingReasoningEffort = m_database.setting(QStringLiteral("coding_reasoning_effort"));
     m_commitModelId = m_database.setting(QStringLiteral("commit_model"));
     m_titleModelId = m_database.setting(QStringLiteral("title_model"));
     loadProjects();
@@ -124,6 +125,7 @@ ConversationModel *AppController::conversation() { return &m_conversation; }
 QVariantList AppController::threads() const { return m_threads; }
 QVariantList AppController::models() const { return m_models; }
 QString AppController::codingModelId() const { return m_codingModelId; }
+QString AppController::codingReasoningEffort() const { return m_codingReasoningEffort; }
 QString AppController::commitModelId() const { return m_commitModelId; }
 QString AppController::titleModelId() const { return m_titleModelId; }
 int AppController::selectedProjectIndex() const { return m_selectedProject; }
@@ -484,7 +486,8 @@ PermissionProfile AppController::permissionProfile(const QString &mode) const
     return PermissionProfile::FullAccess;
 }
 
-void AppController::createThread(const QString &modelId, const QString &permissionMode)
+void AppController::createThread(const QString &modelId, const QString &reasoningEffort,
+                                 const QString &permissionMode)
 {
     const auto project = m_projects.row(m_selectedProject);
     if (project.id < 0 || !m_codex.ready())
@@ -492,13 +495,15 @@ void AppController::createThread(const QString &modelId, const QString &permissi
     if (m_threadCreationPending)
         return;
     m_threadCreationPending = true;
-    beginThread(modelId, permissionProfile(permissionMode));
+    beginThread(modelId, reasoningEffort, permissionProfile(permissionMode));
 }
 
-void AppController::beginThread(const QString &modelId, PermissionProfile permissionProfile)
+void AppController::beginThread(const QString &modelId, const QString &reasoningEffort,
+                                PermissionProfile permissionProfile)
 {
     const auto project = m_projects.row(m_selectedProject);
-    ThreadConfiguration config{project.path, project.path, modelId, {}, permissionProfile, false};
+    ThreadConfiguration config{project.path, project.path, modelId, reasoningEffort,
+                               permissionProfile, false};
     m_codex.startThread(config, [this, project, permissionProfile](const QJsonObject &result, const QString &error) {
         m_threadCreationPending = false;
         if (!error.isEmpty()) {
@@ -541,7 +546,8 @@ void AppController::beginThread(const QString &modelId, PermissionProfile permis
 }
 
 bool AppController::sendPrompt(const QString &text, const QVariantList &imageValues,
-                               const QString &modelId, const QString &permissionMode)
+                               const QString &modelId, const QString &reasoningEffort,
+                               const QString &permissionMode)
 {
     const QString prompt = text.trimmed();
     QStringList images;
@@ -561,7 +567,7 @@ bool AppController::sendPrompt(const QString &text, const QVariantList &imageVal
         m_pendingImages = images;
         m_pendingModelId = modelId;
         m_pendingPermissionProfile = permissionProfile(permissionMode);
-        createThread(modelId, permissionMode);
+        createThread(modelId, reasoningEffort, permissionMode);
         return true;
     }
     if (m_turnRunning) {
@@ -949,6 +955,12 @@ void AppController::setModelSetting(const QString &key, QString &storage,
 void AppController::setCodingModelId(const QString &modelId)
 {
     setModelSetting(QStringLiteral("coding_model"), m_codingModelId, modelId);
+}
+
+void AppController::setCodingReasoningEffort(const QString &reasoningEffort)
+{
+    setModelSetting(QStringLiteral("coding_reasoning_effort"),
+                    m_codingReasoningEffort, reasoningEffort);
 }
 
 void AppController::setCommitModelId(const QString &modelId)

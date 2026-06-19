@@ -32,6 +32,36 @@ Kirigami.ApplicationWindow {
         return appController.models.length > 0 ? 0 : -1
     }
 
+    function selectedModel() {
+        if (modelPicker.currentIndex < 0
+                || modelPicker.currentIndex >= appController.models.length)
+            return null
+        return appController.models[modelPicker.currentIndex]
+    }
+
+    function reasoningOptions() {
+        const selected = selectedModel()
+        if (!selected)
+            return []
+        const defaultLabel = selected.defaultEffort
+                ? "Default (" + selected.defaultEffort + ")" : "Model default"
+        const options = [{ value: "", label: defaultLabel }]
+        const efforts = Array.from(selected.efforts || [])
+        for (let i = 0; i < efforts.length; ++i)
+            options.push({ value: efforts[i],
+                           label: efforts[i].charAt(0).toUpperCase() + efforts[i].slice(1) })
+        return options
+    }
+
+    function reasoningIndex(reasoningEffort) {
+        const options = reasoningOptions()
+        for (let i = 0; i < options.length; ++i) {
+            if (options[i].value === reasoningEffort)
+                return i
+        }
+        return 0
+    }
+
     function localImageUrl(path) {
         return path.length > 0 ? "file://" + encodeURI(path) : ""
     }
@@ -311,6 +341,7 @@ Kirigami.ApplicationWindow {
                                             appController.selectProject(projectDelegate.index)
                                         appController.createThread(
                                             appController.codingModelId,
+                                            appController.codingReasoningEffort,
                                             permissionPicker.currentValue)
                                     }
                                 }
@@ -705,7 +736,34 @@ Kirigami.ApplicationWindow {
                                 valueRole: "id"
                                 currentIndex: root.modelIndex(appController.codingModelId)
                                 enabled: !appController.turnRunning
-                                onActivated: appController.codingModelId = currentValue || ""
+                                onActivated: {
+                                    appController.codingModelId = currentValue || ""
+                                    const options = root.reasoningOptions()
+                                    let supported = false
+                                    for (let i = 0; i < options.length; ++i) {
+                                        if (options[i].value
+                                                === appController.codingReasoningEffort) {
+                                            supported = true
+                                            break
+                                        }
+                                    }
+                                    if (!supported)
+                                        appController.codingReasoningEffort = ""
+                                }
+                            }
+                            ComboBox {
+                                id: reasoningPicker
+                                Layout.preferredWidth: 150
+                                model: root.reasoningOptions()
+                                textRole: "label"
+                                valueRole: "value"
+                                currentIndex: root.reasoningIndex(
+                                                  appController.codingReasoningEffort)
+                                enabled: !appController.turnRunning && count > 1
+                                onActivated: appController.codingReasoningEffort =
+                                             currentValue || ""
+                                ToolTip.text: "Reasoning effort for new threads"
+                                ToolTip.visible: hovered
                             }
                             ComboBox {
                                 id: permissionPicker
@@ -753,6 +811,7 @@ Kirigami.ApplicationWindow {
                                                 composer.text,
                                                 root.composerImages,
                                                 appController.codingModelId,
+                                                appController.codingReasoningEffort,
                                                 permissionPicker.currentValue)) {
                                         composer.clear()
                                         root.composerImages = []
