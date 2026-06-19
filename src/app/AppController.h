@@ -98,7 +98,8 @@ public:
                                   const QString &permissionMode);
     Q_INVOKABLE bool sendPrompt(const QString &text, const QVariantList &images,
                                 const QString &modelId, const QString &reasoningEffort,
-                                const QString &permissionMode);
+                                const QString &permissionMode,
+                                const QString &collaborationMode);
     Q_INVOKABLE void copyText(const QString &text);
     Q_INVOKABLE QString pasteClipboardImage();
     Q_INVOKABLE void interruptTurn();
@@ -148,7 +149,8 @@ private:
     void beginThread(const QString &modelId, const QString &reasoningEffort,
                      PermissionProfile permissionProfile);
     void startPromptTurn(const QString &threadId, const QString &prompt,
-                         const QStringList &images,
+                         const QStringList &images, const QString &modelId,
+                         const QString &reasoningEffort, const QString &collaborationMode,
                          PermissionProfile permissionProfile, bool generateTitle = false);
     void generateThreadTitle(const QString &threadId, const QString &prompt);
     void applyThreadTitle(const QString &threadId, const QString &title);
@@ -187,6 +189,8 @@ private:
     QString m_pendingPrompt;
     QStringList m_pendingImages;
     QString m_pendingModelId;
+    QString m_pendingReasoningEffort;
+    QString m_pendingCollaborationMode = QStringLiteral("default");
     PermissionProfile m_pendingPermissionProfile = PermissionProfile::FullAccess;
     bool m_threadCreationPending = false;
     QString m_codingModelId;

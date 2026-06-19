@@ -529,9 +529,14 @@ void AppController::loadThreads(const QString &threadToSelect)
                 }
                 if (!m_pendingPrompt.isEmpty() || !m_pendingImages.isEmpty()) {
                     const QString prompt = std::exchange(m_pendingPrompt, {});
-                    m_pendingModelId.clear();
+                    const QString modelId = std::exchange(m_pendingModelId, {});
+                    const QString reasoningEffort =
+                        std::exchange(m_pendingReasoningEffort, {});
+                    const QString collaborationMode =
+                        std::exchange(m_pendingCollaborationMode, QStringLiteral("default"));
                     const auto images = std::exchange(m_pendingImages, {});
-                    startPromptTurn(selectedThreadId(), prompt, images,
+                    startPromptTurn(selectedThreadId(), prompt, images, modelId,
+                                    reasoningEffort, collaborationMode,
                                     m_pendingPermissionProfile, true);
                 }
                 break;
@@ -710,9 +715,13 @@ void AppController::beginThread(const QString &modelId, const QString &reasoning
         emit currentPlanChanged();
         if (!m_pendingPrompt.isEmpty() || !m_pendingImages.isEmpty()) {
             const QString prompt = std::exchange(m_pendingPrompt, {});
-            m_pendingModelId.clear();
+            const QString modelId = std::exchange(m_pendingModelId, {});
+            const QString reasoningEffort = std::exchange(m_pendingReasoningEffort, {});
+            const QString collaborationMode =
+                std::exchange(m_pendingCollaborationMode, QStringLiteral("default"));
             const auto images = std::exchange(m_pendingImages, {});
-            startPromptTurn(id, prompt, images, permissionProfile, true);
+            startPromptTurn(id, prompt, images, modelId, reasoningEffort,
+                            collaborationMode, permissionProfile, true);
         } else {
             setStatus(QStringLiteral("Thread created"));
         }
@@ -721,7 +730,8 @@ void AppController::beginThread(const QString &modelId, const QString &reasoning
 
 bool AppController::sendPrompt(const QString &text, const QVariantList &imageValues,
                                const QString &modelId, const QString &reasoningEffort,
-                               const QString &permissionMode)
+                               const QString &permissionMode,
+                               const QString &collaborationMode)
 {
     const QString prompt = text.trimmed();
     QStringList images;
@@ -740,6 +750,8 @@ bool AppController::sendPrompt(const QString &text, const QVariantList &imageVal
         m_pendingPrompt = prompt;
         m_pendingImages = images;
         m_pendingModelId = modelId;
+        m_pendingReasoningEffort = reasoningEffort;
+        m_pendingCollaborationMode = collaborationMode;
         m_pendingPermissionProfile = permissionProfile(permissionMode);
         createThread(modelId, reasoningEffort, permissionMode);
         return true;
@@ -767,7 +779,8 @@ bool AppController::sendPrompt(const QString &text, const QVariantList &imageVal
     }
     const bool generateTitle = m_selectedThread >= 0
         && !m_threads.at(m_selectedThread).toMap().value(QStringLiteral("named")).toBool();
-    startPromptTurn(selectedThreadId(), prompt, images,
+    startPromptTurn(selectedThreadId(), prompt, images, modelId, reasoningEffort,
+                    collaborationMode,
                     permissionProfile(permissionMode), generateTitle);
     return true;
 }
@@ -778,7 +791,9 @@ void AppController::copyText(const QString &text)
 }
 
 void AppController::startPromptTurn(const QString &threadId, const QString &prompt,
-                                    const QStringList &images,
+                                    const QStringList &images, const QString &modelId,
+                                    const QString &reasoningEffort,
+                                    const QString &collaborationMode,
                                     PermissionProfile permissionProfile, bool generateTitle)
 {
     m_conversation.setThread(threadId);
@@ -790,7 +805,8 @@ void AppController::startPromptTurn(const QString &threadId, const QString &prom
                                      userEvent.content, userEvent.metadata);
     m_activeThreadId = threadId;
     setTurnRunning(true);
-    m_codex.sendTurn(threadId, prompt, images, permissionProfile,
+    m_codex.sendTurn(threadId, prompt, images, modelId, reasoningEffort,
+                     collaborationMode, permissionProfile,
                      [this, threadId, prompt, images, generateTitle](const QJsonObject &,
                                                                      const QString &error) {
         if (!error.isEmpty()) {
@@ -985,7 +1001,7 @@ void AppController::generateCommitMessage()
                                    .value(QStringLiteral("id")).toString();
             m_commitDraftBuffer.clear();
             m_codex.sendTurn(m_commitThreadId, commitPrompt(snapshot.output), {},
-                PermissionProfile::ReadOnly,
+                m_commitModelId, {}, QStringLiteral("default"), PermissionProfile::ReadOnly,
                 [this](const QJsonObject &, const QString &turnError) {
                 if (!turnError.isEmpty()) {
                     setStatus(turnError);
@@ -1018,7 +1034,8 @@ void AppController::generateThreadTitle(const QString &threadId, const QString &
             "first message below. Return JSON only as {\"title\":\"...\"}. Use 3 to 7 words, "
             "sentence case, no punctuation at the end, and describe the concrete task.\n\n%1")
             .arg(prompt.left(12000));
-        m_codex.sendTurn(titleThreadId, titlePrompt, {}, PermissionProfile::ReadOnly,
+        m_codex.sendTurn(titleThreadId, titlePrompt, {}, m_titleModelId, {},
+            QStringLiteral("default"), PermissionProfile::ReadOnly,
             [this, titleThreadId](const QJsonObject &, const QString &turnError) {
                 if (turnError.isEmpty())
                     return;

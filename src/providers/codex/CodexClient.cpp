@@ -187,7 +187,9 @@ void CodexClient::startProcess()
             {{QStringLiteral("clientInfo"),
               QJsonObject{{QStringLiteral("name"), QStringLiteral("artemis")},
                           {QStringLiteral("title"), QStringLiteral("Artemis")},
-                          {QStringLiteral("version"), QStringLiteral(ARTEMIS_VERSION)}}}},
+                          {QStringLiteral("version"), QStringLiteral(ARTEMIS_VERSION)}}},
+             {QStringLiteral("capabilities"),
+              QJsonObject{{QStringLiteral("experimentalApi"), true}}}},
             [this](const QJsonObject &, const QString &error) {
         if (!error.isEmpty()) {
             scheduleRestart(error);
@@ -406,7 +408,9 @@ void CodexClient::resumeThread(const QString &threadId, ResultHandler handler)
 }
 
 void CodexClient::sendTurn(const QString &threadId, const QString &text,
-                           const QStringList &images, PermissionProfile permissionProfile,
+                           const QStringList &images, const QString &modelId,
+                           const QString &reasoningEffort, const QString &collaborationMode,
+                           PermissionProfile permissionProfile,
                            ResultHandler handler)
 {
     QJsonArray input;
@@ -416,12 +420,23 @@ void CodexClient::sendTurn(const QString &threadId, const QString &text,
     for (const auto &image : images)
         input.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("localImage")},
                                  {QStringLiteral("path"), image}});
-    request(QStringLiteral("turn/start"),
-            {{QStringLiteral("threadId"), threadId},
-             {QStringLiteral("input"), input},
-             {QStringLiteral("approvalPolicy"), approvalPolicy(permissionProfile)},
-             {QStringLiteral("sandboxPolicy"), sandboxPolicy(permissionProfile)}},
-            std::move(handler));
+    QJsonObject params{{QStringLiteral("threadId"), threadId},
+                       {QStringLiteral("input"), input},
+                       {QStringLiteral("approvalPolicy"), approvalPolicy(permissionProfile)},
+                       {QStringLiteral("sandboxPolicy"), sandboxPolicy(permissionProfile)}};
+    if (!modelId.isEmpty()) {
+        QJsonObject settings{{QStringLiteral("model"), modelId},
+                             {QStringLiteral("reasoning_effort"),
+                              reasoningEffort.isEmpty() ? QJsonValue(QJsonValue::Null)
+                                                        : QJsonValue(reasoningEffort)},
+                             {QStringLiteral("developer_instructions"), QJsonValue::Null}};
+        params.insert(QStringLiteral("collaborationMode"),
+                      QJsonObject{
+                          {QStringLiteral("mode"), collaborationMode == QStringLiteral("plan")
+                               ? QStringLiteral("plan") : QStringLiteral("default")},
+                          {QStringLiteral("settings"), settings}});
+    }
+    request(QStringLiteral("turn/start"), params, std::move(handler));
 }
 
 void CodexClient::steerTurn(const QString &threadId, const QString &text,

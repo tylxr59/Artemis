@@ -6,7 +6,8 @@ Startup:
 
 1. Run `codex --version`.
 2. Start `codex app-server --listen stdio://`.
-3. Send `initialize`.
+3. Send `initialize` with `capabilities.experimentalApi` enabled. Artemis uses
+   experimental turn fields such as `collaborationMode`.
 4. Send the `initialized` notification.
 5. Load models and project-matching threads.
 

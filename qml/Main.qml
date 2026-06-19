@@ -865,6 +865,18 @@ Kirigami.ApplicationWindow {
                                                 : "Allow commands and edits without prompts."
                                 ToolTip.visible: hovered
                             }
+                            Button {
+                                id: collaborationModeButton
+                                Layout.preferredWidth: 92
+                                text: checked ? "Plan" : "Build"
+                                checkable: true
+                                enabled: !appController.turnRunning
+                                Accessible.name: checked ? "Plan mode" : "Build mode"
+                                ToolTip.text: checked
+                                              ? "Plan the work without making changes."
+                                              : "Work on the task and make changes."
+                                ToolTip.visible: hovered
+                            }
                             Item { Layout.fillWidth: true }
                             Item {
                                 id: contextUsageIndicator
@@ -981,9 +993,12 @@ Kirigami.ApplicationWindow {
                                     if (appController.sendPrompt(
                                                 composer.text,
                                                 root.composerImages,
-                                                appController.codingModelId,
+                                                modelPicker.currentValue
+                                                    || appController.codingModelId,
                                                 appController.codingReasoningEffort,
-                                                permissionPicker.currentValue)) {
+                                                permissionPicker.currentValue,
+                                                collaborationModeButton.checked
+                                                    ? "plan" : "default")) {
                                         composer.clear()
                                         root.composerImages = []
                                     }

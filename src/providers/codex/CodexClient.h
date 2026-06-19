@@ -24,7 +24,9 @@ public:
     void startThread(const ThreadConfiguration &configuration, ResultHandler handler) override;
     void resumeThread(const QString &threadId, ResultHandler handler) override;
     void sendTurn(const QString &threadId, const QString &text,
-                  const QStringList &images, PermissionProfile permissionProfile,
+                  const QStringList &images, const QString &modelId,
+                  const QString &reasoningEffort, const QString &collaborationMode,
+                  PermissionProfile permissionProfile,
                   ResultHandler handler) override;
     void steerTurn(const QString &threadId, const QString &text,
                    const QStringList &images, ResultHandler handler) override;
