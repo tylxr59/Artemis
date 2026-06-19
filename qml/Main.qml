@@ -268,21 +268,37 @@ Kirigami.ApplicationWindow {
             }
             ToolButton {
                 text: "Open folder"
+                icon.name: "folder-open"
+                display: AbstractButton.IconOnly
+                ToolTip.text: text
+                ToolTip.visible: hovered
                 visible: root.hasProject
                 onClicked: appController.openProjectFolder()
             }
             ToolButton {
                 text: "Open editor"
+                icon.name: "document-edit"
+                display: AbstractButton.IconOnly
+                ToolTip.text: text
+                ToolTip.visible: hovered
                 visible: root.hasProject
                 onClicked: appController.openProjectEditor()
             }
             ToolButton {
                 text: "Open terminal"
+                icon.name: "utilities-terminal-symbolic"
+                display: AbstractButton.IconOnly
+                ToolTip.text: text
+                ToolTip.visible: hovered
                 visible: root.hasProject
                 onClicked: appController.openTerminal()
             }
             ToolButton {
                 text: "Thread"
+                icon.name: "help-about"
+                display: AbstractButton.IconOnly
+                ToolTip.text: text
+                ToolTip.visible: hovered
                 visible: root.hasThread
                 checkable: true
                 checked: root.sidePanelVisible && root.sidePanelMode === "thread"
@@ -297,6 +313,10 @@ Kirigami.ApplicationWindow {
             }
             ToolButton {
                 text: "Diff"
+                icon.name: "vcs-diff"
+                display: AbstractButton.IconOnly
+                ToolTip.text: text
+                ToolTip.visible: hovered
                 visible: appController.selectedProjectIsGit
                 enabled: appController.hasGitChanges
                 checkable: true
