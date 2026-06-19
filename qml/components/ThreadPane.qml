@@ -125,6 +125,13 @@ Pane {
                             font.bold: true
                             font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
                         }
+                        Label {
+                            visible: root.controller.currentPlanExplanation.length > 0
+                            text: root.controller.currentPlanExplanation
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                            opacity: 0.7
+                        }
                         TextArea {
                             Layout.fillWidth: true
                             visible: root.controller.currentTasks.length > 0
@@ -134,41 +141,6 @@ Pane {
                             wrapMode: TextEdit.Wrap
                             selectByMouse: true
                             background: null
-                        }
-                        Kirigami.PlaceholderMessage {
-                            Layout.fillWidth: true
-                            visible: root.controller.currentTasks.length === 0
-                            text: root.controller.selectedThreadId.length > 0
-                                  ? "No tasks yet" : "No thread selected"
-                            explanation: root.controller.selectedThreadId.length > 0
-                                         ? "Generated task details will appear here."
-                                         : "Select or start a thread to see its task details."
-                        }
-                    }
-
-                    Kirigami.Separator {
-                        Layout.fillWidth: true
-                        visible: root.controller.selectedThreadId.length > 0
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.leftMargin: Kirigami.Units.largeSpacing
-                        Layout.rightMargin: Kirigami.Units.largeSpacing
-                        Layout.bottomMargin: Kirigami.Units.largeSpacing
-                        spacing: Kirigami.Units.smallSpacing
-
-                        Label {
-                            text: "Plan steps"
-                            font.bold: true
-                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
-                        }
-                        Label {
-                            visible: root.controller.currentPlanExplanation.length > 0
-                            text: root.controller.currentPlanExplanation
-                            Layout.fillWidth: true
-                            wrapMode: Text.Wrap
-                            opacity: 0.7
                         }
                         Repeater {
                             model: root.controller.currentPlan
@@ -209,12 +181,13 @@ Pane {
                         }
                         Kirigami.PlaceholderMessage {
                             Layout.fillWidth: true
-                            visible: root.controller.currentPlan.length === 0
+                            visible: root.controller.currentTasks.length === 0
+                                     && root.controller.currentPlan.length === 0
                             text: root.controller.selectedThreadId.length > 0
-                                  ? "No plan steps yet" : "No thread selected"
+                                  ? "No tasks yet" : "No thread selected"
                             explanation: root.controller.selectedThreadId.length > 0
-                                         ? "Plan steps will appear here when Artemis creates them."
-                                         : "Select or start a thread to see its plan."
+                                         ? "Generated tasks will appear here."
+                                         : "Select or start a thread to see its tasks."
                         }
                     }
                 }
