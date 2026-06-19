@@ -112,6 +112,9 @@ public:
     Q_INVOKABLE void commitAllAndPush(const QString &subject, const QString &body);
     Q_INVOKABLE void commitFeatureBranch(const QString &subject, const QString &body,
                                          const QString &branch, const QString &remote);
+    Q_INVOKABLE void retryLockedCommit();
+    Q_INVOKABLE void removeCommitLockAndRetry();
+    Q_INVOKABLE void cancelLockedCommit();
     Q_INVOKABLE QString suggestBranch(const QString &message) const;
     Q_INVOKABLE void openProjectFolder();
     Q_INVOKABLE void openProjectEditor();
@@ -142,6 +145,7 @@ signals:
     void diffChanged();
     void commitDraftFinished(bool success, const QString &message);
     void commitFinished(bool success, const QString &message);
+    void commitLockBlocked(const QString &message);
     void promptRestoreRequested(const QString &text, const QVariantList &images);
 
 private:

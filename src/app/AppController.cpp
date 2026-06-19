@@ -1175,6 +1175,15 @@ void AppController::commitAllAndPush(const QString &subject, const QString &body
     m_git.commitAllAndPush(selectedWorkspacePath(), subject, body, [this](const GitResult &result) {
         const auto output = QString::fromUtf8(result.ok()
             ? result.output + result.error : result.error).trimmed();
+        if (result.failure == GitFailure::IndexLocked) {
+            const auto message = QStringLiteral(
+                "Git's index is locked. Another Git operation may still be running. "
+                "Close other Git clients, then retry. Remove the lock only if you are sure "
+                "it is stale.");
+            emit commitLockBlocked(message);
+            setStatus(message);
+            return;
+        }
         emit commitFinished(result.ok(), output);
         setStatus(output);
         refreshGit();
@@ -1193,10 +1202,42 @@ void AppController::commitFeatureBranch(const QString &subject, const QString &b
                                  [this](const GitResult &result) {
         const auto output = QString::fromUtf8(result.ok()
             ? result.output + result.error : result.error).trimmed();
+        if (result.failure == GitFailure::IndexLocked) {
+            const auto message = QStringLiteral(
+                "Git's index is locked. Another Git operation may still be running. "
+                "Close other Git clients, then retry. Remove the lock only if you are sure "
+                "it is stale.");
+            emit commitLockBlocked(message);
+            setStatus(message);
+            return;
+        }
         emit commitFinished(result.ok(), output);
         setStatus(output);
         refreshGit();
     });
+}
+
+void AppController::retryLockedCommit()
+{
+    setStatus(QStringLiteral("Retrying Git operation…"));
+    m_git.retryLockedOperation();
+}
+
+void AppController::removeCommitLockAndRetry()
+{
+    m_git.removeIndexLockAndRetry([this](const GitResult &result) {
+        const auto message = QString::fromUtf8(
+            result.ok() ? result.output : result.error).trimmed();
+        setStatus(message);
+        if (!result.ok())
+            emit commitFinished(false, message);
+    });
+}
+
+void AppController::cancelLockedCommit()
+{
+    m_git.cancelLockedOperation();
+    emit commitFinished(false, QStringLiteral("Commit operation canceled."));
 }
 
 QString AppController::suggestBranch(const QString &message) const

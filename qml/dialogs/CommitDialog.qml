@@ -9,6 +9,7 @@ Dialog {
     property bool featureMode: false
     property bool busy: false
     property bool generating: false
+    property bool lockBlocked: false
     title: featureMode ? "Commit to feature branch" : "Commit and push changes"
     modal: true
     anchors.centerIn: parent
@@ -66,10 +67,17 @@ Dialog {
         }
         function onCommitFinished(success, message) {
             root.busy = false
+            root.lockBlocked = false
             resultLabel.text = message
             resultLabel.color = success ? Kirigami.Theme.positiveTextColor
                                         : Kirigami.Theme.negativeTextColor
             if (success) closeTimer.start()
+        }
+        function onCommitLockBlocked(message) {
+            root.busy = false
+            root.lockBlocked = true
+            resultLabel.text = message
+            resultLabel.color = Kirigami.Theme.negativeTextColor
         }
     }
 
@@ -137,6 +145,57 @@ Dialog {
             wrapMode: Text.Wrap
         }
 
+        RowLayout {
+            visible: root.lockBlocked
+            Layout.fillWidth: true
+
+            Button {
+                text: "Retry"
+                onClicked: {
+                    root.lockBlocked = false
+                    root.busy = true
+                    root.controller.retryLockedCommit()
+                }
+            }
+            Button {
+                text: "Remove stale lock…"
+                onClicked: removeLockDialog.open()
+            }
+            Button {
+                text: "Cancel operation"
+                onClicked: root.controller.cancelLockedCommit()
+            }
+            Item { Layout.fillWidth: true }
+        }
+
+    }
+
+    Dialog {
+        id: removeLockDialog
+        title: "Remove Git index lock?"
+        modal: true
+        anchors.centerIn: parent
+
+        contentItem: Label {
+            width: 420
+            wrapMode: Text.Wrap
+            text: "Only continue if no other Git process or Git client is using this repository. "
+                  + "Removing an active lock can damage the Git index."
+        }
+
+        footer: DialogButtonBox {
+            standardButtons: DialogButtonBox.Cancel
+            Button {
+                text: "Remove lock and retry"
+                DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
+                onClicked: {
+                    removeLockDialog.close()
+                    root.lockBlocked = false
+                    root.busy = true
+                    root.controller.removeCommitLockAndRetry()
+                }
+            }
+        }
     }
 
     onOpened: {
@@ -144,8 +203,14 @@ Dialog {
         subjectEdit.text = ""
         bodyEdit.text = ""
         branchEdit.text = ""
+        root.lockBlocked = false
         root.busy = true
         root.generating = true
         root.controller.generateCommitMessage()
+    }
+
+    onRejected: {
+        if (root.lockBlocked)
+            root.controller.cancelLockedCommit()
     }
 }

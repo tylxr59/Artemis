@@ -63,6 +63,13 @@ private slots:
             status({"## main", "R  renamed.txt", "old-name.txt"})));
     }
 
+    void gitIndexLockErrorDetection()
+    {
+        QVERIFY(GitService::isIndexLockError(
+            "fatal: Unable to create '/tmp/repo/.git/index.lock': File exists.\n"));
+        QVERIFY(!GitService::isIndexLockError("fatal: unable to access remote"));
+    }
+
     void databaseMigration()
     {
         Database database;
@@ -286,6 +293,75 @@ private slots:
         const auto recoveredRemote = GitService::runSync(
             remotePath, {QStringLiteral("rev-parse"), QStringLiteral("refs/heads/main")});
         QCOMPARE(recoveredLocal.output.trimmed(), recoveredRemote.output.trimmed());
+    }
+
+    void commitRecoversAfterExplicitLockRemoval()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const auto remotePath = root.filePath(QStringLiteral("remote.git"));
+        const auto workPath = root.filePath(QStringLiteral("work"));
+        QVERIFY(GitService::runSync(
+            root.path(), {QStringLiteral("init"), QStringLiteral("--bare"), remotePath}).ok());
+        QVERIFY(QDir().mkpath(workPath));
+        QVERIFY(GitService::runSync(workPath, {QStringLiteral("init")}).ok());
+        QVERIFY(GitService::runSync(
+            workPath, {QStringLiteral("config"), QStringLiteral("user.name"),
+                       QStringLiteral("Artemis Test")}).ok());
+        QVERIFY(GitService::runSync(
+            workPath, {QStringLiteral("config"), QStringLiteral("user.email"),
+                       QStringLiteral("artemis@example.invalid")}).ok());
+        QVERIFY(GitService::runSync(
+            workPath, {QStringLiteral("switch"), QStringLiteral("-c"),
+                       QStringLiteral("main")}).ok());
+        QVERIFY(GitService::runSync(
+            workPath, {QStringLiteral("remote"), QStringLiteral("add"),
+                       QStringLiteral("origin"), remotePath}).ok());
+
+        QFile change(QDir(workPath).filePath(QStringLiteral("change.txt")));
+        QVERIFY(change.open(QIODevice::WriteOnly));
+        change.write("recover from a stale lock\n");
+        change.close();
+
+        QFile lock(QDir(workPath).filePath(QStringLiteral(".git/index.lock")));
+        QVERIFY(lock.open(QIODevice::WriteOnly));
+        lock.close();
+
+        GitService service;
+        GitResult finalResult;
+        GitResult removalResult;
+        int callbackCount = 0;
+        QEventLoop loop;
+        QTimer timeout;
+        timeout.setSingleShot(true);
+        connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
+        timeout.start(10000);
+
+        service.commitAllAndPush(
+            workPath, QStringLiteral("Recover stale lock"), {},
+            [&service, &finalResult, &removalResult, &callbackCount, &loop](
+                const GitResult &result) {
+            ++callbackCount;
+            if (result.failure == GitFailure::IndexLocked) {
+                service.removeIndexLockAndRetry(
+                    [&removalResult](const GitResult &removal) {
+                    removalResult = removal;
+                });
+                return;
+            }
+            finalResult = result;
+            loop.quit();
+        });
+        loop.exec();
+
+        QVERIFY2(timeout.isActive(), "Timed out recovering from stale Git lock");
+        QCOMPARE(callbackCount, 2);
+        QVERIFY2(removalResult.ok(), removalResult.error.constData());
+        QVERIFY2(finalResult.ok(), finalResult.error.constData());
+        QVERIFY(!lock.exists());
+        const auto remote = GitService::runSync(
+            remotePath, {QStringLiteral("rev-parse"), QStringLiteral("refs/heads/main")});
+        QVERIFY(remote.ok());
     }
 };
 

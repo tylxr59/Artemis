@@ -1,6 +1,7 @@
 #include "git/GitService.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QProcess>
 #include <QRegularExpression>
@@ -11,6 +12,12 @@
 #include <utility>
 
 namespace Artemis {
+
+struct GitService::MutationWorkflow {
+    QString path;
+    Handler handler;
+    std::function<void()> resume;
+};
 
 GitService::GitService(QObject *parent) : QObject(parent) {}
 
@@ -117,6 +124,11 @@ QString GitService::suggestedBranch(const QString &subject)
     return QStringLiteral("feature/%1").arg(value.isEmpty() ? QStringLiteral("artemis-change") : value);
 }
 
+bool GitService::isIndexLockError(const QByteArray &error)
+{
+    return error.contains("index.lock") && error.contains("File exists");
+}
+
 void GitService::status(const QString &path, Handler handler)
 {
     run(path, {QStringLiteral("status"), QStringLiteral("--porcelain=v1"),
@@ -132,81 +144,82 @@ void GitService::diff(const QString &path, Handler handler)
 void GitService::commitAllAndPush(const QString &path, const QString &subject,
                                   const QString &body, Handler handler)
 {
-    run(path, {QStringLiteral("add"), QStringLiteral("-A")},
-        [this, path, subject, body, handler = std::move(handler)](
-            const GitResult &add) mutable {
-        if (!add.ok()) {
-            if (handler)
-                handler(add);
-            return;
-        }
-        commitStagedAndPush(path, subject, body, std::move(handler));
+    startMutation(path, std::move(handler),
+                  [this, subject, body](const Workflow &workflow) {
+        runMutationStep(workflow, {QStringLiteral("add"), QStringLiteral("-A")},
+            [this, workflow, subject, body](const GitResult &add) {
+            if (!add.ok()) {
+                finishMutation(workflow, add);
+                return;
+            }
+            commitStagedAndPush(workflow, subject, body);
+            });
     });
 }
 
-void GitService::commitStagedAndPush(const QString &path, const QString &subject,
-                                     const QString &body, Handler handler)
+void GitService::commitStagedAndPush(const Workflow &workflow, const QString &subject,
+                                     const QString &body)
 {
     QStringList arguments{QStringLiteral("commit"), QStringLiteral("-m"), subject.trimmed()};
     if (!body.trimmed().isEmpty())
         arguments << QStringLiteral("-m") << body.trimmed();
-    run(path, arguments,
-        [this, path, handler = std::move(handler)](const GitResult &commit) mutable {
-        if (commit.ok()) {
-            pushCurrentBranch(path, commit.output, std::move(handler));
-            return;
-        }
-        run(path, {QStringLiteral("status"), QStringLiteral("--porcelain")},
-            [this, path, commit, handler = std::move(handler)](
-                const GitResult &status) mutable {
-            if (!status.ok() || !status.output.trimmed().isEmpty()) {
-                if (handler)
-                    handler(commit);
+    runMutationStep(workflow, arguments,
+        [this, workflow](const GitResult &commit) {
+            if (commit.ok()) {
+                pushCurrentBranch(workflow, commit.output);
                 return;
             }
-            pushCurrentBranch(path, commit.output, std::move(handler));
-        });
-    });
-}
-
-void GitService::pushCurrentBranch(const QString &path, const QByteArray &commitOutput,
-                                   Handler handler)
-{
-    run(path, {QStringLiteral("branch"), QStringLiteral("--show-current")},
-        [this, path, commitOutput, handler = std::move(handler)](
-            const GitResult &branchResult) mutable {
-        const auto branch = QString::fromUtf8(branchResult.output).trimmed();
-        if (!branchResult.ok() || branch.isEmpty()) {
-            if (handler) {
-                handler({-1, commitOutput,
-                         QByteArray("Changes are committed locally, but the current branch could "
-                                    "not be determined; nothing was pushed.")});
-            }
-            return;
-        }
-        run(path, {QStringLiteral("rev-parse"), QStringLiteral("--abbrev-ref"),
-                   QStringLiteral("--symbolic-full-name"), QStringLiteral("@{upstream}")},
-            [this, path, branch, commitOutput, handler = std::move(handler)](
-                const GitResult &upstream) mutable {
-            if (upstream.ok()) {
-                run(path, {QStringLiteral("push")}, std::move(handler));
-                return;
-            }
-            run(path, {QStringLiteral("remote"), QStringLiteral("get-url"),
-                       QStringLiteral("origin")},
-                [this, path, branch, commitOutput, handler = std::move(handler)](
-                    const GitResult &origin) mutable {
-                if (!origin.ok()) {
-                    if (handler) {
-                        handler({-1, commitOutput,
-                                 QByteArray("Changes are committed locally, but this branch has no "
-                                            "upstream and the 'origin' remote is not configured; "
-                                            "nothing was pushed.")});
-                    }
+            run(workflow->path, {QStringLiteral("status"), QStringLiteral("--porcelain")},
+                [this, workflow, commit](const GitResult &status) {
+                if (!status.ok() || !status.output.trimmed().isEmpty()) {
+                    finishMutation(workflow, commit);
                     return;
                 }
-                run(path, {QStringLiteral("push"), QStringLiteral("--set-upstream"),
-                           QStringLiteral("origin"), branch}, std::move(handler));
+                pushCurrentBranch(workflow, commit.output);
+            });
+        });
+}
+
+void GitService::pushCurrentBranch(const Workflow &workflow, const QByteArray &commitOutput)
+{
+    run(workflow->path, {QStringLiteral("branch"), QStringLiteral("--show-current")},
+        [this, workflow, commitOutput](const GitResult &branchResult) {
+        const auto branch = QString::fromUtf8(branchResult.output).trimmed();
+        if (!branchResult.ok() || branch.isEmpty()) {
+            finishMutation(workflow,
+                           {-1, commitOutput,
+                            QByteArray("Changes are committed locally, but the current branch could "
+                                       "not be determined; nothing was pushed.")});
+            return;
+        }
+        run(workflow->path, {QStringLiteral("rev-parse"), QStringLiteral("--abbrev-ref"),
+                   QStringLiteral("--symbolic-full-name"), QStringLiteral("@{upstream}")},
+            [this, workflow, branch, commitOutput](const GitResult &upstream) {
+            if (upstream.ok()) {
+                run(workflow->path, {QStringLiteral("push")},
+                    [this, workflow](const GitResult &push) {
+                    finishMutation(workflow, push);
+                });
+                return;
+            }
+            run(workflow->path, {QStringLiteral("remote"), QStringLiteral("get-url"),
+                       QStringLiteral("origin")},
+                [this, workflow, branch, commitOutput](const GitResult &origin) {
+                if (!origin.ok()) {
+                    finishMutation(
+                        workflow,
+                        {-1, commitOutput,
+                         QByteArray("Changes are committed locally, but this branch has no "
+                                    "upstream and the 'origin' remote is not configured; "
+                                    "nothing was pushed.")});
+                    return;
+                }
+                run(workflow->path,
+                    {QStringLiteral("push"), QStringLiteral("--set-upstream"),
+                     QStringLiteral("origin"), branch},
+                    [this, workflow](const GitResult &push) {
+                    finishMutation(workflow, push);
+                });
             });
         });
     });
@@ -216,40 +229,145 @@ void GitService::createBranchCommitPush(const QString &path, const QString &bran
                                         const QString &subject, const QString &body,
                                         const QString &remote, Handler handler)
 {
-    run(path, {QStringLiteral("switch"), QStringLiteral("-c"), branch},
-        [this, path, branch, subject, body, remote, handler = std::move(handler)](
-            const GitResult &checkout) mutable {
-        if (!checkout.ok()) {
-            if (handler)
-                handler(checkout);
-            return;
-        }
-        run(path, {QStringLiteral("add"), QStringLiteral("-A")},
-            [this, path, branch, subject, body, remote, handler = std::move(handler)](
-                const GitResult &add) mutable {
-            if (!add.ok()) {
-                if (handler)
-                    handler(add);
+    startMutation(path, std::move(handler),
+                  [this, branch, subject, body, remote](const Workflow &workflow) {
+        runMutationStep(workflow, {QStringLiteral("switch"), QStringLiteral("-c"), branch},
+            [this, workflow, branch, subject, body, remote](const GitResult &checkout) {
+            if (!checkout.ok()) {
+                finishMutation(workflow, checkout);
                 return;
             }
-            QStringList arguments{
-                QStringLiteral("commit"), QStringLiteral("-m"), subject.trimmed()
-            };
-            if (!body.trimmed().isEmpty())
-                arguments << QStringLiteral("-m") << body.trimmed();
-            run(path, arguments,
-                [this, path, branch, remote, handler = std::move(handler)](
-                    const GitResult &commit) mutable {
-                if (!commit.ok()) {
-                    if (handler)
-                        handler(commit);
+            runMutationStep(workflow, {QStringLiteral("add"), QStringLiteral("-A")},
+                [this, workflow, branch, subject, body, remote](const GitResult &add) {
+                if (!add.ok()) {
+                    finishMutation(workflow, add);
                     return;
                 }
-                run(path, {QStringLiteral("push"), QStringLiteral("--set-upstream"),
-                           remote, branch}, std::move(handler));
+                QStringList arguments{
+                    QStringLiteral("commit"), QStringLiteral("-m"), subject.trimmed()
+                };
+                if (!body.trimmed().isEmpty())
+                    arguments << QStringLiteral("-m") << body.trimmed();
+                runMutationStep(workflow, arguments,
+                    [this, workflow, branch, remote](const GitResult &commit) {
+                    if (!commit.ok()) {
+                        finishMutation(workflow, commit);
+                        return;
+                    }
+                    run(workflow->path,
+                        {QStringLiteral("push"), QStringLiteral("--set-upstream"), remote, branch},
+                        [this, workflow](const GitResult &push) {
+                        finishMutation(workflow, push);
+                    });
+                });
             });
         });
     });
+}
+
+void GitService::startMutation(const QString &path, Handler handler,
+                               std::function<void(const Workflow &)> start)
+{
+    if (m_activeMutation) {
+        if (handler) {
+            handler({-1, {},
+                     QByteArray("Another Artemis Git operation is already in progress."),
+                     GitFailure::MutationInProgress});
+        }
+        return;
+    }
+    auto workflow = std::make_shared<MutationWorkflow>();
+    workflow->path = path;
+    workflow->handler = std::move(handler);
+    m_activeMutation = workflow;
+    start(workflow);
+}
+
+void GitService::runMutationStep(const Workflow &workflow, const QStringList &arguments,
+                                 StepHandler handler, int retry)
+{
+    run(workflow->path, arguments,
+        [this, workflow, arguments, handler = std::move(handler), retry](
+            GitResult result) mutable {
+        if (!result.ok() && isIndexLockError(result.error)) {
+            result.failure = GitFailure::IndexLocked;
+            if (retry < 2) {
+                const int delayMs = retry == 0 ? 300 : 700;
+                QTimer::singleShot(delayMs, this,
+                    [this, workflow, arguments, handler = std::move(handler), retry]() mutable {
+                    runMutationStep(workflow, arguments, std::move(handler), retry + 1);
+                });
+                return;
+            }
+            workflow->resume =
+                [this, workflow, arguments, handler = std::move(handler)]() mutable {
+                runMutationStep(workflow, arguments, std::move(handler));
+            };
+            if (workflow->handler)
+                workflow->handler(result);
+            return;
+        }
+        workflow->resume = {};
+        handler(result);
+    });
+}
+
+void GitService::finishMutation(const Workflow &workflow, const GitResult &result)
+{
+    if (m_activeMutation == workflow)
+        m_activeMutation.reset();
+    if (workflow->handler)
+        workflow->handler(result);
+}
+
+void GitService::retryLockedOperation()
+{
+    if (!m_activeMutation || !m_activeMutation->resume)
+        return;
+    auto resume = std::move(m_activeMutation->resume);
+    resume();
+}
+
+void GitService::removeIndexLockAndRetry(Handler handler)
+{
+    if (!m_activeMutation || !m_activeMutation->resume) {
+        if (handler)
+            handler({-1, {}, QByteArray("There is no blocked Git operation to recover.")});
+        return;
+    }
+
+    const auto lockResult = runSync(
+        m_activeMutation->path,
+        {QStringLiteral("rev-parse"), QStringLiteral("--git-path"),
+         QStringLiteral("index.lock")});
+    if (!lockResult.ok()) {
+        if (handler)
+            handler(lockResult);
+        return;
+    }
+
+    auto lockPath = QString::fromUtf8(lockResult.output).trimmed();
+    if (QDir::isRelativePath(lockPath))
+        lockPath = QDir(m_activeMutation->path).absoluteFilePath(lockPath);
+    QFile lock(lockPath);
+    if (lock.exists() && !lock.remove()) {
+        if (handler) {
+            handler({-1, {},
+                     QStringLiteral("Could not remove Git lock file: %1").arg(lock.errorString())
+                         .toUtf8()});
+        }
+        return;
+    }
+    if (handler)
+        handler({0, QByteArray("Removed stale Git index lock."), {}});
+    retryLockedOperation();
+}
+
+void GitService::cancelLockedOperation()
+{
+    if (m_activeMutation)
+        m_activeMutation->resume = {};
+    m_activeMutation.reset();
 }
 
 void GitService::generateCommitSnapshot(const QString &path, Handler handler)
