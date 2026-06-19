@@ -18,7 +18,6 @@
 #include <QMimeData>
 #include <QProcess>
 #include <QProcessEnvironment>
-#include <QSettings>
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QTime>
@@ -107,23 +106,47 @@ QString desktopFilePath(const QString &desktopId)
 
 QVariantMap desktopEditor(const QString &path)
 {
-    QSettings desktopFile(path, QSettings::IniFormat);
-    desktopFile.beginGroup(QStringLiteral("Desktop Entry"));
-    if (desktopFile.value(QStringLiteral("Type")).toString() != QStringLiteral("Application")
-        || desktopFile.value(QStringLiteral("Hidden")).toBool()
-        || desktopFile.value(QStringLiteral("NoDisplay")).toBool()
-        || desktopFile.value(QStringLiteral("Terminal")).toBool()) {
+    QFile desktopFile(path);
+    if (!desktopFile.open(QIODevice::ReadOnly | QIODevice::Text))
+        return {};
+
+    QHash<QString, QString> values;
+    QTextStream stream(&desktopFile);
+    bool inDesktopEntry = false;
+    while (!stream.atEnd()) {
+        const auto line = stream.readLine().trimmed();
+        if (line.startsWith(QChar(u'['))) {
+            if (inDesktopEntry)
+                break;
+            inDesktopEntry = line == QStringLiteral("[Desktop Entry]");
+            continue;
+        }
+        if (!inDesktopEntry || line.isEmpty() || line.startsWith(QChar(u'#')))
+            continue;
+        const auto separator = line.indexOf(QChar(u'='));
+        if (separator <= 0)
+            continue;
+        values.insert(line.left(separator), line.mid(separator + 1));
+    }
+
+    if (values.value(QStringLiteral("Type")) != QStringLiteral("Application")
+        || values.value(QStringLiteral("Hidden")).compare(
+               QStringLiteral("true"), Qt::CaseInsensitive) == 0
+        || values.value(QStringLiteral("NoDisplay")).compare(
+               QStringLiteral("true"), Qt::CaseInsensitive) == 0
+        || values.value(QStringLiteral("Terminal")).compare(
+               QStringLiteral("true"), Qt::CaseInsensitive) == 0) {
         return {};
     }
 
-    const auto categories = desktopFile.value(QStringLiteral("Categories")).toString()
+    const auto categories = values.value(QStringLiteral("Categories"))
                                 .split(QChar(u';'), Qt::SkipEmptyParts);
     if (!categories.contains(QStringLiteral("TextEditor"))
         && !categories.contains(QStringLiteral("IDE"))) {
         return {};
     }
 
-    const auto name = desktopFile.value(QStringLiteral("Name")).toString().trimmed();
+    const auto name = values.value(QStringLiteral("Name")).trimmed();
     const auto desktopId = QFileInfo(path).fileName();
     if (name.isEmpty() || desktopId.isEmpty())
         return {};
