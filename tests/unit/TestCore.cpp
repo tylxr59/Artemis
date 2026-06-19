@@ -209,6 +209,8 @@ private slots:
             QStringLiteral("First task"), {}, QStringLiteral("test-model"), {},
             QStringLiteral("full-access"), QStringLiteral("default")));
         QVERIFY(controller.turnRunning());
+        QCOMPARE(controller.workingThreadIds(),
+                 QStringList({QStringLiteral("thread-a")}));
 
         controller.selectProjectThread(secondIndex, QStringLiteral("thread-b"));
         QCOMPARE(controller.selectedThreadId(), QStringLiteral("thread-b"));
@@ -217,6 +219,8 @@ private slots:
             QStringLiteral("full-access"), QStringLiteral("default")));
         QVERIFY(controller.turnRunning());
         QCOMPARE(provider.startedTurnThreads,
+                 QStringList({QStringLiteral("thread-a"), QStringLiteral("thread-b")}));
+        QCOMPARE(controller.workingThreadIds(),
                  QStringList({QStringLiteral("thread-a"), QStringLiteral("thread-b")}));
 
         controller.selectProjectThread(firstIndex, QStringLiteral("thread-a"));
@@ -243,6 +247,8 @@ private slots:
 
         controller.selectProjectThread(secondIndex, QStringLiteral("thread-b"));
         QVERIFY(!controller.turnRunning());
+        QCOMPARE(controller.workingThreadIds(),
+                 QStringList({QStringLiteral("thread-a")}));
         controller.selectProjectThread(firstIndex, QStringLiteral("thread-a"));
         QVERIFY(controller.turnRunning());
     }

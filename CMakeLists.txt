@@ -23,6 +23,7 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS
 )
 find_package(KF6Kirigami REQUIRED)
 find_package(KF6SyntaxHighlighting REQUIRED)
+find_package(KF6Notifications REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -86,6 +87,7 @@ target_link_libraries(artemis PRIVATE
     Qt6::Sql
     Qt6::Widgets
     KF6::Kirigami
+    KF6::Notifications
     KF6::SyntaxHighlighting
 )
 target_compile_options(artemis PRIVATE
@@ -101,6 +103,8 @@ install(FILES resources/icons/artemis-bow-256.png
 install(FILES resources/icons/artemis-bow.svg
     DESTINATION share/icons/hicolor/scalable/apps
     RENAME artemis.svg)
+install(FILES resources/artemis.notifyrc
+    DESTINATION share/knotifications6)
 
 if(BUILD_TESTING)
     add_subdirectory(tests)

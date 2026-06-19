@@ -26,6 +26,7 @@ target_link_libraries(artemis-unit-tests PRIVATE
     Qt6::Sql
     Qt6::Test
     Qt6::Widgets
+    KF6::Notifications
 )
 target_compile_options(artemis-unit-tests PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Wpedantic>

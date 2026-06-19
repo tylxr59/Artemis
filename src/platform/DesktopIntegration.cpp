@@ -14,6 +14,8 @@
 #include <QTextStream>
 #include <QUrl>
 
+#include <KNotification>
+
 #include <algorithm>
 
 namespace Artemis::DesktopIntegration {
@@ -421,6 +423,13 @@ bool openTerminal(const QString &desktopId, const QString &path, QString *error)
         *error = QStringLiteral(
             "Could not start a terminal. Install a supported terminal emulator.");
     return false;
+}
+
+void showNotification(const QString &title, const QString &text)
+{
+    KNotification::event(
+        QStringLiteral("threadFinished"), title, text, QStringLiteral("artemis"),
+        KNotification::CloseOnTimeout, QStringLiteral("artemis"));
 }
 
 }

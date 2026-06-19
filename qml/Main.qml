@@ -610,6 +610,15 @@ Kirigami.ApplicationWindow {
                                             Layout.preferredHeight: 16
                                             opacity: 0.7
                                         }
+                                        Rectangle {
+                                            visible: appController.workingThreadIds.indexOf(
+                                                         threadItem.modelData.id) >= 0
+                                            Layout.preferredWidth: 8
+                                            Layout.preferredHeight: 8
+                                            radius: width / 2
+                                            color: Kirigami.Theme.positiveTextColor
+                                            Accessible.name: "Working"
+                                        }
                                         ColumnLayout {
                                             Layout.fillWidth: true
                                             spacing: 0

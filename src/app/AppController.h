@@ -40,6 +40,7 @@ class AppController : public QObject {
     Q_PROPERTY(QVariantList currentPlan READ currentPlan NOTIFY currentPlanChanged)
     Q_PROPERTY(QString currentPlanExplanation READ currentPlanExplanation NOTIFY currentPlanChanged)
     Q_PROPERTY(bool turnRunning READ turnRunning NOTIFY turnRunningChanged)
+    Q_PROPERTY(QStringList workingThreadIds READ workingThreadIds NOTIFY workingThreadsChanged)
     Q_PROPERTY(bool hasPendingUserInput READ hasPendingUserInput NOTIFY pendingUserInputChanged)
     Q_PROPERTY(QVariantMap pendingUserInputQuestion READ pendingUserInputQuestion NOTIFY pendingUserInputChanged)
     Q_PROPERTY(int pendingUserInputQuestionNumber READ pendingUserInputQuestionNumber NOTIFY pendingUserInputChanged)
@@ -88,6 +89,7 @@ public:
     QVariantList currentPlan() const;
     QString currentPlanExplanation() const;
     bool turnRunning() const;
+    QStringList workingThreadIds() const;
     bool hasPendingUserInput() const;
     QVariantMap pendingUserInputQuestion() const;
     int pendingUserInputQuestionNumber() const;
@@ -159,6 +161,7 @@ signals:
     void currentPlanChanged();
     void taskPanelRequested();
     void turnRunningChanged();
+    void workingThreadsChanged();
     void pendingUserInputChanged();
     void turnElapsedChanged();
     void providerReadyChanged();
@@ -235,6 +238,8 @@ private:
     struct ActiveTurn {
         QString turnId;
         qint64 startedAtMs = 0;
+        QString threadTitle;
+        QString projectName;
     };
     QHash<QString, ActiveTurn> m_activeTurns;
     QString m_pendingUserInputThreadId;

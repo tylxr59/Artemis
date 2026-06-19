@@ -238,6 +238,12 @@ bool AppController::turnRunning() const
 {
     return m_activeTurns.contains(selectedThreadId());
 }
+QStringList AppController::workingThreadIds() const
+{
+    auto threadIds = m_activeTurns.keys();
+    threadIds.sort();
+    return threadIds;
+}
 bool AppController::hasPendingUserInput() const
 {
     return m_pendingUserInputIndex >= 0
@@ -1126,6 +1132,14 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
         event.content = QStringLiteral("Complete · %1 · %2 total")
                             .arg(QLocale().toString(QTime::currentTime(), QLocale::ShortFormat),
                                  elapsedText(elapsed));
+        if (activeTurn != m_activeTurns.cend()) {
+            const auto notificationText = activeTurn->projectName.isEmpty()
+                ? activeTurn->threadTitle
+                : QStringLiteral("%1 · %2")
+                      .arg(activeTurn->projectName, activeTurn->threadTitle);
+            DesktopIntegration::showNotification(
+                QStringLiteral("Thread finished"), notificationText);
+        }
     }
     const bool isAssistantDelta = type == QStringLiteral("assistant")
         && metadata.value(QStringLiteral("delta")).toBool();
@@ -1307,6 +1321,9 @@ void AppController::applyThreadTitle(const QString &threadId, const QString &tit
             setStatus(QStringLiteral("Could not name thread: %1").arg(error));
             return;
         }
+        auto activeTurn = m_activeTurns.find(threadId);
+        if (activeTurn != m_activeTurns.end())
+            activeTurn->threadTitle = title;
         for (int i = 0; i < m_threads.size(); ++i) {
             auto row = m_threads.at(i).toMap();
             if (row.value(QStringLiteral("id")).toString() != threadId)
@@ -1567,7 +1584,11 @@ void AppController::setTurnRunning(const QString &threadId, bool running)
         return;
     if (running) {
         m_activeTurns.insert(
-            threadId, ActiveTurn{{}, QDateTime::currentMSecsSinceEpoch()});
+            threadId,
+            ActiveTurn{{}, QDateTime::currentMSecsSinceEpoch(),
+                       selectedThreadId() == threadId
+                           ? selectedThreadTitle() : QStringLiteral("Untitled thread"),
+                       selectedThreadId() == threadId ? selectedProjectName() : QString()});
     } else {
         m_activeTurns.remove(threadId);
     }
@@ -1575,6 +1596,7 @@ void AppController::setTurnRunning(const QString &threadId, bool running)
         m_turnElapsedUpdateTimer.stop();
     else if (!m_turnElapsedUpdateTimer.isActive())
         m_turnElapsedUpdateTimer.start();
+    emit workingThreadsChanged();
     if (threadId == selectedThreadId()) {
         emit turnRunningChanged();
         emit turnElapsedChanged();

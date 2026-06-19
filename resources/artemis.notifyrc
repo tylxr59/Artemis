@@ -1,0 +1,9 @@
+[Global]
+IconName=artemis
+DesktopEntry=org.artemis.Artemis
+Comment=Artemis
+
+[Event/threadFinished]
+Name=Thread finished
+Comment=A coding thread finished working
+Action=Popup
