@@ -461,12 +461,37 @@ Kirigami.ApplicationWindow {
 
                 ListView {
                     id: conversationList
+                    property bool followTail: true
+
+                    function updateFollowTail() {
+                        const distanceFromEnd = contentHeight - height - contentY
+                        followTail = distanceFromEnd <= Kirigami.Units.gridUnit * 2
+                    }
+
+                    function scrollToEndIfFollowing() {
+                        if (!followTail || conversationScrollBar.pressed)
+                            return
+                        Qt.callLater(function() {
+                            if (conversationList.followTail
+                                    && !conversationScrollBar.pressed)
+                                conversationList.positionViewAtEnd()
+                        })
+                    }
+
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     model: appController.conversation
                     clip: true
                     ScrollBar.vertical: ScrollBar {
+                        id: conversationScrollBar
                         policy: ScrollBar.AsNeeded
+
+                        onPressedChanged: {
+                            if (pressed)
+                                conversationList.followTail = false
+                            else
+                                conversationList.updateFollowTail()
+                        }
                     }
                     spacing: Kirigami.Units.largeSpacing
                     topMargin: Kirigami.Units.largeSpacing
@@ -493,7 +518,8 @@ Kirigami.ApplicationWindow {
                             metadata: conversationRow.metadata
                         }
                     }
-                    onCountChanged: positionViewAtEnd()
+                    onCountChanged: scrollToEndIfFollowing()
+                    onMovementEnded: updateFollowTail()
                     onWidthChanged: forceLayout()
 
                     Kirigami.PlaceholderMessage {
