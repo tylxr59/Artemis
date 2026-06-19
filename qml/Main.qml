@@ -117,6 +117,7 @@ Kirigami.ApplicationWindow {
             ToolButton {
                 text: "Diff"
                 visible: appController.selectedProjectIsGit
+                enabled: appController.hasGitChanges
                 checkable: true
                 checked: root.sidePanelVisible && root.sidePanelMode === "diff"
                 onClicked: {
@@ -132,7 +133,7 @@ Kirigami.ApplicationWindow {
             Button {
                 text: "Commit & push"
                 visible: appController.selectedProjectIsGit
-                enabled: appController.gitStatusText.length > 0
+                enabled: appController.hasGitChanges
                 onClicked: {
                     commitDialog.featureMode = false
                     commitDialog.open()
@@ -143,7 +144,7 @@ Kirigami.ApplicationWindow {
                 id: commitMenuButton
                 text: "More"
                 visible: appController.selectedProjectIsGit
-                enabled: appController.gitStatusText.length > 0
+                enabled: appController.hasGitChanges
                 onClicked: commitMenu.open()
                 Accessible.name: "More commit options"
                 Menu {

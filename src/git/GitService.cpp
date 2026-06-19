@@ -48,6 +48,16 @@ bool GitService::isRepository(const QString &path)
     return runSync(path, {QStringLiteral("rev-parse"), QStringLiteral("--is-inside-work-tree")}).ok();
 }
 
+bool GitService::statusHasChanges(const QByteArray &porcelainStatus)
+{
+    const auto records = porcelainStatus.split('\0');
+    for (const auto &record : records) {
+        if (!record.isEmpty() && !record.startsWith("## "))
+            return true;
+    }
+    return false;
+}
+
 QString GitService::canonicalProjectPath(const QString &path)
 {
     QFileInfo info(path);

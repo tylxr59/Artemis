@@ -154,6 +154,7 @@ QString AppController::providerVersion() const { return m_codex.version(); }
 QString AppController::statusText() const { return m_status; }
 QString AppController::diffText() const { return m_diff; }
 QString AppController::gitStatusText() const { return m_gitStatus; }
+bool AppController::hasGitChanges() const { return m_hasGitChanges; }
 QString AppController::databasePath() const { return m_database.path(); }
 
 void AppController::chooseProjectFolder()
@@ -676,18 +677,25 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
 void AppController::refreshGit()
 {
     const auto path = selectedWorkspacePath();
+    m_hasGitChanges = false;
     if (path.isEmpty() || !selectedProjectIsGit()) {
         m_diff.clear();
         m_gitStatus = QStringLiteral("This folder is not a Git repository.");
         emit diffChanged();
         return;
     }
-    m_git.status(path, [this](const GitResult &result) {
+    emit diffChanged();
+    m_git.status(path, [this, path](const GitResult &result) {
+        if (path != selectedWorkspacePath())
+            return;
         m_gitStatus = result.ok() ? QString::fromUtf8(result.output).replace(QChar(u'\0'), QChar(u'\n'))
                                   : QString::fromUtf8(result.error);
+        m_hasGitChanges = result.ok() && GitService::statusHasChanges(result.output);
         emit diffChanged();
     });
-    m_git.diff(path, [this](const GitResult &result) {
+    m_git.diff(path, [this, path](const GitResult &result) {
+        if (path != selectedWorkspacePath())
+            return;
         m_diff = result.ok() ? QString::fromUtf8(result.output) : QString::fromUtf8(result.error);
         emit diffChanged();
     });

@@ -24,6 +24,7 @@ public:
     static GitResult runSync(const QString &cwd, const QStringList &arguments,
                              const QProcessEnvironment &environment = {});
     static bool isRepository(const QString &path);
+    static bool statusHasChanges(const QByteArray &porcelainStatus);
     static QString canonicalProjectPath(const QString &path);
     static QString validateBranchName(const QString &path, const QString &branch);
     static QString suggestedBranch(const QString &subject);

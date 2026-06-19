@@ -36,6 +36,24 @@ private slots:
         QVERIFY(GitService::isRepository(directory.path()));
     }
 
+    void gitStatusChangeDetection()
+    {
+        const auto status = [](std::initializer_list<QByteArray> records) {
+            QByteArray output;
+            for (const auto &record : records) {
+                output.append(record);
+                output.append('\0');
+            }
+            return output;
+        };
+
+        QVERIFY(!GitService::statusHasChanges(status({"## main"})));
+        QVERIFY(GitService::statusHasChanges(status({"## main", " M tracked.txt"})));
+        QVERIFY(GitService::statusHasChanges(status({"## main", "?? untracked.txt"})));
+        QVERIFY(GitService::statusHasChanges(
+            status({"## main", "R  renamed.txt", "old-name.txt"})));
+    }
+
     void databaseMigration()
     {
         Database database;

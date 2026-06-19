@@ -39,6 +39,7 @@ class AppController : public QObject {
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
     Q_PROPERTY(QString diffText READ diffText NOTIFY diffChanged)
     Q_PROPERTY(QString gitStatusText READ gitStatusText NOTIFY diffChanged)
+    Q_PROPERTY(bool hasGitChanges READ hasGitChanges NOTIFY diffChanged)
     Q_PROPERTY(QString databasePath READ databasePath CONSTANT)
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -67,6 +68,7 @@ public:
     QString statusText() const;
     QString diffText() const;
     QString gitStatusText() const;
+    bool hasGitChanges() const;
     QString databasePath() const;
 
     Q_INVOKABLE void chooseProjectFolder();
@@ -145,6 +147,7 @@ private:
     QString m_status;
     QString m_diff;
     QString m_gitStatus;
+    bool m_hasGitChanges = false;
     QString m_commitThreadId;
     QString m_commitDraftBuffer;
     QHash<QString, QString> m_titleTargets;
