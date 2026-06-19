@@ -11,6 +11,7 @@ Item {
     required property string title
     required property string content
     required property var metadata
+    signal imageOpenRequested(string path)
 
     readonly property bool isTool: eventType === "command" || eventType === "file"
     readonly property bool isReasoning: eventType === "reasoning"
@@ -180,14 +181,32 @@ Item {
                 clip: true
                 model: root.images
 
-                delegate: Image {
+                delegate: Item {
+                    id: imageThumbnail
                     required property string modelData
                     width: Math.min(220, implicitWidth)
                     height: 150
-                    source: root.localImageUrl(modelData)
-                    fillMode: Image.PreserveAspectFit
-                    asynchronous: true
-                    cache: false
+                    implicitWidth: thumbnail.implicitWidth
+
+                    Image {
+                        id: thumbnail
+                        anchors.fill: parent
+                        source: root.localImageUrl(imageThumbnail.modelData)
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                        cache: false
+                    }
+                    HoverHandler {
+                        id: thumbnailHover
+                        cursorShape: Qt.PointingHandCursor
+                    }
+                    TapHandler {
+                        onTapped: root.imageOpenRequested(imageThumbnail.modelData)
+                    }
+                    ToolTip {
+                        visible: thumbnailHover.hovered
+                        text: "Open full-size image"
+                    }
                 }
             }
             TextArea {
