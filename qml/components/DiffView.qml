@@ -241,6 +241,7 @@ Item {
                             Label {
                                 id: filePathLabel
                                 text: fileCard.modelData.path
+                                textFormat: Text.PlainText
                                 Layout.fillWidth: true
                                 elide: Text.ElideMiddle
                                 font.bold: true
@@ -354,6 +355,7 @@ Item {
                                         Layout.rightMargin: Kirigami.Units.smallSpacing
                                         text: diffLine.modelData.text.length > 0
                                               ? diffLine.modelData.text : " "
+                                        textFormat: Text.PlainText
                                         elide: Text.ElideRight
                                         font.family: "monospace"
                                         font.pointSize: Kirigami.Theme.smallFont.pointSize

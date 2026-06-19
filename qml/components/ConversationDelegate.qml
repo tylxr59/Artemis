@@ -77,6 +77,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.rightMargin: Kirigami.Units.largeSpacing
                 text: "—  " + root.compactContent
+                textFormat: Text.PlainText
                 font.family: root.eventType === "command" ? "monospace" : Kirigami.Theme.defaultFont.family
                 font.pointSize: Kirigami.Theme.smallFont.pointSize
                 elide: Text.ElideRight
@@ -116,6 +117,7 @@ Item {
                 Layout.bottomMargin: Kirigami.Units.largeSpacing
                 visible: reasoningToggle.checked
                 text: root.content
+                textFormat: TextEdit.PlainText
                 readOnly: true
                 wrapMode: TextEdit.Wrap
                 selectByMouse: true
@@ -131,6 +133,7 @@ Item {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             text: root.content
+            textFormat: Text.PlainText
             font: Kirigami.Theme.smallFont
             opacity: 0.45
             topPadding: Kirigami.Units.smallSpacing
@@ -163,6 +166,7 @@ Item {
                 Layout.rightMargin: Kirigami.Units.largeSpacing
                 Layout.topMargin: Kirigami.Units.largeSpacing
                 text: root.title
+                textFormat: Text.PlainText
                 font.bold: true
                 font.pointSize: Kirigami.Theme.smallFont.pointSize
                 visible: root.eventType === "user" || root.eventType === "error"
@@ -218,6 +222,7 @@ Item {
                 Layout.topMargin: root.eventType === "user" || root.eventType === "error"
                                   ? 0 : Kirigami.Units.largeSpacing
                 text: root.content
+                textFormat: TextEdit.PlainText
                 visible: root.content.length > 0
                 readOnly: true
                 wrapMode: TextEdit.Wrap
