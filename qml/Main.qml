@@ -803,6 +803,9 @@ Kirigami.ApplicationWindow {
                         anchors.fill: parent
                         model: appController.conversation
                         clip: true
+                        cacheBuffer: Math.max(height * 8, 12000)
+                        reuseItems: true
+                        boundsBehavior: Flickable.StopAtBounds
                         ScrollBar.vertical: ScrollBar {
                             id: conversationScrollBar
                             policy: ScrollBar.AsNeeded
@@ -873,6 +876,7 @@ Kirigami.ApplicationWindow {
 
                         WheelHandler {
                             target: null
+                            blocking: false
                             onWheel: function(event) {
                                 conversationList.followTail = false
                             }

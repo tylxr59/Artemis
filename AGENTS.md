@@ -15,9 +15,11 @@ Running only `artemis_qmllint` is not sufficient. That target validates and
 copies QML sources for linting, but it does not rebuild the QML cache embedded
 in `build/artemis`.
 
-Restart every running Artemis process after rebuilding. A process launched
-before the rebuild continues using the old executable and embedded QML, even
-if `/proc/<pid>/exe` points to `build/artemis (deleted)`.
+A process launched before the rebuild continues using the old executable and
+embedded QML, even if `/proc/<pid>/exe` points to `build/artemis (deleted)`.
+Do not kill, restart, or otherwise interrupt a running Artemis process unless
+the user explicitly asks you to. Instead, report that existing instances must
+be restarted before they can be used to verify the QML change.
 
 For QML changes, use this verification sequence:
 
