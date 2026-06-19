@@ -722,146 +722,174 @@ Kirigami.ApplicationWindow {
                 anchors.fill: parent
                 spacing: 0
 
-                ListView {
-                    id: conversationList
-                    property bool followTail: true
-                    property bool tailScrollPending: false
-                    readonly property real contentViewportWidth: Math.max(
-                        0, width - (conversationScrollBar.visible
-                                    ? conversationScrollBar.width
-                                      + Kirigami.Units.smallSpacing : 0))
-
-                    function updateFollowTail() {
-                        const distanceFromEnd = contentHeight - height - contentY
-                        followTail = distanceFromEnd <= Kirigami.Units.gridUnit * 2
-                    }
-
-                    function scrollToEndIfFollowing() {
-                        if (!followTail || conversationScrollBar.pressed
-                                || tailScrollPending)
-                            return
-                        tailScrollPending = true
-                        Qt.callLater(function() {
-                            conversationList.tailScrollPending = false
-                            if (conversationList.followTail
-                                    && !conversationScrollBar.pressed)
-                                conversationList.positionViewAtEnd()
-                        })
-                    }
-
+                Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    model: appController.conversation
-                    clip: true
-                    ScrollBar.vertical: ScrollBar {
-                        id: conversationScrollBar
-                        policy: ScrollBar.AsNeeded
 
-                        onPressedChanged: {
-                            if (pressed)
-                                conversationList.followTail = false
-                            else
-                                conversationList.updateFollowTail()
-                        }
-                    }
-                    spacing: Kirigami.Units.largeSpacing
-                    topMargin: Kirigami.Units.largeSpacing
-                    bottomMargin: Kirigami.Units.largeSpacing
-                    footer: Item {
-                        width: conversationList.contentViewportWidth
-                        implicitHeight: workingStatus.visible
-                                        ? workingStatus.implicitHeight : 0
+                    ListView {
+                        id: conversationList
+                        property bool followTail: true
+                        property bool tailScrollPending: false
+                        readonly property real tailThreshold:
+                            Kirigami.Units.gridUnit * 2
+                        readonly property real distanceFromEnd: Math.max(
+                            0, contentHeight - height - contentY)
+                        readonly property bool awayFromTail:
+                            distanceFromEnd > tailThreshold
+                        readonly property real contentViewportWidth: Math.max(
+                            0, width - (conversationScrollBar.visible
+                                        ? conversationScrollBar.width
+                                          + Kirigami.Units.smallSpacing : 0))
 
-                        Label {
-                            id: workingStatus
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            width: Math.min(840, parent.width)
-                            visible: appController.turnRunning
-                            horizontalAlignment: Text.AlignHCenter
-                            text: "Working · " + appController.turnElapsedText + " elapsed"
-                            font: Kirigami.Theme.smallFont
-                            opacity: 0.45
-                            topPadding: Kirigami.Units.smallSpacing
-                            bottomPadding: Kirigami.Units.smallSpacing
-                        }
-                    }
-                    delegate: Item {
-                        id: conversationRow
-                        required property int index
-                        required property string eventType
-                        required property string title
-                        required property string content
-                        required property var metadata
-
-                        readonly property real horizontalGutter: Kirigami.Units.largeSpacing
-                        width: conversationList.contentViewportWidth
-                        implicitHeight: conversationDelegate.implicitHeight
-                        onImplicitHeightChanged: {
-                            if (index === conversationList.count - 1)
-                                conversationList.scrollToEndIfFollowing()
+                        function updateFollowTail() {
+                            followTail = !awayFromTail
                         }
 
-                        ConversationDelegate {
-                            id: conversationDelegate
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            width: Math.min(840, parent.width
-                                                 - conversationRow.horizontalGutter * 2)
-                            eventType: conversationRow.eventType
-                            title: conversationRow.title
-                            content: conversationRow.content
-                            metadata: conversationRow.metadata
-                            onImageOpenRequested: path => imageViewer.showImage(path)
+                        function scrollToEndIfFollowing() {
+                            if (!followTail || conversationScrollBar.pressed
+                                    || tailScrollPending)
+                                return
+                            tailScrollPending = true
+                            Qt.callLater(function() {
+                                conversationList.tailScrollPending = false
+                                if (conversationList.followTail
+                                        && !conversationScrollBar.pressed)
+                                    conversationList.positionViewAtEnd()
+                            })
                         }
-                    }
-                    onCountChanged: scrollToEndIfFollowing()
-                    onDraggingChanged: {
-                        if (dragging)
-                            followTail = false
-                    }
-                    onMovementEnded: updateFollowTail()
-                    onWidthChanged: forceLayout()
 
-                    WheelHandler {
-                        target: null
-                        onWheel: function(event) {
-                            conversationList.followTail = false
+                        function resumeFollowing() {
+                            followTail = true
+                            positionViewAtEnd()
+                            scrollToEndIfFollowing()
                         }
-                    }
 
-                    Connections {
-                        target: appController
-                        function onTurnRunningChanged() {
-                            if (appController.turnRunning) {
-                                conversationList.followTail = true
-                                conversationList.scrollToEndIfFollowing()
+                        anchors.fill: parent
+                        model: appController.conversation
+                        clip: true
+                        ScrollBar.vertical: ScrollBar {
+                            id: conversationScrollBar
+                            policy: ScrollBar.AsNeeded
+
+                            onPressedChanged: {
+                                if (pressed)
+                                    conversationList.followTail = false
+                                else
+                                    conversationList.updateFollowTail()
                             }
                         }
-                    }
+                        spacing: Kirigami.Units.largeSpacing
+                        topMargin: Kirigami.Units.largeSpacing
+                        bottomMargin: Kirigami.Units.largeSpacing
+                        footer: Item {
+                            width: conversationList.contentViewportWidth
+                            implicitHeight: workingStatus.visible
+                                            ? workingStatus.implicitHeight : 0
 
-                    Kirigami.PlaceholderMessage {
-                        anchors.centerIn: parent
-                        width: Math.min(parent.width - 40, 480)
-                        visible: conversationList.count === 0
-                        text: !root.hasProject ? "Start with a project"
-                              : !appController.providerReady ? "Codex is offline"
-                              : "What would you like to build?"
-                        explanation: !root.hasProject
-                                     ? "Add a project folder to give Artemis a workspace."
-                                     : !appController.providerReady
-                                       ? "Open Diagnostics to inspect the Codex connection."
-                                       : appController.selectedProjectIsGit
-                                         ? "Describe a task below. Use Diff to review file changes."
-                                         : "Describe a task below. Git review is unavailable for this folder."
+                            Label {
+                                id: workingStatus
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: Math.min(840, parent.width)
+                                visible: appController.turnRunning
+                                horizontalAlignment: Text.AlignHCenter
+                                text: "Working · " + appController.turnElapsedText + " elapsed"
+                                font: Kirigami.Theme.smallFont
+                                opacity: 0.45
+                                topPadding: Kirigami.Units.smallSpacing
+                                bottomPadding: Kirigami.Units.smallSpacing
+                            }
+                        }
+                        delegate: Item {
+                            id: conversationRow
+                            required property int index
+                            required property string eventType
+                            required property string title
+                            required property string content
+                            required property var metadata
+
+                            readonly property real horizontalGutter: Kirigami.Units.largeSpacing
+                            width: conversationList.contentViewportWidth
+                            implicitHeight: conversationDelegate.implicitHeight
+                            onImplicitHeightChanged: {
+                                if (index === conversationList.count - 1)
+                                    conversationList.scrollToEndIfFollowing()
+                            }
+
+                            ConversationDelegate {
+                                id: conversationDelegate
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: Math.min(840, parent.width
+                                                     - conversationRow.horizontalGutter * 2)
+                                eventType: conversationRow.eventType
+                                title: conversationRow.title
+                                content: conversationRow.content
+                                metadata: conversationRow.metadata
+                                onImageOpenRequested: path => imageViewer.showImage(path)
+                            }
+                        }
+                        onCountChanged: scrollToEndIfFollowing()
+                        onDraggingChanged: {
+                            if (dragging)
+                                followTail = false
+                        }
+                        onMovementEnded: updateFollowTail()
+                        onWidthChanged: forceLayout()
+
+                        WheelHandler {
+                            target: null
+                            onWheel: function(event) {
+                                conversationList.followTail = false
+                            }
+                        }
+
+                        Connections {
+                            target: appController
+                            function onTurnRunningChanged() {
+                                if (appController.turnRunning) {
+                                    conversationList.followTail = true
+                                    conversationList.scrollToEndIfFollowing()
+                                }
+                            }
+                        }
+
+                        Kirigami.PlaceholderMessage {
+                            anchors.centerIn: parent
+                            width: Math.min(parent.width - 40, 480)
+                            visible: conversationList.count === 0
+                            text: !root.hasProject ? "Start with a project"
+                                  : !appController.providerReady ? "Codex is offline"
+                                  : "What would you like to build?"
+                            explanation: !root.hasProject
+                                         ? "Add a project folder to give Artemis a workspace."
+                                         : !appController.providerReady
+                                           ? "Open Diagnostics to inspect the Codex connection."
+                                           : appController.selectedProjectIsGit
+                                             ? "Describe a task below. Use Diff to review file changes."
+                                             : "Describe a task below. Git review is unavailable for this folder."
+                        }
+
+                        Button {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.top: parent.verticalCenter
+                            anchors.topMargin: Kirigami.Units.gridUnit * 4
+                            visible: conversationList.count === 0 && !root.hasProject
+                            text: "Add project folder"
+                            icon.name: "folder-new"
+                            onClicked: appController.chooseProjectFolder()
+                        }
                     }
 
                     Button {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.top: parent.verticalCenter
-                        anchors.topMargin: Kirigami.Units.gridUnit * 4
-                        visible: conversationList.count === 0 && !root.hasProject
-                        text: "Add project folder"
-                        icon.name: "folder-new"
-                        onClicked: appController.chooseProjectFolder()
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: Kirigami.Units.largeSpacing
+                        z: 1
+                        visible: !conversationList.followTail
+                                 && conversationList.awayFromTail
+                        text: "Scroll to bottom"
+                        icon.name: "go-bottom"
+                        onClicked: conversationList.resumeFollowing()
+                        Accessible.name: text
                     }
                 }
 
