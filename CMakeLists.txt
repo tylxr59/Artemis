@@ -54,6 +54,7 @@ qt_add_qml_module(artemis
     QML_FILES
         qml/Main.qml
         qml/components/ConversationDelegate.qml
+        qml/components/DiffView.qml
         qml/components/ThreadPane.qml
         qml/dialogs/CommitDialog.qml
         qml/dialogs/SettingsDialog.qml

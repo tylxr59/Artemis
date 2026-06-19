@@ -185,13 +185,11 @@ Pane {
                 ScrollView {
                     anchors.fill: parent
                     visible: root.controller.diffText.length > 0
-                    TextArea {
-                        text: root.controller.diffText
-                        readOnly: true
-                        selectByMouse: true
-                        wrapMode: TextEdit.NoWrap
-                        font.family: "monospace"
-                        color: Kirigami.Theme.textColor
+                    contentWidth: availableWidth
+
+                    DiffView {
+                        width: parent.width
+                        diffText: root.controller.diffText
                     }
                 }
                 Kirigami.PlaceholderMessage {

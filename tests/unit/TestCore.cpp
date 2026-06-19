@@ -91,6 +91,7 @@ private slots:
         connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
         timeout.start(10000);
         service.commitAllAndPush(workPath, QStringLiteral("Publish test change"),
+                                 QStringLiteral("Explain why this test change is published."),
                                  [&result, &loop](const GitResult &value) {
             result = value;
             loop.quit();
@@ -99,6 +100,13 @@ private slots:
 
         QVERIFY2(timeout.isActive(), "Timed out waiting for Git push");
         QVERIFY2(result.ok(), result.error.constData());
+        const auto message = GitService::runSync(
+            workPath, {QStringLiteral("log"), QStringLiteral("-1"),
+                       QStringLiteral("--pretty=%s%n%n%b")});
+        QVERIFY(message.ok());
+        QCOMPARE(QString::fromUtf8(message.output).trimmed(),
+                 QStringLiteral("Publish test change\n\n"
+                                "Explain why this test change is published."));
         const auto local = GitService::runSync(workPath, {QStringLiteral("rev-parse"),
                                                           QStringLiteral("HEAD")});
         const auto remote = GitService::runSync(remotePath, {QStringLiteral("rev-parse"),
@@ -118,7 +126,7 @@ private slots:
 
         result = {};
         timeout.start(10000);
-        service.commitAllAndPush(workPath, QStringLiteral("No new changes"),
+        service.commitAllAndPush(workPath, QStringLiteral("No new changes"), QString(),
                                  [&result, &loop](const GitResult &value) {
             result = value;
             loop.quit();

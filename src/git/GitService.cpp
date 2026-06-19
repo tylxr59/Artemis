@@ -86,7 +86,8 @@ void GitService::diff(const QString &path, Handler handler)
                QStringLiteral("--binary"), QStringLiteral("HEAD")}, std::move(handler));
 }
 
-void GitService::commitAllAndPush(const QString &path, const QString &message, Handler handler)
+void GitService::commitAllAndPush(const QString &path, const QString &subject,
+                                  const QString &body, Handler handler)
 {
     const auto add = runSync(path, {QStringLiteral("add"), QStringLiteral("-A")});
     if (!add.ok()) {
@@ -94,7 +95,10 @@ void GitService::commitAllAndPush(const QString &path, const QString &message, H
             handler(add);
         return;
     }
-    const auto commit = runSync(path, {QStringLiteral("commit"), QStringLiteral("-m"), message});
+    QStringList commitArguments{QStringLiteral("commit"), QStringLiteral("-m"), subject.trimmed()};
+    if (!body.trimmed().isEmpty())
+        commitArguments << QStringLiteral("-m") << body.trimmed();
+    const auto commit = runSync(path, commitArguments);
     if (!commit.ok()) {
         const auto status = runSync(path, {QStringLiteral("status"),
                                            QStringLiteral("--porcelain")});
@@ -146,7 +150,8 @@ void GitService::pushCurrentBranch(const QString &path, const QByteArray &commit
 }
 
 void GitService::createBranchCommitPush(const QString &path, const QString &branch,
-                                        const QString &message, const QString &remote, Handler handler)
+                                        const QString &subject, const QString &body,
+                                        const QString &remote, Handler handler)
 {
     const auto checkout = runSync(path, {QStringLiteral("switch"), QStringLiteral("-c"), branch});
     if (!checkout.ok()) {
@@ -160,7 +165,10 @@ void GitService::createBranchCommitPush(const QString &path, const QString &bran
             handler(add);
         return;
     }
-    const auto commit = runSync(path, {QStringLiteral("commit"), QStringLiteral("-m"), message});
+    QStringList commitArguments{QStringLiteral("commit"), QStringLiteral("-m"), subject.trimmed()};
+    if (!body.trimmed().isEmpty())
+        commitArguments << QStringLiteral("-m") << body.trimmed();
+    const auto commit = runSync(path, commitArguments);
     if (!commit.ok()) {
         if (handler)
             handler(commit);

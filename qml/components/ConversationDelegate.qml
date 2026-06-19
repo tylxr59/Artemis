@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -13,6 +15,7 @@ Item {
     readonly property bool isTool: eventType === "command" || eventType === "file"
     readonly property bool isReasoning: eventType === "reasoning"
     readonly property bool isStatus: eventType === "status"
+    readonly property bool isDiff: eventType === "diff"
     readonly property bool isRunning: metadata && metadata.lifecycle === "started"
     readonly property string compactContent: content.replace(/\s+/g, " ").trim()
 
@@ -40,7 +43,8 @@ Item {
             anchors.right: parent.right
             sourceComponent: root.isTool ? toolComponent
                              : root.isReasoning ? reasoningComponent
-                             : root.isStatus ? statusComponent : messageComponent
+                             : root.isStatus ? statusComponent
+                             : root.isDiff ? diffComponent : messageComponent
         }
     }
 
@@ -129,6 +133,19 @@ Item {
     }
 
     Component {
+        id: diffComponent
+        ColumnLayout {
+            spacing: Kirigami.Units.smallSpacing
+
+            DiffView {
+                Layout.fillWidth: true
+                diffText: root.content
+                compact: true
+            }
+        }
+    }
+
+    Component {
         id: messageComponent
         ColumnLayout {
             spacing: Kirigami.Units.smallSpacing
@@ -160,8 +177,7 @@ Item {
                 wrapMode: TextEdit.Wrap
                 selectByMouse: true
                 background: null
-                font.family: root.eventType === "diff" ? "monospace"
-                                                       : Kirigami.Theme.defaultFont.family
+                font.family: Kirigami.Theme.defaultFont.family
             }
         }
     }

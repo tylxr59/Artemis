@@ -786,9 +786,9 @@ void AppController::setTitleModelId(const QString &modelId)
     setModelSetting(QStringLiteral("title_model"), m_titleModelId, modelId);
 }
 
-void AppController::commitAllAndPush(const QString &message)
+void AppController::commitAllAndPush(const QString &subject, const QString &body)
 {
-    m_git.commitAllAndPush(selectedWorkspacePath(), message, [this](const GitResult &result) {
+    m_git.commitAllAndPush(selectedWorkspacePath(), subject, body, [this](const GitResult &result) {
         const auto output = QString::fromUtf8(result.ok()
             ? result.output + result.error : result.error).trimmed();
         emit commitFinished(result.ok(), output);
@@ -797,15 +797,15 @@ void AppController::commitAllAndPush(const QString &message)
     });
 }
 
-void AppController::commitFeatureBranch(const QString &message, const QString &branch,
-                                        const QString &remote)
+void AppController::commitFeatureBranch(const QString &subject, const QString &body,
+                                        const QString &branch, const QString &remote)
 {
     const auto validation = validateBranch(branch);
     if (!validation.isEmpty()) {
         emit commitFinished(false, validation);
         return;
     }
-    m_git.createBranchCommitPush(selectedWorkspacePath(), branch, message,
+    m_git.createBranchCommitPush(selectedWorkspacePath(), branch, subject, body,
                                  remote.isEmpty() ? QStringLiteral("origin") : remote,
                                  [this](const GitResult &result) {
         const auto output = QString::fromUtf8(result.ok()
