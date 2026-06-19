@@ -590,6 +590,11 @@ Kirigami.ApplicationWindow {
                     bottomPadding: Kirigami.Units.smallSpacing
                 }
 
+                Kirigami.Separator {
+                    visible: root.hasProject && appController.providerReady
+                    Layout.fillWidth: true
+                }
+
                 Frame {
                     visible: root.hasProject && appController.providerReady
                     Layout.fillWidth: true
