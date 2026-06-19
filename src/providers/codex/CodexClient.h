@@ -18,6 +18,8 @@ public:
     ~CodexClient() override;
 
     ProviderCapabilities capabilities() const override;
+    bool ready() const override;
+    QString version() const override;
     void start() override;
     void listModels(ResultHandler handler) override;
     void listThreads(const QString &workspacePath, ResultHandler handler) override;
@@ -33,16 +35,11 @@ public:
                    const QStringList &images, ResultHandler handler) override;
     void interruptTurn(const QString &threadId, const QString &turnId,
                        ResultHandler handler) override;
-
-    bool ready() const;
-    QString version() const;
+    void setThreadName(const QString &threadId, const QString &name,
+                       ResultHandler handler) override;
+    QString itemContent(const QJsonObject &item) const override;
 
     void request(const QString &method, const QJsonObject &params, ResultHandler handler = {});
-    static QString itemContent(const QJsonObject &item);
-
-signals:
-    void versionChanged();
-    void rawNotification(const QString &method, const QJsonObject &params);
 
 private:
     struct Pending {

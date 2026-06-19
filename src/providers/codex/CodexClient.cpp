@@ -251,20 +251,20 @@ void CodexClient::initializeProcess()
 void CodexClient::scheduleRestart(const QString &reason)
 {
     setReady(false);
-    for (auto it = m_pending.begin(); it != m_pending.end(); ++it) {
-        if (it->timeout)
-            it->timeout->deleteLater();
-        if (it->handler)
-            it->handler({}, QStringLiteral("Codex disconnected: %1").arg(reason));
+    if (m_restartScheduled)
+        return;
+    m_restartScheduled = true;
+    auto pendingRequests = std::exchange(m_pending, {});
+    for (auto &pending : pendingRequests) {
+        if (pending.timeout)
+            pending.timeout->deleteLater();
+        if (pending.handler)
+            pending.handler({}, QStringLiteral("Codex disconnected: %1").arg(reason));
     }
-    m_pending.clear();
     if (!reason.isEmpty())
         emit providerError(reason);
     if (m_stopping)
         return;
-    if (m_restartScheduled)
-        return;
-    m_restartScheduled = true;
     const int delay = qMin(16000, 500 * (1 << qMin(m_restartAttempt++, 5)));
     if (m_process.state() != QProcess::NotRunning)
         m_process.kill();
@@ -324,9 +324,22 @@ void CodexClient::handleLine(const QByteArray &line)
 
 void CodexClient::handleNotification(const QString &method, const QJsonObject &params)
 {
-    emit rawNotification(method, params);
     const auto turnId = params.value(QStringLiteral("turnId")).toString();
-    if (method == QStringLiteral("item/started") || method == QStringLiteral("item/completed")) {
+    if (method == QStringLiteral("turn/started")) {
+        const auto turn = params.value(QStringLiteral("turn")).toObject();
+        emit activeTurnStarted(params.value(QStringLiteral("threadId")).toString(),
+                               turn.value(QStringLiteral("id")).toString());
+    } else if (method == QStringLiteral("thread/tokenUsage/updated")) {
+        const auto usage = params.value(QStringLiteral("tokenUsage")).toObject();
+        emit tokenUsageUpdated(
+            params.value(QStringLiteral("threadId")).toString(),
+            usage.value(QStringLiteral("last")).toObject()
+                .value(QStringLiteral("totalTokens")).toInteger(),
+            usage.value(QStringLiteral("total")).toObject()
+                .value(QStringLiteral("totalTokens")).toInteger(),
+            usage.value(QStringLiteral("modelContextWindow")).toInteger());
+    } else if (method == QStringLiteral("item/started")
+               || method == QStringLiteral("item/completed")) {
         normalizeItem(method.endsWith(QStringLiteral("started")) ? QStringLiteral("started")
                                                                  : QStringLiteral("completed"),
                       params);
@@ -412,7 +425,7 @@ void CodexClient::normalizeItem(const QString &lifecycle, const QJsonObject &par
                                        params.value(QStringLiteral("turnId")).toString()}});
 }
 
-QString CodexClient::itemContent(const QJsonObject &item)
+QString CodexClient::itemContent(const QJsonObject &item) const
 {
     for (const auto &key : {QStringLiteral("text"), QStringLiteral("command"),
                             QStringLiteral("aggregatedOutput"), QStringLiteral("diff")}) {
@@ -438,7 +451,7 @@ void CodexClient::listModels(ResultHandler handler)
 void CodexClient::listThreads(const QString &workspacePath, ResultHandler handler)
 {
     request(QStringLiteral("thread/list"),
-            {{QStringLiteral("cwd"), workspacePath},
+            {{QStringLiteral("cwd"), QJsonArray{workspacePath}},
              {QStringLiteral("limit"), 100},
              {QStringLiteral("sortKey"), QStringLiteral("updated_at")},
              {QStringLiteral("sortDirection"), QStringLiteral("desc")}},
@@ -520,6 +533,15 @@ void CodexClient::interruptTurn(const QString &threadId, const QString &turnId,
     request(QStringLiteral("turn/interrupt"),
             {{QStringLiteral("threadId"), threadId},
              {QStringLiteral("turnId"), turnId}},
+            std::move(handler));
+}
+
+void CodexClient::setThreadName(const QString &threadId, const QString &name,
+                                ResultHandler handler)
+{
+    request(QStringLiteral("thread/name/set"),
+            {{QStringLiteral("threadId"), threadId},
+             {QStringLiteral("name"), name}},
             std::move(handler));
 }
 

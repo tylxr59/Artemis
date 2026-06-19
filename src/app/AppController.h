@@ -4,13 +4,15 @@
 #include "models/ConversationModel.h"
 #include "models/ProjectTreeModel.h"
 #include "persistence/Database.h"
-#include "providers/codex/CodexClient.h"
+#include "domain/AgentProvider.h"
 
 #include <QElapsedTimer>
 #include <QHash>
 #include <QObject>
 #include <QTimer>
 #include <QVariantList>
+
+#include <memory>
 
 namespace Artemis {
 
@@ -54,6 +56,7 @@ class AppController : public QObject {
     Q_PROPERTY(QString databasePath READ databasePath CONSTANT)
 public:
     explicit AppController(QObject *parent = nullptr);
+    explicit AppController(AgentProvider *provider, QObject *parent = nullptr);
 
     bool initialize();
     ProjectTreeModel *projects();
@@ -154,6 +157,7 @@ signals:
     void promptRestoreRequested(const QString &text, const QVariantList &images);
 
 private:
+    void connectProvider();
     void loadProjects();
     void activateProject(int index, const QString &threadToSelect = {});
     void loadThreads(const QString &threadToSelect = {});
@@ -172,12 +176,15 @@ private:
     void setActiveTurnId(const QString &threadId, const QString &turnId);
     void sendPendingSteers();
     void restorePendingSteers();
-    void generateThreadTitle(const QString &threadId, const QString &prompt);
+    void generateThreadTitle(const QString &threadId, const QString &prompt,
+                             const QString &projectPath, const QString &workspacePath,
+                             const QString &modelId);
     void applyThreadTitle(const QString &threadId, const QString &title);
     void setModelSetting(const QString &key, QString &storage, const QString &modelId);
     PermissionProfile permissionProfile(const QString &mode) const;
     QString selectedWorkspacePath() const;
-    QString commitPrompt(const QByteArray &snapshot) const;
+    QString commitPrompt(const QByteArray &snapshot, const QString &projectName,
+                         const QString &branch) const;
     QString cleanCommitDraft(const QString &raw) const;
     QString cleanTitleDraft(const QString &raw) const;
     void persistConversationEvent(const ConversationEvent &event,
@@ -186,7 +193,8 @@ private:
     Database m_database;
     ProjectTreeModel m_projects;
     ConversationModel m_conversation;
-    CodexClient m_codex;
+    std::unique_ptr<AgentProvider> m_ownedProvider;
+    AgentProvider *m_provider = nullptr;
     GitService m_git;
     QVariantList m_threads;
     QVariantList m_models;

@@ -1,3 +1,4 @@
+#include "app/AppController.h"
 #include "git/GitService.h"
 #include "persistence/Database.h"
 #include "platform/DesktopIntegration.h"
@@ -7,6 +8,7 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
+#include <QJsonArray>
 #include <QStandardPaths>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -15,6 +17,89 @@
 #include <QUuid>
 
 using namespace Artemis;
+
+class FakeAgentProvider final : public AgentProvider {
+public:
+    ProviderCapabilities capabilities() const override { return {}; }
+    bool ready() const override { return m_ready; }
+    QString version() const override { return QStringLiteral("test-provider"); }
+
+    void start() override
+    {
+        m_ready = true;
+        emit readyChanged(true);
+    }
+
+    void listModels(ResultHandler handler) override
+    {
+        handler({{QStringLiteral("data"), QJsonArray{}}}, {});
+    }
+
+    void listThreads(const QString &, ResultHandler handler) override
+    {
+        handler({{QStringLiteral("data"), QJsonArray{}}}, {});
+    }
+
+    void startThread(const ThreadConfiguration &configuration,
+                     ResultHandler handler) override
+    {
+        lastThreadConfiguration = configuration;
+        pendingStartThread = std::move(handler);
+    }
+
+    void resumeThread(const QString &, ResultHandler handler) override
+    {
+        handler({{QStringLiteral("thread"),
+                  QJsonObject{{QStringLiteral("turns"), QJsonArray{}}}}}, {});
+    }
+
+    void sendTurn(const QString &, const QString &text, const QStringList &,
+                  const QString &modelId, const QString &, const QString &,
+                  PermissionProfile, ResultHandler handler) override
+    {
+        lastTurnText = text;
+        lastTurnModelId = modelId;
+        handler({{QStringLiteral("turn"),
+                  QJsonObject{{QStringLiteral("id"), QStringLiteral("turn-1")}}}}, {});
+    }
+
+    void steerTurn(const QString &, const QString &, const QString &,
+                   const QStringList &, ResultHandler handler) override
+    {
+        handler({}, {});
+    }
+
+    void interruptTurn(const QString &, const QString &, ResultHandler handler) override
+    {
+        handler({}, {});
+    }
+
+    void setThreadName(const QString &, const QString &, ResultHandler handler) override
+    {
+        handler({}, {});
+    }
+
+    QString itemContent(const QJsonObject &item) const override
+    {
+        return item.value(QStringLiteral("text")).toString();
+    }
+
+    void completeThreadStart(const QString &threadId)
+    {
+        auto handler = std::move(pendingStartThread);
+        QVERIFY(handler);
+        handler({{QStringLiteral("thread"),
+                  QJsonObject{{QStringLiteral("id"), threadId}}}}, {});
+    }
+
+    ThreadConfiguration lastThreadConfiguration;
+    ResultHandler pendingStartThread;
+    QString lastTurnText;
+    QString lastTurnModelId;
+
+private:
+    bool m_ready = false;
+};
 
 class TestCore : public QObject {
     Q_OBJECT
@@ -288,6 +373,149 @@ private slots:
         }
         QVERIFY2(readyCount >= 2, "Codex did not become ready after restarting");
         qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
+    }
+
+    void codexDisconnectCallbacksAreNotReentrant()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto executable = directory.filePath(QStringLiteral("fake-codex"));
+        QFile script(executable);
+        QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Text));
+        script.write(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = \"--version\" ]; then\n"
+            "  echo 'codex-cli 0.141.0'\n"
+            "  exit 0\n"
+            "fi\n"
+            "IFS= read -r request\n"
+            "exit 1\n");
+        script.close();
+        QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                      | QFileDevice::ExeOwner));
+
+        qputenv("ARTEMIS_CODEX_EXECUTABLE", executable.toUtf8());
+        CodexClient client;
+        QSignalSpy errors(&client, &CodexClient::providerError);
+        client.start();
+        QTRY_VERIFY_WITH_TIMEOUT(errors.count() >= 2, 3000);
+        QVERIFY(errors.count() < 20);
+        qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
+    }
+
+    void delayedThreadCreationDoesNotChangeAnotherProject()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const auto firstPath = root.filePath(QStringLiteral("a-project"));
+        const auto secondPath = root.filePath(QStringLiteral("b-project"));
+        QVERIFY(QDir().mkpath(firstPath));
+        QVERIFY(QDir().mkpath(secondPath));
+
+        FakeAgentProvider provider;
+        AppController controller(&provider);
+        QVERIFY(controller.initialize());
+        controller.addProject(firstPath);
+        controller.addProject(secondPath);
+
+        int firstIndex = -1;
+        int secondIndex = -1;
+        for (int row = 0; row < controller.projects()->rowCount(); ++row) {
+            const auto index = controller.projects()->index(row);
+            const auto path = controller.projects()
+                                  ->data(index, ProjectTreeModel::PathRole).toString();
+            if (path == firstPath)
+                firstIndex = row;
+            else if (path == secondPath)
+                secondIndex = row;
+        }
+        QVERIFY(firstIndex >= 0);
+        QVERIFY(secondIndex >= 0);
+
+        controller.selectProject(firstIndex);
+        QSignalSpy restored(&controller, &AppController::promptRestoreRequested);
+        QVERIFY(controller.sendPrompt(
+            QStringLiteral("Create a file"), {}, QStringLiteral("test-model"), {},
+            QStringLiteral("full-access"), QStringLiteral("default")));
+        QVERIFY(provider.pendingStartThread);
+        QCOMPARE(provider.lastThreadConfiguration.projectPath, firstPath);
+
+        controller.selectProject(secondIndex);
+        provider.completeThreadStart(QStringLiteral("thread-for-first-project"));
+
+        QCOMPARE(controller.selectedProjectPath(), secondPath);
+        QVERIFY(controller.selectedThreadId().isEmpty());
+        QVERIFY(controller.threads().isEmpty());
+        QCOMPARE(restored.count(), 1);
+    }
+
+    void commitGenerationKeepsOriginalRepositoryContext()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const auto firstPath = root.filePath(QStringLiteral("a-repository"));
+        const auto secondPath = root.filePath(QStringLiteral("b-repository"));
+        QVERIFY(QDir().mkpath(firstPath));
+        QVERIFY(QDir().mkpath(secondPath));
+
+        QVERIFY(GitService::runSync(firstPath, {QStringLiteral("init")}).ok());
+        QVERIFY(GitService::runSync(
+            firstPath, {QStringLiteral("config"), QStringLiteral("user.name"),
+                        QStringLiteral("Artemis Test")}).ok());
+        QVERIFY(GitService::runSync(
+            firstPath, {QStringLiteral("config"), QStringLiteral("user.email"),
+                        QStringLiteral("artemis@example.invalid")}).ok());
+        QVERIFY(GitService::runSync(
+            firstPath, {QStringLiteral("switch"), QStringLiteral("-c"),
+                        QStringLiteral("main")}).ok());
+        QFile change(QDir(firstPath).filePath(QStringLiteral("context.txt")));
+        QVERIFY(change.open(QIODevice::WriteOnly | QIODevice::Text));
+        change.write("original\n");
+        change.close();
+        QVERIFY(GitService::runSync(firstPath, {QStringLiteral("add"),
+                                               QStringLiteral("-A")}).ok());
+        QVERIFY(GitService::runSync(
+            firstPath, {QStringLiteral("commit"), QStringLiteral("-m"),
+                        QStringLiteral("Initial commit")}).ok());
+        QVERIFY(change.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text));
+        change.write("change from first repository\n");
+        change.close();
+
+        FakeAgentProvider provider;
+        AppController controller(&provider);
+        QVERIFY(controller.initialize());
+        controller.addProject(firstPath);
+        controller.addProject(secondPath);
+        controller.setCommitModelId(QStringLiteral("commit-test-model"));
+
+        int firstIndex = -1;
+        int secondIndex = -1;
+        for (int row = 0; row < controller.projects()->rowCount(); ++row) {
+            const auto index = controller.projects()->index(row);
+            const auto path = controller.projects()
+                                  ->data(index, ProjectTreeModel::PathRole).toString();
+            if (path == firstPath)
+                firstIndex = row;
+            else if (path == secondPath)
+                secondIndex = row;
+        }
+        QVERIFY(firstIndex >= 0);
+        QVERIFY(secondIndex >= 0);
+
+        controller.selectProject(firstIndex);
+        controller.generateCommitMessage();
+        QTRY_VERIFY_WITH_TIMEOUT(provider.pendingStartThread, 3000);
+        QCOMPARE(provider.lastThreadConfiguration.projectPath, firstPath);
+        QCOMPARE(provider.lastThreadConfiguration.workspacePath, firstPath);
+
+        controller.selectProject(secondIndex);
+        provider.completeThreadStart(QStringLiteral("commit-thread"));
+
+        QCOMPARE(provider.lastTurnModelId, QStringLiteral("commit-test-model"));
+        QVERIFY(provider.lastTurnText.contains(QStringLiteral("Repository: a-repository")));
+        QVERIFY(provider.lastTurnText.contains(
+            QStringLiteral("change from first repository")));
+        QVERIFY(!provider.lastTurnText.contains(QStringLiteral("Repository: b-repository")));
     }
 
     void codexActiveTurnRequestsIncludeTurnId()

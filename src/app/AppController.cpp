@@ -1,6 +1,7 @@
 #include "app/AppController.h"
 #include "platform/DesktopIntegration.h"
 #include "platform/Paths.h"
+#include "providers/codex/CodexClient.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -81,9 +82,11 @@ QString elapsedText(qint64 elapsedMilliseconds)
     return QStringLiteral("%1s").arg(seconds);
 }
 
-void removeOrphanedAttachments(const Database &database)
+bool removeOrphanedAttachments(const Database &database, QString *error)
 {
-    const auto referenced = database.referencedAttachmentPaths();
+    const auto referenced = database.referencedAttachmentPaths(error);
+    if (error && !error->isEmpty())
+        return false;
     QDir directory(Paths::attachmentRoot());
     const auto cutoff = QDateTime::currentDateTimeUtc().addDays(-1);
     for (const auto &info : directory.entryInfoList(QDir::Files | QDir::NoDotAndDotDot)) {
@@ -92,17 +95,33 @@ void removeOrphanedAttachments(const Database &database)
             QFile::remove(info.absoluteFilePath());
         }
     }
+    return true;
 }
 
 } // namespace
 
 AppController::AppController(QObject *parent)
-    : QObject(parent)
+    : QObject(parent),
+      m_ownedProvider(std::make_unique<CodexClient>()),
+      m_provider(m_ownedProvider.get())
+{
+    connectProvider();
+}
+
+AppController::AppController(AgentProvider *provider, QObject *parent)
+    : QObject(parent),
+      m_provider(provider)
+{
+    Q_ASSERT(m_provider);
+    connectProvider();
+}
+
+void AppController::connectProvider()
 {
     m_turnElapsedUpdateTimer.setInterval(1000);
     connect(&m_turnElapsedUpdateTimer, &QTimer::timeout,
             this, &AppController::turnElapsedChanged);
-    connect(&m_codex, &CodexClient::readyChanged, this, [this](bool ready) {
+    connect(m_provider, &AgentProvider::readyChanged, this, [this](bool ready) {
         emit providerReadyChanged();
         if (ready) {
             setStatus(QStringLiteral("Codex connected"));
@@ -110,34 +129,23 @@ AppController::AppController(QObject *parent)
             loadThreads();
         }
     });
-    connect(&m_codex, &CodexClient::versionChanged, this, &AppController::providerReadyChanged);
-    connect(&m_codex, &CodexClient::providerError, this, [this](const QString &message) {
+    connect(m_provider, &AgentProvider::versionChanged,
+            this, &AppController::providerReadyChanged);
+    connect(m_provider, &AgentProvider::providerError, this, [this](const QString &message) {
         setStatus(message);
     });
-    connect(&m_codex, &CodexClient::domainEvent, this, &AppController::handleDomainEvent);
-    connect(&m_codex, &CodexClient::rawNotification, this,
-            [this](const QString &method, const QJsonObject &params) {
-        if (method == QStringLiteral("turn/started")) {
-            const auto turn = params.value(QStringLiteral("turn")).toObject();
-            setActiveTurnId(params.value(QStringLiteral("threadId")).toString(),
-                            turn.value(QStringLiteral("id")).toString());
-            return;
-        }
-        if (method != QStringLiteral("thread/tokenUsage/updated"))
-            return;
-        const auto threadId = params.value(QStringLiteral("threadId")).toString();
+    connect(m_provider, &AgentProvider::domainEvent, this, &AppController::handleDomainEvent);
+    connect(m_provider, &AgentProvider::activeTurnStarted,
+            this, &AppController::setActiveTurnId);
+    connect(m_provider, &AgentProvider::tokenUsageUpdated, this,
+            [this](const QString &threadId, qint64 contextTokens,
+                   qint64 totalProcessedTokens, qint64 modelContextWindow) {
         if (threadId.isEmpty())
             return;
-        const auto usage = params.value(QStringLiteral("tokenUsage")).toObject();
-        const auto total = usage.value(QStringLiteral("total")).toObject();
-        const auto last = usage.value(QStringLiteral("last")).toObject();
         m_threadTokenUsage.insert(threadId, {
-            {QStringLiteral("contextTokens"),
-             last.value(QStringLiteral("totalTokens")).toInteger()},
-            {QStringLiteral("totalProcessedTokens"),
-             total.value(QStringLiteral("totalTokens")).toInteger()},
-            {QStringLiteral("modelContextWindow"),
-             usage.value(QStringLiteral("modelContextWindow")).toInteger()}
+            {QStringLiteral("contextTokens"), contextTokens},
+            {QStringLiteral("totalProcessedTokens"), totalProcessedTokens},
+            {QStringLiteral("modelContextWindow"), modelContextWindow}
         });
         if (threadId == selectedThreadId())
             emit tokenUsageChanged();
@@ -155,7 +163,10 @@ bool AppController::initialize()
         setStatus(QStringLiteral("Database error: %1").arg(error));
         return false;
     }
-    removeOrphanedAttachments(m_database);
+    if (!removeOrphanedAttachments(m_database, &error)) {
+        setStatus(QStringLiteral("Could not inspect stored attachments: %1").arg(error));
+        return false;
+    }
     m_codingModelId = m_database.setting(QStringLiteral("coding_model"));
     m_codingReasoningEffort = m_database.setting(QStringLiteral("coding_reasoning_effort"));
     m_commitModelId = m_database.setting(QStringLiteral("commit_model"));
@@ -165,7 +176,7 @@ bool AppController::initialize()
     m_terminalOptions = DesktopIntegration::availableTerminals();
     m_selectedTerminalId = m_database.setting(QStringLiteral("terminal_desktop_id"));
     loadProjects();
-    m_codex.start();
+    m_provider->start();
     return true;
 }
 
@@ -215,8 +226,8 @@ QString AppController::turnElapsedText() const
 {
     return elapsedText(m_turnElapsedTimer.isValid() ? m_turnElapsedTimer.elapsed() : 0);
 }
-bool AppController::providerReady() const { return m_codex.ready(); }
-QString AppController::providerVersion() const { return m_codex.version(); }
+bool AppController::providerReady() const { return m_provider->ready(); }
+QString AppController::providerVersion() const { return m_provider->version(); }
 QString AppController::statusText() const { return m_status; }
 qint64 AppController::contextTokens() const
 {
@@ -265,13 +276,24 @@ void AppController::chooseProjectFolder()
 void AppController::loadProjects()
 {
     QVector<ProjectRow> rows;
-    for (const auto &project : m_database.projects()) {
+    QString error;
+    const auto projects = m_database.projects(&error);
+    if (!error.isEmpty()) {
+        setStatus(QStringLiteral("Could not load projects: %1").arg(error));
+        return;
+    }
+    for (const auto &project : projects) {
         ProjectRow row;
         row.id = project.value(QStringLiteral("id")).toLongLong();
         row.path = project.value(QStringLiteral("path")).toString();
         row.name = project.value(QStringLiteral("name")).toString();
         row.git = GitService::isRepository(row.path);
-        row.threadCount = static_cast<int>(m_database.threadBindings(row.id).size());
+        const auto bindings = m_database.threadBindings(row.id, &error);
+        if (!error.isEmpty()) {
+            setStatus(QStringLiteral("Could not load project threads: %1").arg(error));
+            return;
+        }
+        row.threadCount = static_cast<int>(bindings.size());
         rows.push_back(row);
     }
     m_projects.setRows(std::move(rows));
@@ -433,18 +455,23 @@ void AppController::loadThreads(const QString &threadToSelect)
     m_threads.clear();
     emit threadsChanged();
     const auto project = m_projects.row(m_selectedProject);
-    if (project.id < 0 || !m_codex.ready())
+    if (project.id < 0 || !m_provider->ready())
         return;
-    const auto bindings = m_database.threadBindings(project.id);
-    const auto hiddenThreadIds = m_database.hiddenThreadIds(project.id);
+    QString databaseError;
+    const auto bindings = m_database.threadBindings(project.id, &databaseError);
+    if (!databaseError.isEmpty()) {
+        setStatus(QStringLiteral("Could not load thread bindings: %1").arg(databaseError));
+        return;
+    }
+    const auto hiddenThreadIds = m_database.hiddenThreadIds(project.id, &databaseError);
+    if (!databaseError.isEmpty()) {
+        setStatus(QStringLiteral("Could not load hidden threads: %1").arg(databaseError));
+        return;
+    }
     QHash<QString, QVariantMap> bindingById;
     for (const auto &binding : bindings)
         bindingById.insert(binding.value(QStringLiteral("threadId")).toString(), binding);
-    m_codex.request(QStringLiteral("thread/list"),
-        {{QStringLiteral("cwd"), QJsonArray{project.path}},
-         {QStringLiteral("limit"), 100},
-         {QStringLiteral("sortKey"), QStringLiteral("updated_at")},
-         {QStringLiteral("sortDirection"), QStringLiteral("desc")}},
+    m_provider->listThreads(project.path,
         [this, project, bindingById, hiddenThreadIds, threadToSelect](
             const QJsonObject &result, const QString &error) {
         if (!error.isEmpty()) {
@@ -514,7 +541,7 @@ void AppController::loadThreads(const QString &threadToSelect)
 
 void AppController::loadModels()
 {
-    m_codex.listModels([this](const QJsonObject &result, const QString &error) {
+    m_provider->listModels([this](const QJsonObject &result, const QString &error) {
         if (!error.isEmpty()) {
             setStatus(error);
             return;
@@ -551,14 +578,22 @@ void AppController::selectThread(int index)
     emit currentTasksChanged();
     emit currentPlanChanged();
     const auto threadId = selectedThreadId();
-    m_codex.resumeThread(threadId, [this, threadId](const QJsonObject &result, const QString &error) {
+    m_provider->resumeThread(threadId, [this, threadId](const QJsonObject &result,
+                                                        const QString &error) {
         if (!error.isEmpty()) {
             setStatus(error);
             return;
         }
         if (threadId != selectedThreadId())
             return;
-        const auto persistedEvents = m_database.conversationEvents(threadId);
+        QString databaseError;
+        const auto persistedEvents =
+            m_database.conversationEvents(threadId, &databaseError);
+        if (!databaseError.isEmpty()) {
+            setStatus(QStringLiteral("Could not load conversation history: %1")
+                          .arg(databaseError));
+            return;
+        }
         if (!persistedEvents.isEmpty()) {
             for (const auto &stored : persistedEvents) {
                 const auto type = stored.value(QStringLiteral("type")).toString();
@@ -593,7 +628,7 @@ void AppController::selectThread(int index)
             for (const auto &itemValue : turn.value(QStringLiteral("items")).toArray()) {
                 const auto item = itemValue.toObject();
                 const auto type = item.value(QStringLiteral("type")).toString();
-                const auto content = CodexClient::itemContent(item);
+                const auto content = m_provider->itemContent(item);
                 if (content.isEmpty())
                     continue;
                 QString eventType;
@@ -647,7 +682,7 @@ void AppController::createThread(const QString &modelId, const QString &reasonin
                                  const QString &permissionMode)
 {
     const auto project = m_projects.row(m_selectedProject);
-    if (project.id < 0 || !m_codex.ready())
+    if (project.id < 0 || !m_provider->ready())
         return;
     if (m_threadCreationPending)
         return;
@@ -661,7 +696,9 @@ void AppController::beginThread(const QString &modelId, const QString &reasoning
     const auto project = m_projects.row(m_selectedProject);
     ThreadConfiguration config{project.path, project.path, modelId, reasoningEffort,
                                permissionProfile, false};
-    m_codex.startThread(config, [this, project, permissionProfile](const QJsonObject &result, const QString &error) {
+    m_provider->startThread(
+        config, [this, project, permissionProfile](const QJsonObject &result,
+                                                   const QString &error) {
         m_threadCreationPending = false;
         if (!error.isEmpty()) {
             if (!m_pendingPrompt.isEmpty() || !m_pendingImages.isEmpty())
@@ -681,6 +718,19 @@ void AppController::beginThread(const QString &modelId, const QString &reasoning
             setStatus(QStringLiteral("Could not save thread binding: %1").arg(bindError));
         }
         loadProjects();
+        if (m_projects.row(m_selectedProject).id != project.id) {
+            if (!m_pendingPrompt.isEmpty() || !m_pendingImages.isEmpty()) {
+                emit promptRestoreRequested(
+                    m_pendingPrompt,
+                    QVariantList(m_pendingImages.cbegin(), m_pendingImages.cend()));
+                m_pendingPrompt.clear();
+                m_pendingImages.clear();
+                m_pendingModelId.clear();
+                m_pendingReasoningEffort.clear();
+                m_pendingCollaborationMode = QStringLiteral("default");
+            }
+            return;
+        }
         m_threads.prepend(QVariantMap{
             {QStringLiteral("id"), id},
             {QStringLiteral("title"), QStringLiteral("Untitled thread")},
@@ -728,7 +778,8 @@ bool AppController::sendPrompt(const QString &text, const QVariantList &imageVal
     if (prompt.isEmpty() && images.isEmpty())
         return false;
     if (selectedThreadId().isEmpty()) {
-        if (selectedProjectPath().isEmpty() || !m_codex.ready() || m_threadCreationPending)
+        if (selectedProjectPath().isEmpty() || !m_provider->ready()
+            || m_threadCreationPending)
             return false;
         m_pendingPrompt = prompt;
         m_pendingImages = images;
@@ -768,7 +819,7 @@ void AppController::sendPendingSteers()
         return;
     }
     const auto steer = m_pendingSteers.takeFirst();
-    m_codex.steerTurn(m_activeThreadId, m_activeTurnId, steer.prompt, steer.images,
+    m_provider->steerTurn(m_activeThreadId, m_activeTurnId, steer.prompt, steer.images,
                       [this, steer](const QJsonObject &, const QString &error) {
             if (!error.isEmpty())
                 setStatus(error);
@@ -809,6 +860,9 @@ void AppController::startPromptTurn(const QString &threadId, const QString &prom
                                     const QString &collaborationMode,
                                     PermissionProfile permissionProfile, bool generateTitle)
 {
+    const auto titleProjectPath = selectedProjectPath();
+    const auto titleWorkspacePath = selectedWorkspacePath();
+    const auto titleModelId = m_titleModelId;
     m_conversation.setThread(threadId);
     const ConversationEvent userEvent{
         threadId, QStringLiteral("user"), QStringLiteral("You"), prompt,
@@ -818,9 +872,10 @@ void AppController::startPromptTurn(const QString &threadId, const QString &prom
     m_activeThreadId = threadId;
     m_activeTurnId.clear();
     setTurnRunning(true);
-    m_codex.sendTurn(threadId, prompt, images, modelId, reasoningEffort,
+    m_provider->sendTurn(threadId, prompt, images, modelId, reasoningEffort,
                      collaborationMode, permissionProfile,
-                     [this, threadId, prompt, images, generateTitle](
+                     [this, threadId, prompt, images, generateTitle,
+                      titleProjectPath, titleWorkspacePath, titleModelId](
                          const QJsonObject &result, const QString &error) {
         if (!error.isEmpty()) {
             restorePendingSteers();
@@ -834,9 +889,12 @@ void AppController::startPromptTurn(const QString &threadId, const QString &prom
         }
         setActiveTurnId(threadId, result.value(QStringLiteral("turn")).toObject()
                                      .value(QStringLiteral("id")).toString());
-        if (generateTitle)
-            generateThreadTitle(threadId, prompt.isEmpty()
-                ? QStringLiteral("Image attachment") : prompt);
+        if (generateTitle) {
+            generateThreadTitle(
+                threadId,
+                prompt.isEmpty() ? QStringLiteral("Image attachment") : prompt,
+                titleProjectPath, titleWorkspacePath, titleModelId);
+        }
         loadThreads(threadId);
     });
 }
@@ -884,7 +942,7 @@ void AppController::interruptTurn()
 {
     if (!m_turnRunning || m_activeThreadId.isEmpty() || m_activeTurnId.isEmpty())
         return;
-    m_codex.interruptTurn(m_activeThreadId, m_activeTurnId,
+    m_provider->interruptTurn(m_activeThreadId, m_activeTurnId,
                           [this](const QJsonObject &, const QString &error) {
         if (!error.isEmpty())
             setStatus(error);
@@ -1017,22 +1075,36 @@ void AppController::generateCommitMessage()
         emit commitDraftFinished(false, QStringLiteral("Select a Git repository first."));
         return;
     }
-    if (!m_codex.ready()) {
+    if (!m_provider->ready()) {
         emit commitDraftFinished(false, QStringLiteral("Codex is offline."));
         return;
     }
+    const auto projectId = m_projects.row(m_selectedProject).id;
+    const auto projectPath = selectedProjectPath();
+    const auto projectName = selectedProjectName();
+    const auto workspace = selectedWorkspacePath();
+    const auto modelId = m_commitModelId;
+    QString branch;
+    const auto firstStatusLine = m_gitStatus.section(QChar(u'\n'), 0, 0);
+    if (firstStatusLine.startsWith(QStringLiteral("## ")))
+        branch = firstStatusLine.mid(3).section(QStringLiteral("..."), 0, 0).trimmed();
     setStatus(QStringLiteral("Preparing commit snapshot…"));
-    m_git.generateCommitSnapshot(selectedWorkspacePath(), [this](const GitResult &snapshot) {
+    m_git.generateCommitSnapshot(
+        workspace,
+        [this, projectId, projectPath, projectName, workspace, modelId, branch](
+            const GitResult &snapshot) {
         if (!snapshot.ok()) {
             const auto message = QString::fromUtf8(snapshot.error).trimmed();
             setStatus(message);
             emit commitDraftFinished(false, message);
             return;
         }
-        const auto workspace = selectedWorkspacePath();
-        ThreadConfiguration config{selectedProjectPath(), workspace, m_commitModelId, {},
+        ThreadConfiguration config{projectPath, workspace, modelId, {},
                                    PermissionProfile::ReadOnly, true};
-        m_codex.startThread(config, [this, snapshot](const QJsonObject &result, const QString &error) {
+        m_provider->startThread(
+            config,
+            [this, projectId, projectName, modelId, branch, snapshot](
+                const QJsonObject &result, const QString &error) {
             if (!error.isEmpty()) {
                 setStatus(error);
                 emit commitDraftFinished(false, error);
@@ -1041,8 +1113,10 @@ void AppController::generateCommitMessage()
             m_commitThreadId = result.value(QStringLiteral("thread")).toObject()
                                    .value(QStringLiteral("id")).toString();
             m_commitDraftBuffer.clear();
-            m_codex.sendTurn(m_commitThreadId, commitPrompt(snapshot.output), {},
-                m_commitModelId, {}, QStringLiteral("default"), PermissionProfile::ReadOnly,
+            m_provider->sendTurn(
+                m_commitThreadId,
+                commitPrompt(snapshot.output, projectName, branch), {},
+                modelId, {}, QStringLiteral("default"), PermissionProfile::ReadOnly,
                 [this](const QJsonObject &, const QString &turnError) {
                 if (!turnError.isEmpty()) {
                     setStatus(turnError);
@@ -1050,17 +1124,21 @@ void AppController::generateCommitMessage()
                     emit commitDraftFinished(false, turnError);
                 }
             });
-            setStatus(QStringLiteral("Generating commit message…"));
+            if (m_projects.row(m_selectedProject).id == projectId)
+                setStatus(QStringLiteral("Generating commit message…"));
         });
     });
 }
 
-void AppController::generateThreadTitle(const QString &threadId, const QString &prompt)
+void AppController::generateThreadTitle(const QString &threadId, const QString &prompt,
+                                        const QString &projectPath,
+                                        const QString &workspacePath,
+                                        const QString &modelId)
 {
-    ThreadConfiguration config{selectedProjectPath(), selectedWorkspacePath(), m_titleModelId, {},
+    ThreadConfiguration config{projectPath, workspacePath, modelId, {},
                                PermissionProfile::ReadOnly, true};
-    m_codex.startThread(config, [this, threadId, prompt](const QJsonObject &result,
-                                                         const QString &error) {
+    m_provider->startThread(config, [this, threadId, prompt, modelId](
+                                        const QJsonObject &result, const QString &error) {
         if (!error.isEmpty()) {
             setStatus(QStringLiteral("Could not generate thread title: %1").arg(error));
             return;
@@ -1076,7 +1154,7 @@ void AppController::generateThreadTitle(const QString &threadId, const QString &
             "first message below. Return JSON only as {\"title\":\"...\"}. Use 3 to 7 words, "
             "sentence case, no punctuation at the end, and describe the concrete task.\n\n%1")
             .arg(prompt.left(12000));
-        m_codex.sendTurn(titleThreadId, titlePrompt, {}, m_titleModelId, {},
+        m_provider->sendTurn(titleThreadId, titlePrompt, {}, modelId, {},
             QStringLiteral("default"), PermissionProfile::ReadOnly,
             [this, titleThreadId](const QJsonObject &, const QString &turnError) {
                 if (turnError.isEmpty())
@@ -1090,10 +1168,9 @@ void AppController::generateThreadTitle(const QString &threadId, const QString &
 
 void AppController::applyThreadTitle(const QString &threadId, const QString &title)
 {
-    m_codex.request(QStringLiteral("thread/name/set"),
-                    {{QStringLiteral("threadId"), threadId},
-                     {QStringLiteral("name"), title}},
-                    [this, threadId, title](const QJsonObject &, const QString &error) {
+    m_provider->setThreadName(
+        threadId, title,
+        [this, threadId, title](const QJsonObject &, const QString &error) {
         if (!error.isEmpty()) {
             setStatus(QStringLiteral("Could not name thread: %1").arg(error));
             return;
@@ -1114,12 +1191,9 @@ void AppController::applyThreadTitle(const QString &threadId, const QString &tit
     });
 }
 
-QString AppController::commitPrompt(const QByteArray &snapshot) const
+QString AppController::commitPrompt(const QByteArray &snapshot, const QString &projectName,
+                                    const QString &branch) const
 {
-    QString branch;
-    const auto firstStatusLine = m_gitStatus.section(QChar(u'\n'), 0, 0);
-    if (firstStatusLine.startsWith(QStringLiteral("## ")))
-        branch = firstStatusLine.mid(3).section(QStringLiteral("..."), 0, 0).trimmed();
     return QStringLiteral(
         "You write concise Git commit messages.\n"
         "Return JSON only with exactly these string keys: "
@@ -1136,7 +1210,7 @@ QString AppController::commitPrompt(const QByteArray &snapshot) const
         "\nRepository: %1\n"
         "Branch: %2\n"
         "\nStaged snapshot:\n%3")
-        .arg(selectedProjectName(), branch,
+        .arg(projectName, branch,
              QString::fromUtf8(snapshot).left(120000));
 }
 

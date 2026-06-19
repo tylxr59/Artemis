@@ -154,11 +154,16 @@ bool Database::execute(const QString &sql, QString *error) const
     return true;
 }
 
-QVector<QVariantMap> Database::projects() const
+QVector<QVariantMap> Database::projects(QString *error) const
 {
     QVector<QVariantMap> result;
     QSqlQuery query(m_db);
-    query.exec(QStringLiteral("SELECT id, path, name FROM projects ORDER BY name COLLATE NOCASE"));
+    if (!query.exec(QStringLiteral(
+            "SELECT id, path, name FROM projects ORDER BY name COLLATE NOCASE"))) {
+        if (error)
+            *error = query.lastError().text();
+        return result;
+    }
     while (query.next())
         result.push_back({{QStringLiteral("id"), query.value(0)},
                           {QStringLiteral("path"), query.value(1)},
@@ -214,7 +219,7 @@ bool Database::bindThread(qint64 projectId, const QString &threadId, const QStri
     return true;
 }
 
-QVector<QVariantMap> Database::threadBindings(qint64 projectId) const
+QVector<QVariantMap> Database::threadBindings(qint64 projectId, QString *error) const
 {
     QVector<QVariantMap> result;
     QSqlQuery query(m_db);
@@ -223,7 +228,11 @@ QVector<QVariantMap> Database::threadBindings(qint64 projectId) const
         "FROM thread_bindings b JOIN projects p ON p.id=b.project_id "
         "WHERE b.project_id=? AND b.workspace_path=p.path ORDER BY b.updated_at DESC"));
     query.addBindValue(projectId);
-    query.exec();
+    if (!query.exec()) {
+        if (error)
+            *error = query.lastError().text();
+        return result;
+    }
     while (query.next())
         result.push_back({{QStringLiteral("threadId"), query.value(0)},
                           {QStringLiteral("workspacePath"), query.value(1)},
@@ -231,13 +240,17 @@ QVector<QVariantMap> Database::threadBindings(qint64 projectId) const
     return result;
 }
 
-QSet<QString> Database::hiddenThreadIds(qint64 projectId) const
+QSet<QString> Database::hiddenThreadIds(qint64 projectId, QString *error) const
 {
     QSet<QString> result;
     QSqlQuery query(m_db);
     query.prepare(QStringLiteral("SELECT provider_thread_id FROM hidden_threads WHERE project_id=?"));
     query.addBindValue(projectId);
-    query.exec();
+    if (!query.exec()) {
+        if (error)
+            *error = query.lastError().text();
+        return result;
+    }
     while (query.next())
         result.insert(query.value(0).toString());
     return result;
@@ -274,10 +287,16 @@ bool Database::hideThread(qint64 projectId, const QString &threadId, QString *er
         m_db.rollback();
         return false;
     }
-    return m_db.commit();
+    if (!m_db.commit()) {
+        if (error)
+            *error = m_db.lastError().text();
+        return false;
+    }
+    return true;
 }
 
-QVector<QVariantMap> Database::conversationEvents(const QString &threadId) const
+QVector<QVariantMap> Database::conversationEvents(const QString &threadId,
+                                                  QString *error) const
 {
     QVector<QVariantMap> result;
     QSqlQuery query(m_db);
@@ -285,8 +304,11 @@ QVector<QVariantMap> Database::conversationEvents(const QString &threadId) const
         "SELECT type, title, content, metadata FROM conversation_events "
         "WHERE provider_thread_id=? ORDER BY id"));
     query.addBindValue(threadId);
-    if (!query.exec())
+    if (!query.exec()) {
+        if (error)
+            *error = query.lastError().text();
         return result;
+    }
     while (query.next()) {
         const auto metadataDocument = QJsonDocument::fromJson(query.value(3).toByteArray());
         result.push_back({
@@ -338,13 +360,15 @@ bool Database::saveConversationEvent(const QString &threadId, const QString &typ
     return true;
 }
 
-QSet<QString> Database::referencedAttachmentPaths() const
+QSet<QString> Database::referencedAttachmentPaths(QString *error) const
 {
     QSet<QString> result;
     QSqlQuery query(m_db);
     if (!query.exec(QStringLiteral(
             "SELECT metadata FROM conversation_events "
             "WHERE metadata LIKE '%\"images\"%'"))) {
+        if (error)
+            *error = query.lastError().text();
         return result;
     }
     while (query.next()) {

@@ -34,24 +34,6 @@ struct ThreadConfiguration {
     bool ephemeral = false;
 };
 
-struct AgentThread {
-    QString id;
-    QString title;
-    QString cwd;
-    QString model;
-    QString updatedAt;
-    bool external = false;
-};
-
-struct ModelInfo {
-    QString id;
-    QString displayName;
-    QString description;
-    QString defaultEffort;
-    QStringList efforts;
-    bool isDefault = false;
-};
-
 class AgentProvider : public QObject {
     Q_OBJECT
 public:
@@ -61,6 +43,8 @@ public:
     ~AgentProvider() override = default;
 
     virtual ProviderCapabilities capabilities() const = 0;
+    virtual bool ready() const = 0;
+    virtual QString version() const = 0;
     virtual void start() = 0;
     virtual void listModels(ResultHandler handler) = 0;
     virtual void listThreads(const QString &workspacePath, ResultHandler handler) = 0;
@@ -76,9 +60,16 @@ public:
                            const QStringList &images, ResultHandler handler) = 0;
     virtual void interruptTurn(const QString &threadId, const QString &turnId,
                                ResultHandler handler) = 0;
+    virtual void setThreadName(const QString &threadId, const QString &name,
+                               ResultHandler handler) = 0;
+    virtual QString itemContent(const QJsonObject &item) const = 0;
 
 signals:
     void readyChanged(bool ready);
+    void versionChanged();
+    void activeTurnStarted(const QString &threadId, const QString &turnId);
+    void tokenUsageUpdated(const QString &threadId, qint64 contextTokens,
+                           qint64 totalProcessedTokens, qint64 modelContextWindow);
     void domainEvent(const QString &threadId, const QString &type,
                      const QString &title, const QString &content,
                      const QVariantMap &metadata);
