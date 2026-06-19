@@ -94,7 +94,9 @@ public:
     Q_INVOKABLE void removeSelectedProject();
     Q_INVOKABLE void removeProject(int index);
     Q_INVOKABLE void removeThread(int index);
+    Q_INVOKABLE void removeProjectThread(int projectIndex, const QString &threadId);
     Q_INVOKABLE void selectProject(int index);
+    Q_INVOKABLE void selectProjectThread(int projectIndex, const QString &threadId);
     Q_INVOKABLE void selectThread(int index);
     Q_INVOKABLE void createThread(const QString &modelId, const QString &reasoningEffort,
                                   const QString &permissionMode);
@@ -123,6 +125,8 @@ public:
 
 signals:
     void threadsChanged();
+    void projectThreadsLoaded(const QString &projectPath, const QVariantList &threads);
+    void projectThreadRemoved(const QString &projectPath, const QString &threadId);
     void modelsChanged();
     void settingsChanged();
     void selectedProjectChanged();
@@ -143,6 +147,7 @@ signals:
 
 private:
     void loadProjects();
+    void activateProject(int index, const QString &threadToSelect = {});
     void loadThreads(const QString &threadToSelect = {});
     void loadModels();
     void setStatus(const QString &text);

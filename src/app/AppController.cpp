@@ -441,6 +441,7 @@ void AppController::removeThread(int index)
 
     const bool removedSelected = index == m_selectedThread;
     m_threads.removeAt(index);
+    emit projectThreadRemoved(project.path, threadId);
     m_threadPlans.remove(threadId);
     m_threadPlanExplanations.remove(threadId);
     m_threadTasks.remove(threadId);
@@ -459,7 +460,48 @@ void AppController::removeThread(int index)
         selectThread(qMin(index, m_threads.size() - 1));
 }
 
+void AppController::removeProjectThread(int projectIndex, const QString &threadId)
+{
+    if (projectIndex == m_selectedProject) {
+        for (int i = 0; i < m_threads.size(); ++i) {
+            if (m_threads.at(i).toMap().value(QStringLiteral("id")).toString() == threadId) {
+                removeThread(i);
+                return;
+            }
+        }
+        return;
+    }
+
+    const auto project = m_projects.row(projectIndex);
+    if (project.id < 0 || threadId.isEmpty())
+        return;
+    QString error;
+    if (!m_database.hideThread(project.id, threadId, &error)) {
+        setStatus(error);
+        return;
+    }
+    emit projectThreadRemoved(project.path, threadId);
+}
+
 void AppController::selectProject(int index)
+{
+    activateProject(index);
+}
+
+void AppController::selectProjectThread(int projectIndex, const QString &threadId)
+{
+    if (projectIndex == m_selectedProject) {
+        for (int i = 0; i < m_threads.size(); ++i) {
+            if (m_threads.at(i).toMap().value(QStringLiteral("id")).toString() == threadId) {
+                selectThread(i);
+                return;
+            }
+        }
+    }
+    activateProject(projectIndex, threadId);
+}
+
+void AppController::activateProject(int index, const QString &threadToSelect)
 {
     if (index < 0 || index >= m_projects.rowCount())
         return;
@@ -471,7 +513,7 @@ void AppController::selectProject(int index)
     emit tokenUsageChanged();
     emit currentTasksChanged();
     emit currentPlanChanged();
-    loadThreads();
+    loadThreads(threadToSelect);
     refreshGit();
 }
 
@@ -521,6 +563,9 @@ void AppController::loadThreads(const QString &threadToSelect)
             if (!known)
                 m_database.bindThread(project.id, id, project.path, true);
         }
+        emit projectThreadsLoaded(project.path, rows);
+        if (m_projects.row(m_selectedProject).id != project.id)
+            return;
         m_threads = rows;
         emit threadsChanged();
         if (!threadToSelect.isEmpty()) {

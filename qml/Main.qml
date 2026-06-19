@@ -31,6 +31,35 @@ Kirigami.ApplicationWindow {
     readonly property bool hasProject: appController.selectedProjectPath.length > 0
     readonly property bool hasThread: appController.selectedThreadId.length > 0
     property var composerImages: []
+    property var projectThreadCache: ({})
+    property var expandedProjects: ({})
+
+    function cachedProjectThreads(path) {
+        return projectThreadCache[path] || []
+    }
+
+    function cacheProjectThreads(path, threads) {
+        if (path.length === 0)
+            return
+        const updated = Object.assign({}, projectThreadCache)
+        updated[path] = Array.from(threads || [])
+        projectThreadCache = updated
+    }
+
+    function removeCachedProjectThread(path, threadId) {
+        const threads = cachedProjectThreads(path)
+        cacheProjectThreads(path, threads.filter(thread => thread.id !== threadId))
+    }
+
+    function projectExpanded(path) {
+        return expandedProjects[path] === true
+    }
+
+    function setProjectExpanded(path, expanded) {
+        const updated = Object.assign({}, expandedProjects)
+        updated[path] = expanded
+        expandedProjects = updated
+    }
 
     function modelIndex(modelId) {
         const exact = modelPicker.indexOfValue(modelId)
@@ -111,6 +140,17 @@ Kirigami.ApplicationWindow {
         }
         function onStatusMessage(text) {
             statusToast.showMessage(text)
+        }
+        function onThreadsChanged() {
+            if (appController.threads.length > 0)
+                root.cacheProjectThreads(appController.selectedProjectPath,
+                                         appController.threads)
+        }
+        function onProjectThreadsLoaded(projectPath, threads) {
+            root.cacheProjectThreads(projectPath, threads)
+        }
+        function onProjectThreadRemoved(projectPath, threadId) {
+            root.removeCachedProjectThread(projectPath, threadId)
         }
         function onTaskPanelRequested() {
             root.sidePanelMode = "thread"
@@ -392,10 +432,18 @@ Kirigami.ApplicationWindow {
                         required property string path
                         required property bool isGit
                         readonly property bool selected: index === appController.selectedProjectIndex
+                        readonly property bool expanded: root.projectExpanded(path)
+                        property bool showAllThreads: false
+                        readonly property var projectThreads: root.cachedProjectThreads(path)
                         width: projectList.width
                         spacing: 2
                         visible: projectSearch.text.length === 0
                                  || name.toLowerCase().includes(projectSearch.text.toLowerCase())
+
+                        Component.onCompleted: {
+                            if (selected)
+                                root.setProjectExpanded(path, true)
+                        }
 
                         ItemDelegate {
                             id: projectItem
@@ -406,12 +454,21 @@ Kirigami.ApplicationWindow {
                             rightPadding: Kirigami.Units.smallSpacing
                             contentItem: RowLayout {
                                 spacing: Kirigami.Units.smallSpacing
-                                Kirigami.Icon {
-                                    source: projectDelegate.selected
-                                            ? "arrow-down" : "arrow-right"
-                                    Layout.preferredWidth: 14
-                                    Layout.preferredHeight: 14
-                                    opacity: 0.65
+                                ToolButton {
+                                    icon.name: projectDelegate.expanded
+                                               ? "arrow-down" : "arrow-right"
+                                    Layout.preferredWidth: 24
+                                    Layout.preferredHeight: 24
+                                    Accessible.name: (projectDelegate.expanded
+                                                      ? "Collapse " : "Expand ")
+                                                     + projectDelegate.name
+                                    onClicked: {
+                                        const expanding = !projectDelegate.expanded
+                                        root.setProjectExpanded(projectDelegate.path, expanding)
+                                        if (expanding
+                                                && !projectDelegate.selected)
+                                            appController.selectProject(projectDelegate.index)
+                                    }
                                 }
                                 Kirigami.Icon {
                                     source: "folder"
@@ -426,7 +483,7 @@ Kirigami.ApplicationWindow {
                                 }
                                 ToolButton {
                                     text: "+"
-                                    visible: projectDelegate.selected
+                                    visible: projectDelegate.expanded
                                     enabled: appController.providerReady
                                     Accessible.name: "New thread in " + projectDelegate.name
                                     ToolTip.text: Accessible.name
@@ -443,7 +500,10 @@ Kirigami.ApplicationWindow {
                             }
                             ToolTip.text: projectDelegate.path
                             ToolTip.visible: hovered
-                            onClicked: appController.selectProject(projectDelegate.index)
+                            onClicked: {
+                                root.setProjectExpanded(projectDelegate.path, true)
+                                appController.selectProject(projectDelegate.index)
+                            }
 
                             TapHandler {
                                 acceptedButtons: Qt.RightButton
@@ -461,11 +521,13 @@ Kirigami.ApplicationWindow {
 
                         ColumnLayout {
                             Layout.fillWidth: true
-                            visible: projectDelegate.selected
+                            visible: projectDelegate.expanded
                             spacing: 2
 
                             Repeater {
-                                model: projectDelegate.selected ? appController.threads : []
+                                model: projectDelegate.showAllThreads
+                                       ? projectDelegate.projectThreads
+                                       : projectDelegate.projectThreads.slice(0, 5)
                                 delegate: ItemDelegate {
                                     id: threadItem
                                     required property int index
@@ -499,7 +561,8 @@ Kirigami.ApplicationWindow {
                                         }
                                     }
                                     onClicked: {
-                                        appController.selectThread(index)
+                                        appController.selectProjectThread(
+                                            projectDelegate.index, modelData.id)
                                         if (!root.navigationVisible)
                                             navigationDrawer.close()
                                     }
@@ -513,10 +576,26 @@ Kirigami.ApplicationWindow {
                                         MenuItem {
                                             text: "Remove thread from Artemis"
                                             icon.name: "edit-delete"
-                                            onTriggered: appController.removeThread(index)
+                                            onTriggered: appController.removeProjectThread(
+                                                projectDelegate.index, modelData.id)
                                         }
                                     }
                                 }
+                            }
+
+                            ToolButton {
+                                Layout.leftMargin: Kirigami.Units.gridUnit * 2
+                                visible: projectDelegate.projectThreads.length > 5
+                                flat: true
+                                text: projectDelegate.showAllThreads
+                                      ? "Show less"
+                                      : "Show "
+                                        + (projectDelegate.projectThreads.length - 5)
+                                        + " more"
+                                font: Kirigami.Theme.smallFont
+                                opacity: hovered ? 0.9 : 0.6
+                                onClicked: projectDelegate.showAllThreads =
+                                           !projectDelegate.showAllThreads
                             }
 
                             Label {
@@ -525,7 +604,8 @@ Kirigami.ApplicationWindow {
                                 Layout.rightMargin: Kirigami.Units.smallSpacing
                                 Layout.topMargin: Kirigami.Units.smallSpacing
                                 Layout.bottomMargin: Kirigami.Units.smallSpacing
-                                visible: appController.threads.length === 0
+                                visible: projectDelegate.projectThreads.length === 0
+                                         && projectDelegate.selected
                                 text: appController.providerReady
                                       ? "No chats yet. Send a message to start one."
                                       : "Codex is offline."
