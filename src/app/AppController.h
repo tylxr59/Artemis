@@ -6,7 +6,6 @@
 #include "persistence/Database.h"
 #include "domain/AgentProvider.h"
 
-#include <QElapsedTimer>
 #include <QHash>
 #include <QObject>
 #include <QTimer>
@@ -181,7 +180,7 @@ private:
     void loadThreads(const QString &threadToSelect = {});
     void loadModels();
     void setStatus(const QString &text);
-    void setTurnRunning(bool running);
+    void setTurnRunning(const QString &threadId, bool running);
     void handleDomainEvent(const QString &threadId, const QString &type,
                            const QString &title, const QString &content,
                            const QVariantMap &metadata);
@@ -195,8 +194,8 @@ private:
     void handleUserInputRequest(const QString &threadId, const QString &turnId,
                                 const QString &itemId, const QVariantList &questions);
     void clearPendingUserInput();
-    void sendPendingSteers();
-    void restorePendingSteers();
+    void sendPendingSteers(const QString &threadId);
+    void restorePendingSteers(const QString &threadId);
     void generateThreadTitle(const QString &threadId, const QString &prompt,
                              const QString &projectPath, const QString &workspacePath,
                              const QString &modelId);
@@ -221,8 +220,6 @@ private:
     QVariantList m_models;
     int m_selectedProject = -1;
     int m_selectedThread = -1;
-    bool m_turnRunning = false;
-    QElapsedTimer m_turnElapsedTimer;
     QTimer m_turnElapsedUpdateTimer;
     QString m_status;
     QString m_providerIssue;
@@ -235,8 +232,11 @@ private:
     QHash<QString, QString> m_titleTargets;
     QHash<QString, QString> m_titleDraftBuffers;
     QHash<QString, QString> m_assistantDraftBuffers;
-    QString m_activeThreadId;
-    QString m_activeTurnId;
+    struct ActiveTurn {
+        QString turnId;
+        qint64 startedAtMs = 0;
+    };
+    QHash<QString, ActiveTurn> m_activeTurns;
     QString m_pendingUserInputThreadId;
     QString m_pendingUserInputTurnId;
     QString m_pendingUserInputItemId;
@@ -247,7 +247,7 @@ private:
         QString prompt;
         QStringList images;
     };
-    QList<PendingSteer> m_pendingSteers;
+    QHash<QString, QList<PendingSteer>> m_pendingSteers;
     QHash<QString, QVariantList> m_threadPlans;
     QHash<QString, QString> m_threadPlanExplanations;
     QHash<QString, QString> m_threadTasks;

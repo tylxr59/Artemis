@@ -234,7 +234,10 @@ QString AppController::currentPlanExplanation() const
 {
     return m_threadPlanExplanations.value(selectedThreadId());
 }
-bool AppController::turnRunning() const { return m_turnRunning; }
+bool AppController::turnRunning() const
+{
+    return m_activeTurns.contains(selectedThreadId());
+}
 bool AppController::hasPendingUserInput() const
 {
     return m_pendingUserInputIndex >= 0
@@ -258,7 +261,10 @@ int AppController::pendingUserInputQuestionCount() const
 }
 QString AppController::turnElapsedText() const
 {
-    return elapsedText(m_turnElapsedTimer.isValid() ? m_turnElapsedTimer.elapsed() : 0);
+    const auto activeTurn = m_activeTurns.constFind(selectedThreadId());
+    if (activeTurn == m_activeTurns.cend())
+        return elapsedText(0);
+    return elapsedText(QDateTime::currentMSecsSinceEpoch() - activeTurn->startedAtMs);
 }
 bool AppController::providerReady() const { return m_provider->ready(); }
 bool AppController::providerSetupRequired() const { return m_provider->setupRequired(); }
@@ -483,6 +489,8 @@ void AppController::activateProject(int index, const QString &threadToSelect)
     m_conversation.setThread({});
     emit selectedProjectChanged();
     emit selectedThreadChanged();
+    emit turnRunningChanged();
+    emit turnElapsedChanged();
     emit tokenUsageChanged();
     emit currentTasksChanged();
     emit currentPlanChanged();
@@ -553,9 +561,12 @@ void AppController::loadThreads(const QString &threadToSelect)
             for (int i = 0; i < m_threads.size(); ++i) {
                 if (m_threads.at(i).toMap().value(QStringLiteral("id")).toString() != threadToSelect)
                     continue;
-                if (threadToSelect == m_activeThreadId) {
+                if (m_activeTurns.contains(threadToSelect)) {
                     m_selectedThread = i;
+                    m_conversation.setThread(threadToSelect);
                     emit selectedThreadChanged();
+                    emit turnRunningChanged();
+                    emit turnElapsedChanged();
                     emit currentTasksChanged();
                     emit currentPlanChanged();
                 } else {
@@ -614,6 +625,8 @@ void AppController::selectThread(int index)
     m_selectedThread = index;
     m_conversation.setThread(selectedThreadId());
     emit selectedThreadChanged();
+    emit turnRunningChanged();
+    emit turnElapsedChanged();
     emit tokenUsageChanged();
     emit currentTasksChanged();
     emit currentPlanChanged();
@@ -783,6 +796,8 @@ void AppController::beginThread(const QString &modelId, const QString &reasoning
         m_conversation.setThread(id);
         emit threadsChanged();
         emit selectedThreadChanged();
+        emit turnRunningChanged();
+        emit turnElapsedChanged();
         emit tokenUsageChanged();
         emit currentTasksChanged();
         emit currentPlanChanged();
@@ -830,18 +845,14 @@ bool AppController::sendPrompt(const QString &text, const QVariantList &imageVal
         createThread(modelId, reasoningEffort, permissionMode);
         return true;
     }
-    if (m_turnRunning) {
-        if (selectedThreadId() != m_activeThreadId) {
-            setStatus(QStringLiteral("Another thread is active in this Artemis session. Stop it before starting this turn."));
-            return false;
-        }
+    if (m_activeTurns.contains(selectedThreadId())) {
         const ConversationEvent userEvent{
             selectedThreadId(), QStringLiteral("user"), QStringLiteral("You"), prompt,
             {{QStringLiteral("images"), images}}};
         m_conversation.append(userEvent);
         persistConversationEvent(userEvent);
-        m_pendingSteers.push_back({prompt, images});
-        sendPendingSteers();
+        m_pendingSteers[selectedThreadId()].push_back({prompt, images});
+        sendPendingSteers(selectedThreadId());
         return true;
     }
     const bool generateTitle = m_selectedThread >= 0
@@ -852,15 +863,19 @@ bool AppController::sendPrompt(const QString &text, const QVariantList &imageVal
     return true;
 }
 
-void AppController::sendPendingSteers()
+void AppController::sendPendingSteers(const QString &threadId)
 {
-    if (m_activeThreadId.isEmpty() || m_activeTurnId.isEmpty()
-        || m_pendingSteers.isEmpty()) {
+    const auto activeTurn = m_activeTurns.constFind(threadId);
+    auto pending = m_pendingSteers.find(threadId);
+    if (activeTurn == m_activeTurns.cend() || activeTurn->turnId.isEmpty()
+        || pending == m_pendingSteers.end() || pending->isEmpty()) {
         return;
     }
-    const auto steer = m_pendingSteers.takeFirst();
-    m_provider->steerTurn(m_activeThreadId, m_activeTurnId, steer.prompt, steer.images,
-                      [this, steer](const QJsonObject &, const QString &error) {
+    const auto steer = pending->takeFirst();
+    if (pending->isEmpty())
+        m_pendingSteers.erase(pending);
+    m_provider->steerTurn(threadId, activeTurn->turnId, steer.prompt, steer.images,
+                      [this, threadId, steer](const QJsonObject &, const QString &error) {
             if (!error.isEmpty())
                 setStatus(error);
             if (!error.isEmpty()) {
@@ -868,14 +883,15 @@ void AppController::sendPendingSteers()
                     steer.prompt,
                     QVariantList(steer.images.cbegin(), steer.images.cend()));
             }
-            sendPendingSteers();
+            sendPendingSteers(threadId);
         });
 }
 
-void AppController::restorePendingSteers()
+void AppController::restorePendingSteers(const QString &threadId)
 {
-    while (!m_pendingSteers.isEmpty()) {
-        const auto steer = m_pendingSteers.takeFirst();
+    auto steers = m_pendingSteers.take(threadId);
+    while (!steers.isEmpty()) {
+        const auto steer = steers.takeFirst();
         emit promptRestoreRequested(
             steer.prompt, QVariantList(steer.images.cbegin(), steer.images.cend()));
     }
@@ -883,10 +899,15 @@ void AppController::restorePendingSteers()
 
 void AppController::setActiveTurnId(const QString &threadId, const QString &turnId)
 {
-    if (threadId != m_activeThreadId || turnId.isEmpty())
+    if (m_titleTargets.contains(threadId) || threadId == m_commitThreadId)
         return;
-    m_activeTurnId = turnId;
-    sendPendingSteers();
+    if (!m_activeTurns.contains(threadId))
+        setTurnRunning(threadId, true);
+    auto activeTurn = m_activeTurns.find(threadId);
+    if (turnId.isEmpty())
+        return;
+    activeTurn->turnId = turnId;
+    sendPendingSteers(threadId);
 }
 
 void AppController::handleUserInputRequest(const QString &threadId, const QString &turnId,
@@ -976,19 +997,15 @@ void AppController::startPromptTurn(const QString &threadId, const QString &prom
         {{QStringLiteral("images"), images}}};
     m_conversation.append(userEvent);
     persistConversationEvent(userEvent);
-    m_activeThreadId = threadId;
-    m_activeTurnId.clear();
-    setTurnRunning(true);
+    setTurnRunning(threadId, true);
     m_provider->sendTurn(threadId, prompt, images, modelId, reasoningEffort,
                      collaborationMode, permissionProfile,
                      [this, threadId, prompt, images, generateTitle,
                       titleProjectPath, titleWorkspacePath, titleModelId](
                          const QJsonObject &result, const QString &error) {
         if (!error.isEmpty()) {
-            restorePendingSteers();
-            setTurnRunning(false);
-            m_activeThreadId.clear();
-            m_activeTurnId.clear();
+            restorePendingSteers(threadId);
+            setTurnRunning(threadId, false);
             setStatus(error);
             emit promptRestoreRequested(prompt,
                                         QVariantList(images.cbegin(), images.cend()));
@@ -1047,9 +1064,11 @@ QString AppController::pasteClipboardImage()
 
 void AppController::interruptTurn()
 {
-    if (!m_turnRunning || m_activeThreadId.isEmpty() || m_activeTurnId.isEmpty())
+    const auto threadId = selectedThreadId();
+    const auto activeTurn = m_activeTurns.constFind(threadId);
+    if (activeTurn == m_activeTurns.cend() || activeTurn->turnId.isEmpty())
         return;
-    m_provider->interruptTurn(m_activeThreadId, m_activeTurnId,
+    m_provider->interruptTurn(threadId, activeTurn->turnId,
                           [this](const QJsonObject &, const QString &error) {
         if (!error.isEmpty())
             setStatus(error);
@@ -1101,9 +1120,12 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
     }
     ConversationEvent event{threadId, type, title, content, metadata};
     if (type == QStringLiteral("status") && content == QStringLiteral("completed")) {
+        const auto activeTurn = m_activeTurns.constFind(threadId);
+        const auto elapsed = activeTurn == m_activeTurns.cend()
+            ? 0 : QDateTime::currentMSecsSinceEpoch() - activeTurn->startedAtMs;
         event.content = QStringLiteral("Complete · %1 · %2 total")
                             .arg(QLocale().toString(QTime::currentTime(), QLocale::ShortFormat),
-                                 turnElapsedText());
+                                 elapsedText(elapsed));
     }
     const bool isAssistantDelta = type == QStringLiteral("assistant")
         && metadata.value(QStringLiteral("delta")).toBool();
@@ -1137,16 +1159,18 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
     else
         m_conversation.append(event);
     if (type == QStringLiteral("diff")) {
-        m_diff = content;
-        emit diffChanged();
+        if (threadId == selectedThreadId()) {
+            m_diff = content;
+            emit diffChanged();
+        }
     }
     if (type == QStringLiteral("status")) {
-        restorePendingSteers();
-        clearPendingUserInput();
-        setTurnRunning(false);
-        m_activeThreadId.clear();
-        m_activeTurnId.clear();
-        refreshGit();
+        restorePendingSteers(threadId);
+        if (m_pendingUserInputThreadId == threadId)
+            clearPendingUserInput();
+        setTurnRunning(threadId, false);
+        if (threadId == selectedThreadId())
+            refreshGit();
     }
 }
 
@@ -1537,19 +1561,24 @@ void AppController::persistConversationEvent(const ConversationEvent &event,
     }
 }
 
-void AppController::setTurnRunning(bool running)
+void AppController::setTurnRunning(const QString &threadId, bool running)
 {
-    if (m_turnRunning == running)
+    if (threadId.isEmpty() || m_activeTurns.contains(threadId) == running)
         return;
-    m_turnRunning = running;
     if (running) {
-        m_turnElapsedTimer.restart();
-        m_turnElapsedUpdateTimer.start();
+        m_activeTurns.insert(
+            threadId, ActiveTurn{{}, QDateTime::currentMSecsSinceEpoch()});
     } else {
-        m_turnElapsedUpdateTimer.stop();
+        m_activeTurns.remove(threadId);
     }
-    emit turnRunningChanged();
-    emit turnElapsedChanged();
+    if (m_activeTurns.isEmpty())
+        m_turnElapsedUpdateTimer.stop();
+    else if (!m_turnElapsedUpdateTimer.isActive())
+        m_turnElapsedUpdateTimer.start();
+    if (threadId == selectedThreadId()) {
+        emit turnRunningChanged();
+        emit turnElapsedChanged();
+    }
 }
 
 } // namespace Artemis

@@ -35,9 +35,9 @@ public:
         handler({{QStringLiteral("data"), QJsonArray{}}}, {});
     }
 
-    void listThreads(const QString &, ResultHandler handler) override
+    void listThreads(const QString &workspacePath, ResultHandler handler) override
     {
-        QJsonArray data;
+        QJsonArray data = availableThreads.value(workspacePath);
         if (!availableThreadId.isEmpty()) {
             data.append(QJsonObject{
                 {QStringLiteral("id"), availableThreadId},
@@ -60,10 +60,11 @@ public:
                   QJsonObject{{QStringLiteral("turns"), QJsonArray{}}}}}, {});
     }
 
-    void sendTurn(const QString &, const QString &text, const QStringList &,
+    void sendTurn(const QString &threadId, const QString &text, const QStringList &,
                   const QString &modelId, const QString &, const QString &,
                   PermissionProfile, ResultHandler handler) override
     {
+        startedTurnThreads.push_back(threadId);
         lastTurnText = text;
         lastTurnModelId = modelId;
         handler({{QStringLiteral("turn"),
@@ -115,6 +116,8 @@ public:
     QString lastUserInputItemId;
     QVariantMap lastUserInputAnswers;
     QString availableThreadId;
+    QHash<QString, QJsonArray> availableThreads;
+    QStringList startedTurnThreads;
 
 private:
     bool m_ready = false;
@@ -135,6 +138,113 @@ private slots:
     {
         QCOMPARE(GitService::suggestedBranch(QStringLiteral("Add project thread navigation")),
                  QStringLiteral("feature/add-project-thread-navigation"));
+    }
+
+    void conversationDeltasStayInTheirThread()
+    {
+        ConversationModel model;
+        model.setThread(QStringLiteral("thread-a"));
+        model.appendOrMergeDelta(
+            {QStringLiteral("thread-b"), QStringLiteral("assistant"),
+             QStringLiteral("Artemis"), QStringLiteral("wrong thread"),
+             {{QStringLiteral("delta"), true},
+              {QStringLiteral("itemId"), QStringLiteral("message-b")}}});
+        QCOMPARE(model.rowCount(), 0);
+
+        model.appendOrMergeDelta(
+            {QStringLiteral("thread-a"), QStringLiteral("assistant"),
+             QStringLiteral("Artemis"), QStringLiteral("right thread"),
+             {{QStringLiteral("delta"), true},
+              {QStringLiteral("itemId"), QStringLiteral("message-a")}}});
+        QCOMPARE(model.rowCount(), 1);
+        QCOMPARE(model.data(model.index(0), ConversationModel::ContentRole).toString(),
+                 QStringLiteral("right thread"));
+    }
+
+    void concurrentThreadsKeepIndependentOutputAndRunningState()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const auto firstPath = root.filePath(QStringLiteral("concurrent-a"));
+        const auto secondPath = root.filePath(QStringLiteral("concurrent-b"));
+        QVERIFY(QDir().mkpath(firstPath));
+        QVERIFY(QDir().mkpath(secondPath));
+
+        FakeAgentProvider provider;
+        provider.availableThreads.insert(
+            firstPath,
+            QJsonArray{QJsonObject{
+                {QStringLiteral("id"), QStringLiteral("thread-a")},
+                {QStringLiteral("name"), QStringLiteral("Thread A")},
+                {QStringLiteral("cwd"), firstPath}}});
+        provider.availableThreads.insert(
+            secondPath,
+            QJsonArray{QJsonObject{
+                {QStringLiteral("id"), QStringLiteral("thread-b")},
+                {QStringLiteral("name"), QStringLiteral("Thread B")},
+                {QStringLiteral("cwd"), secondPath}}});
+
+        AppController controller(&provider);
+        QVERIFY(controller.initialize());
+        controller.addProject(firstPath);
+        controller.addProject(secondPath);
+
+        int firstIndex = -1;
+        int secondIndex = -1;
+        for (int row = 0; row < controller.projects()->rowCount(); ++row) {
+            const auto index = controller.projects()->index(row);
+            const auto path = controller.projects()
+                                  ->data(index, ProjectTreeModel::PathRole).toString();
+            if (path == firstPath)
+                firstIndex = row;
+            else if (path == secondPath)
+                secondIndex = row;
+        }
+        QVERIFY(firstIndex >= 0);
+        QVERIFY(secondIndex >= 0);
+
+        controller.selectProjectThread(firstIndex, QStringLiteral("thread-a"));
+        QCOMPARE(controller.selectedThreadId(), QStringLiteral("thread-a"));
+        QVERIFY(controller.sendPrompt(
+            QStringLiteral("First task"), {}, QStringLiteral("test-model"), {},
+            QStringLiteral("full-access"), QStringLiteral("default")));
+        QVERIFY(controller.turnRunning());
+
+        controller.selectProjectThread(secondIndex, QStringLiteral("thread-b"));
+        QCOMPARE(controller.selectedThreadId(), QStringLiteral("thread-b"));
+        QVERIFY(controller.sendPrompt(
+            QStringLiteral("Second task"), {}, QStringLiteral("test-model"), {},
+            QStringLiteral("full-access"), QStringLiteral("default")));
+        QVERIFY(controller.turnRunning());
+        QCOMPARE(provider.startedTurnThreads,
+                 QStringList({QStringLiteral("thread-a"), QStringLiteral("thread-b")}));
+
+        controller.selectProjectThread(firstIndex, QStringLiteral("thread-a"));
+        QVERIFY(controller.turnRunning());
+        const int rowsBeforeForeignDelta = controller.conversation()->rowCount();
+        emit provider.domainEvent(
+            QStringLiteral("thread-b"), QStringLiteral("assistant"),
+            QStringLiteral("Artemis"), QStringLiteral("foreign output"),
+            {{QStringLiteral("delta"), true},
+             {QStringLiteral("itemId"), QStringLiteral("message-b")}});
+        QCOMPARE(controller.conversation()->rowCount(), rowsBeforeForeignDelta);
+
+        emit provider.domainEvent(
+            QStringLiteral("thread-a"), QStringLiteral("assistant"),
+            QStringLiteral("Artemis"), QStringLiteral("local output"),
+            {{QStringLiteral("delta"), true},
+             {QStringLiteral("itemId"), QStringLiteral("message-a")}});
+        QCOMPARE(controller.conversation()->rowCount(), rowsBeforeForeignDelta + 1);
+
+        emit provider.domainEvent(
+            QStringLiteral("thread-b"), QStringLiteral("status"),
+            QStringLiteral("Turn completed"), QStringLiteral("completed"), {});
+        QVERIFY(controller.turnRunning());
+
+        controller.selectProjectThread(secondIndex, QStringLiteral("thread-b"));
+        QVERIFY(!controller.turnRunning());
+        controller.selectProjectThread(firstIndex, QStringLiteral("thread-a"));
+        QVERIFY(controller.turnRunning());
     }
 
     void gitRepositoryDetection()

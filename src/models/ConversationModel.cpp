@@ -63,6 +63,8 @@ void ConversationModel::append(const ConversationEvent &event)
 
 void ConversationModel::appendOrMergeDelta(const ConversationEvent &event)
 {
+    if (!m_threadId.isEmpty() && event.threadId != m_threadId)
+        return;
     const bool completed = event.metadata.value(QStringLiteral("lifecycle")).toString()
                            == QStringLiteral("completed");
     if (completed) {
