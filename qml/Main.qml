@@ -766,6 +766,7 @@ Kirigami.ApplicationWindow {
                         id: conversationList
                         property bool followTail: true
                         property bool tailScrollPending: false
+                        property bool followUpdatePending: false
                         readonly property real tailThreshold:
                             Kirigami.Units.gridUnit * 2
                         readonly property real distanceFromEnd: Math.max(
@@ -779,6 +780,16 @@ Kirigami.ApplicationWindow {
 
                         function updateFollowTail() {
                             followTail = !awayFromTail
+                        }
+
+                        function updateFollowTailLater() {
+                            if (followUpdatePending)
+                                return
+                            followUpdatePending = true
+                            Qt.callLater(function() {
+                                conversationList.followUpdatePending = false
+                                conversationList.updateFollowTail()
+                            })
                         }
 
                         function scrollToEndIfFollowing() {
@@ -879,6 +890,7 @@ Kirigami.ApplicationWindow {
                             blocking: false
                             onWheel: function(event) {
                                 conversationList.followTail = false
+                                conversationList.updateFollowTailLater()
                             }
                         }
 
