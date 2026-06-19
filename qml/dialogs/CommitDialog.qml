@@ -12,7 +12,25 @@ Dialog {
     anchors.centerIn: parent
     width: Math.min(parent ? parent.width - 40 : 720, 720)
     height: Math.min(parent ? parent.height - 40 : 650, 650)
-    standardButtons: Dialog.Cancel
+
+    footer: DialogButtonBox {
+        standardButtons: DialogButtonBox.Cancel
+
+        Button {
+            text: root.featureMode ? "Create, commit, and push" : "Commit and push all changes"
+            enabled: subjectEdit.text.trim().length > 0 && !busy.running
+            DialogButtonBox.buttonRole: DialogButtonBox.ActionRole
+            onClicked: {
+                busy.running = true
+                resultLabel.text = ""
+                if (root.featureMode)
+                    root.controller.commitFeatureBranch(
+                        subjectEdit.text, bodyEdit.text, branchEdit.text, remoteEdit.text)
+                else
+                    root.controller.commitAllAndPush(subjectEdit.text, bodyEdit.text)
+            }
+        }
+    }
 
     Connections {
         target: root.controller
@@ -111,23 +129,6 @@ Dialog {
             wrapMode: Text.Wrap
         }
 
-        RowLayout {
-            Layout.fillWidth: true
-            Item { Layout.fillWidth: true }
-            Button {
-                text: root.featureMode ? "Create, commit, and push" : "Commit and push all changes"
-                enabled: subjectEdit.text.trim().length > 0 && !busy.running
-                onClicked: {
-                    busy.running = true
-                    resultLabel.text = ""
-                    if (root.featureMode)
-                        root.controller.commitFeatureBranch(
-                            subjectEdit.text, bodyEdit.text, branchEdit.text, remoteEdit.text)
-                    else
-                        root.controller.commitAllAndPush(subjectEdit.text, bodyEdit.text)
-                }
-            }
-        }
     }
 
     onOpened: {

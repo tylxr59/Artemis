@@ -519,6 +519,7 @@ Kirigami.ApplicationWindow {
                         }
                     }
                     onCountChanged: scrollToEndIfFollowing()
+                    onContentHeightChanged: scrollToEndIfFollowing()
                     onMovementEnded: updateFollowTail()
                     onWidthChanged: forceLayout()
 
