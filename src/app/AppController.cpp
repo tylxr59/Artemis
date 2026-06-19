@@ -790,10 +790,21 @@ QString AppController::commitPrompt(const QByteArray &snapshot) const
     const auto branch = GitService::runSync(selectedWorkspacePath(),
         {QStringLiteral("branch"), QStringLiteral("--show-current")});
     return QStringLiteral(
-        "Generate a Git commit message for the following staged snapshot.\n"
-        "Return JSON only with this schema: {\"subject\":\"...\",\"body\":\"...\"}.\n"
-        "Use imperative mood, keep the subject concise, describe intent, and never invent issue numbers.\n"
-        "Repository: %1\nBranch: %2\n\n%3")
+        "You write concise Git commit messages.\n"
+        "Return JSON only with exactly these string keys: "
+        "{\"subject\":\"...\",\"body\":\"...\"}.\n"
+        "Rules:\n"
+        "- subject must use imperative mood, be at most 72 characters, and have no trailing period\n"
+        "- body must be an empty string or 1-4 concise Markdown bullet points\n"
+        "- capture the primary user-visible or developer-visible change\n"
+        "- explain what changed and why; do not produce a file-by-file inventory\n"
+        "- omit details already clear from the subject\n"
+        "- mention important behavioral, architectural, or compatibility effects\n"
+        "- do not claim tests were run unless the snapshot proves it\n"
+        "- never invent issue numbers or unsupported context\n"
+        "\nRepository: %1\n"
+        "Branch: %2\n"
+        "\nStaged snapshot:\n%3")
         .arg(selectedProjectName(), QString::fromUtf8(branch.output).trimmed(),
              QString::fromUtf8(snapshot).left(120000));
 }
@@ -811,7 +822,10 @@ QString AppController::cleanCommitDraft(const QString &raw) const
             object = document.object();
     }
     if (!object.isEmpty()) {
-        const auto subject = object.value(QStringLiteral("subject")).toString().trimmed();
+        auto subject = object.value(QStringLiteral("subject")).toString().trimmed()
+                           .section(QChar(u'\n'), 0, 0).trimmed();
+        subject.remove(QRegularExpression(QStringLiteral("\\.+$")));
+        subject = subject.left(72).trimmed();
         const auto body = object.value(QStringLiteral("body")).toString().trimmed();
         if (!subject.isEmpty())
             return body.isEmpty() ? subject : subject + QStringLiteral("\n\n") + body;
