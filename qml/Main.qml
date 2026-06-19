@@ -37,6 +37,7 @@ Kirigami.ApplicationWindow {
         appController.hasPendingUserInput
         && appController.pendingUserInputQuestion.threadId
            === appController.selectedThreadId
+    property string selectedQuestionOption: ""
     property var composerImages: []
     property var projectThreadCache: ({})
     property var expandedProjects: ({})
@@ -124,9 +125,12 @@ Kirigami.ApplicationWindow {
         return value.toString()
     }
 
-    function answerPendingQuestion(answer) {
+    function submitPendingQuestion() {
+        const typedAnswer = composer.text.trim()
+        const answer = typedAnswer.length > 0 ? typedAnswer : selectedQuestionOption
         if (!appController.answerPendingUserInput(answer))
             return false
+        selectedQuestionOption = ""
         composer.clear()
         composer.forceActiveFocus()
         return true
@@ -170,6 +174,9 @@ Kirigami.ApplicationWindow {
         function onTaskPanelRequested() {
             root.sidePanelMode = "thread"
             root.sidePanelVisible = true
+        }
+        function onPendingUserInputChanged() {
+            root.selectedQuestionOption = ""
         }
     }
 
@@ -969,72 +976,146 @@ Kirigami.ApplicationWindow {
                     Layout.maximumWidth: 840
                     Layout.alignment: Qt.AlignHCenter
                     Layout.margins: Kirigami.Units.largeSpacing
-                    padding: Kirigami.Units.smallSpacing
+                    padding: root.pendingQuestionVisible
+                             ? Kirigami.Units.largeSpacing
+                             : Kirigami.Units.smallSpacing
+
+                    background: Rectangle {
+                        radius: Kirigami.Units.largeSpacing
+                        color: Qt.alpha(Kirigami.Theme.backgroundColor, 0.96)
+                        border.width: 1
+                        border.color: root.pendingQuestionVisible
+                                      ? Kirigami.Theme.highlightColor
+                                      : Qt.alpha(Kirigami.Theme.textColor, 0.16)
+                    }
 
                     ColumnLayout {
                         anchors.fill: parent
-                        Frame {
+                        ColumnLayout {
                             id: userInputFrame
                             visible: root.pendingQuestionVisible
                             Layout.fillWidth: true
-                            padding: Kirigami.Units.largeSpacing
+                            spacing: Kirigami.Units.smallSpacing
 
-                            ColumnLayout {
-                                anchors.fill: parent
-                                spacing: Kirigami.Units.smallSpacing
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: appController.pendingUserInputQuestion.header
-                                              || "Question"
-                                        font.bold: true
-                                    }
-                                    Label {
-                                        visible: appController.pendingUserInputQuestionCount > 1
-                                        text: appController.pendingUserInputQuestionNumber
-                                              + " of "
-                                              + appController.pendingUserInputQuestionCount
-                                        font: Kirigami.Theme.smallFont
-                                        opacity: 0.6
-                                    }
-                                }
+                            RowLayout {
+                                Layout.fillWidth: true
                                 Label {
                                     Layout.fillWidth: true
-                                    text: appController.pendingUserInputQuestion.question || ""
-                                    wrapMode: Text.Wrap
+                                    text: (appController.pendingUserInputQuestion.header
+                                           || "Question").toUpperCase()
+                                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                    font.letterSpacing: 1
+                                    opacity: 0.52
                                 }
-                                Flow {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: childrenRect.height
-                                    spacing: Kirigami.Units.smallSpacing
+                                Label {
+                                    visible: appController.pendingUserInputQuestionCount > 1
+                                    text: appController.pendingUserInputQuestionNumber
+                                          + " of "
+                                          + appController.pendingUserInputQuestionCount
+                                    font: Kirigami.Theme.smallFont
+                                    opacity: 0.52
+                                }
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                Layout.bottomMargin: Kirigami.Units.smallSpacing
+                                text: appController.pendingUserInputQuestion.question || ""
+                                wrapMode: Text.Wrap
+                                font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 1
 
-                                    Repeater {
-                                        model: appController.pendingUserInputQuestion.options || []
-                                        delegate: Button {
-                                            required property var modelData
-                                            text: modelData.label
-                                            Accessible.description: modelData.description || ""
-                                            ToolTip.text: modelData.description || ""
-                                            ToolTip.visible: hovered
-                                            onClicked: root.answerPendingQuestion(modelData.label)
+                                Repeater {
+                                    model: appController.pendingUserInputQuestion.options || []
+                                    delegate: Button {
+                                        id: answerOption
+                                        required property var modelData
+                                        required property int index
+                                        readonly property bool selected:
+                                            root.selectedQuestionOption === modelData.label
+
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 52
+                                        flat: true
+                                        Accessible.name: modelData.label
+                                        Accessible.description: modelData.description || ""
+                                        onClicked: root.selectedQuestionOption = modelData.label
+
+                                        contentItem: RowLayout {
+                                            spacing: Kirigami.Units.largeSpacing
+
+                                            Rectangle {
+                                                Layout.preferredWidth: 24
+                                                Layout.preferredHeight: 24
+                                                radius: 4
+                                                color: answerOption.selected
+                                                       ? Kirigami.Theme.highlightColor
+                                                       : Qt.alpha(
+                                                           Kirigami.Theme.textColor, 0.05)
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    text: answerOption.index + 1
+                                                    font: Kirigami.Theme.smallFont
+                                                    color: answerOption.selected
+                                                           ? Kirigami.Theme.highlightedTextColor
+                                                           : Kirigami.Theme.textColor
+                                                    opacity: answerOption.selected ? 1 : 0.48
+                                                }
+                                            }
+                                            Label {
+                                                text: answerOption.modelData.label
+                                                font.bold: answerOption.selected
+                                                color: answerOption.selected
+                                                       ? Kirigami.Theme.highlightColor
+                                                       : Kirigami.Theme.textColor
+                                            }
+                                            Label {
+                                                Layout.fillWidth: true
+                                                text: answerOption.modelData.description || ""
+                                                elide: Text.ElideRight
+                                                opacity: 0.48
+                                            }
+                                            Kirigami.Icon {
+                                                Layout.preferredWidth: 18
+                                                Layout.preferredHeight: 18
+                                                source: "checkmark"
+                                                visible: answerOption.selected
+                                                color: Kirigami.Theme.highlightColor
+                                            }
+                                        }
+                                        background: Rectangle {
+                                            radius: Kirigami.Units.smallSpacing
+                                            color: answerOption.selected
+                                                   ? Qt.alpha(
+                                                       Kirigami.Theme.highlightColor, 0.10)
+                                                   : answerOption.hovered
+                                                     ? Qt.alpha(
+                                                         Kirigami.Theme.textColor, 0.05)
+                                                     : Qt.alpha(
+                                                         Kirigami.Theme.textColor, 0.025)
+                                            border.width: answerOption.selected ? 1 : 0
+                                            border.color: Qt.alpha(
+                                                Kirigami.Theme.highlightColor, 0.4)
+                                        }
+                                        HoverHandler {
+                                            cursorShape: Qt.PointingHandCursor
                                         }
                                     }
-                                    Button {
-                                        text: "Other…"
-                                        icon.name: "document-edit"
-                                        onClicked: composer.forceActiveFocus()
-                                        ToolTip.text: "Type a different answer below."
-                                        ToolTip.visible: hovered
-                                    }
                                 }
+                            }
+                            Kirigami.Separator {
+                                Layout.fillWidth: true
+                                Layout.topMargin: Kirigami.Units.smallSpacing
+                                Layout.bottomMargin: Kirigami.Units.smallSpacing
                             }
                         }
                         Flickable {
                             Layout.fillWidth: true
                             Layout.preferredHeight: root.composerImages.length > 0 ? 92 : 0
                             visible: root.composerImages.length > 0
+                                     && !root.pendingQuestionVisible
                             contentWidth: attachmentRow.implicitWidth
                             contentHeight: height
                             clip: true
@@ -1081,15 +1162,24 @@ Kirigami.ApplicationWindow {
                         TextArea {
                             id: composer
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Math.max(90, implicitHeight)
+                            Layout.preferredHeight: root.pendingQuestionVisible
+                                                    ? 72
+                                                    : Math.max(90, implicitHeight)
                             Layout.maximumHeight: 260
                             placeholderText: root.pendingQuestionVisible
-                                             ? "Type a different answer…"
+                                             ? "Type your own answer, or leave this blank to use the selected option"
                                              : appController.turnRunning
                                              ? "Add guidance while Artemis is working…"
                                              : "Describe a task, ask a question, or paste an error…"
                             wrapMode: TextEdit.Wrap
                             enabled: root.hasProject && appController.providerReady
+                            background: Rectangle {
+                                radius: Kirigami.Units.smallSpacing
+                                color: root.pendingQuestionVisible
+                                       ? "transparent"
+                                       : Qt.alpha(
+                                           Kirigami.Theme.alternateBackgroundColor, 0.32)
+                            }
                             Keys.onPressed: event => {
                                 if (!root.pendingQuestionVisible
                                         && event.matches(StandardKey.Paste)) {
@@ -1324,21 +1414,29 @@ Kirigami.ApplicationWindow {
 
                                 RoundButton {
                                     id: sendButton
-                                    text: "↑"
-                                    Accessible.name: appController.turnRunning
+                                    text: root.pendingQuestionVisible ? "Submit answer" : "↑"
+                                    Layout.preferredWidth: root.pendingQuestionVisible
+                                                           ? implicitWidth : implicitHeight
+                                    Accessible.name: root.pendingQuestionVisible
+                                                     ? "Submit answer"
+                                                     : appController.turnRunning
                                                      ? "Add message" : "Send"
-                                    ToolTip.text: appController.turnRunning
+                                    ToolTip.text: root.pendingQuestionVisible
+                                                  ? "Submit selected or typed answer (Enter)"
+                                                  : appController.turnRunning
                                                   ? "Add message to current turn (Enter)"
                                                   : "Send (Enter)"
                                     ToolTip.visible: hovered
                                     enabled: (composer.text.trim().length > 0
+                                              || (root.pendingQuestionVisible
+                                                  && root.selectedQuestionOption.length > 0)
                                               || (!root.pendingQuestionVisible
                                                   && root.composerImages.length > 0))
                                              && root.hasProject
                                              && appController.providerReady
                                     onClicked: {
                                         if (root.pendingQuestionVisible) {
-                                            root.answerPendingQuestion(composer.text)
+                                            root.submitPendingQuestion()
                                             return
                                         }
                                         if (appController.sendPrompt(
