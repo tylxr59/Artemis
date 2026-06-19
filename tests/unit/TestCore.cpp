@@ -275,9 +275,12 @@ private slots:
             QStringLiteral("thread-b"), QStringLiteral("status"),
             QStringLiteral("Turn completed"), QStringLiteral("completed"), {});
         QVERIFY(controller.turnRunning());
+        QCOMPARE(controller.completedThreadIds(),
+                 QStringList({QStringLiteral("thread-b")}));
 
         controller.selectProjectThread(secondIndex, QStringLiteral("thread-b"));
         QVERIFY(!controller.turnRunning());
+        QVERIFY(controller.completedThreadIds().isEmpty());
         QCOMPARE(controller.workingThreadIds(),
                  QStringList({QStringLiteral("thread-a")}));
         controller.selectProjectThread(firstIndex, QStringLiteral("thread-a"));

@@ -110,7 +110,8 @@ AppController::AppController(QObject *parent)
 
 AppController::AppController(AgentProvider *provider, QObject *parent)
     : QObject(parent),
-      m_provider(provider)
+      m_provider(provider),
+      m_notificationsEnabled(false)
 {
     Q_ASSERT(m_provider);
     connectProvider();
@@ -241,6 +242,12 @@ bool AppController::turnRunning() const
 QStringList AppController::workingThreadIds() const
 {
     auto threadIds = m_activeTurns.keys();
+    threadIds.sort();
+    return threadIds;
+}
+QStringList AppController::completedThreadIds() const
+{
+    auto threadIds = m_completedThreads.values();
     threadIds.sort();
     return threadIds;
 }
@@ -569,6 +576,7 @@ void AppController::loadThreads(const QString &threadToSelect)
                     continue;
                 if (m_activeTurns.contains(threadToSelect)) {
                     m_selectedThread = i;
+                    markThreadViewed(threadToSelect);
                     m_conversation.setThread(threadToSelect);
                     emit selectedThreadChanged();
                     emit turnRunningChanged();
@@ -629,6 +637,7 @@ void AppController::selectThread(int index)
     if (index < 0 || index >= m_threads.size())
         return;
     m_selectedThread = index;
+    markThreadViewed(selectedThreadId());
     m_conversation.setThread(selectedThreadId());
     emit selectedThreadChanged();
     emit turnRunningChanged();
@@ -1132,13 +1141,18 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
         event.content = QStringLiteral("Complete · %1 · %2 total")
                             .arg(QLocale().toString(QTime::currentTime(), QLocale::ShortFormat),
                                  elapsedText(elapsed));
-        if (activeTurn != m_activeTurns.cend()) {
+        if (m_notificationsEnabled && activeTurn != m_activeTurns.cend()) {
             const auto notificationText = activeTurn->projectName.isEmpty()
                 ? activeTurn->threadTitle
                 : QStringLiteral("%1 · %2")
                       .arg(activeTurn->projectName, activeTurn->threadTitle);
             DesktopIntegration::showNotification(
                 QStringLiteral("Thread finished"), notificationText);
+        }
+        if (threadId != selectedThreadId()
+            && !m_completedThreads.contains(threadId)) {
+            m_completedThreads.insert(threadId);
+            emit completedThreadsChanged();
         }
     }
     const bool isAssistantDelta = type == QStringLiteral("assistant")
@@ -1583,6 +1597,7 @@ void AppController::setTurnRunning(const QString &threadId, bool running)
     if (threadId.isEmpty() || m_activeTurns.contains(threadId) == running)
         return;
     if (running) {
+        markThreadViewed(threadId);
         m_activeTurns.insert(
             threadId,
             ActiveTurn{{}, QDateTime::currentMSecsSinceEpoch(),
@@ -1601,6 +1616,13 @@ void AppController::setTurnRunning(const QString &threadId, bool running)
         emit turnRunningChanged();
         emit turnElapsedChanged();
     }
+}
+
+void AppController::markThreadViewed(const QString &threadId)
+{
+    if (threadId.isEmpty() || !m_completedThreads.remove(threadId))
+        return;
+    emit completedThreadsChanged();
 }
 
 } // namespace Artemis

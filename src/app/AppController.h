@@ -8,6 +8,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QTimer>
 #include <QVariantList>
 
@@ -41,6 +42,7 @@ class AppController : public QObject {
     Q_PROPERTY(QString currentPlanExplanation READ currentPlanExplanation NOTIFY currentPlanChanged)
     Q_PROPERTY(bool turnRunning READ turnRunning NOTIFY turnRunningChanged)
     Q_PROPERTY(QStringList workingThreadIds READ workingThreadIds NOTIFY workingThreadsChanged)
+    Q_PROPERTY(QStringList completedThreadIds READ completedThreadIds NOTIFY completedThreadsChanged)
     Q_PROPERTY(bool hasPendingUserInput READ hasPendingUserInput NOTIFY pendingUserInputChanged)
     Q_PROPERTY(QVariantMap pendingUserInputQuestion READ pendingUserInputQuestion NOTIFY pendingUserInputChanged)
     Q_PROPERTY(int pendingUserInputQuestionNumber READ pendingUserInputQuestionNumber NOTIFY pendingUserInputChanged)
@@ -90,6 +92,7 @@ public:
     QString currentPlanExplanation() const;
     bool turnRunning() const;
     QStringList workingThreadIds() const;
+    QStringList completedThreadIds() const;
     bool hasPendingUserInput() const;
     QVariantMap pendingUserInputQuestion() const;
     int pendingUserInputQuestionNumber() const;
@@ -162,6 +165,7 @@ signals:
     void taskPanelRequested();
     void turnRunningChanged();
     void workingThreadsChanged();
+    void completedThreadsChanged();
     void pendingUserInputChanged();
     void turnElapsedChanged();
     void providerReadyChanged();
@@ -184,6 +188,7 @@ private:
     void loadModels();
     void setStatus(const QString &text);
     void setTurnRunning(const QString &threadId, bool running);
+    void markThreadViewed(const QString &threadId);
     void handleDomainEvent(const QString &threadId, const QString &type,
                            const QString &title, const QString &content,
                            const QVariantMap &metadata);
@@ -218,6 +223,7 @@ private:
     ConversationModel m_conversation;
     std::unique_ptr<AgentProvider> m_ownedProvider;
     AgentProvider *m_provider = nullptr;
+    bool m_notificationsEnabled = true;
     GitService m_git;
     QVariantList m_threads;
     QVariantList m_models;
@@ -242,6 +248,7 @@ private:
         QString projectName;
     };
     QHash<QString, ActiveTurn> m_activeTurns;
+    QSet<QString> m_completedThreads;
     QString m_pendingUserInputThreadId;
     QString m_pendingUserInputTurnId;
     QString m_pendingUserInputItemId;

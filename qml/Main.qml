@@ -604,20 +604,43 @@ Kirigami.ApplicationWindow {
                                     }
                                     contentItem: RowLayout {
                                         spacing: Kirigami.Units.smallSpacing
-                                        Kirigami.Icon {
-                                            source: "dialog-messages"
+                                        Item {
+                                            id: threadStatus
+                                            readonly property bool working:
+                                                appController.workingThreadIds.indexOf(
+                                                    threadItem.modelData.id) >= 0
+                                            readonly property bool completed:
+                                                appController.completedThreadIds.indexOf(
+                                                    threadItem.modelData.id) >= 0
                                             Layout.preferredWidth: 16
                                             Layout.preferredHeight: 16
-                                            opacity: 0.7
-                                        }
-                                        Rectangle {
-                                            visible: appController.workingThreadIds.indexOf(
-                                                         threadItem.modelData.id) >= 0
-                                            Layout.preferredWidth: 8
-                                            Layout.preferredHeight: 8
-                                            radius: width / 2
-                                            color: Kirigami.Theme.positiveTextColor
-                                            Accessible.name: "Working"
+                                            Accessible.name: working ? "Working"
+                                                                      : completed ? "Completed"
+                                                                                  : "Thread"
+
+                                            Kirigami.Icon {
+                                                anchors.fill: parent
+                                                visible: !threadStatus.working
+                                                source: threadStatus.completed
+                                                        ? "dialog-ok-apply"
+                                                        : "dialog-messages"
+                                                opacity: 0.7
+                                            }
+
+                                            Kirigami.Icon {
+                                                id: workingThreadIcon
+                                                anchors.fill: parent
+                                                visible: threadStatus.working
+                                                source: "view-refresh"
+                                                opacity: 0.7
+                                                NumberAnimation on rotation {
+                                                    running: workingThreadIcon.visible
+                                                    from: 0
+                                                    to: 360
+                                                    duration: 1200
+                                                    loops: Animation.Infinite
+                                                }
+                                            }
                                         }
                                         ColumnLayout {
                                             Layout.fillWidth: true
