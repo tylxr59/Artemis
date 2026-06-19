@@ -85,6 +85,9 @@ QString desktopFilePath(const QString &desktopId)
 
 QVariantMap desktopEditor(const QString &path)
 {
+    if (path.isEmpty())
+        return {};
+
     QFile desktopFile(path);
     if (!desktopFile.open(QIODevice::ReadOnly | QIODevice::Text))
         return {};
@@ -133,6 +136,9 @@ QVariantMap desktopEditor(const QString &path)
 
 QVariantMap desktopTerminal(const QString &path)
 {
+    if (path.isEmpty())
+        return {};
+
     QFile desktopFile(path);
     if (!desktopFile.open(QIODevice::ReadOnly | QIODevice::Text))
         return {};
