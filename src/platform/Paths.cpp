@@ -26,9 +26,14 @@ QString logRoot()
     return QDir(stateRoot()).filePath(QStringLiteral("logs"));
 }
 
+QString attachmentRoot()
+{
+    return QDir(dataRoot()).filePath(QStringLiteral("attachments"));
+}
+
 bool ensureRuntimeDirectories(QString *error)
 {
-    for (const auto &path : {dataRoot(), logRoot()}) {
+    for (const auto &path : {dataRoot(), logRoot(), attachmentRoot()}) {
         if (!QDir().mkpath(path)) {
             if (error)
                 *error = QStringLiteral("Could not create %1").arg(path);

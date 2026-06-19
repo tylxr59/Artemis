@@ -69,7 +69,8 @@ public:
     virtual void sendTurn(const QString &threadId, const QString &text,
                           const QStringList &images, PermissionProfile permissionProfile,
                           ResultHandler handler) = 0;
-    virtual void steerTurn(const QString &threadId, const QString &text, ResultHandler handler) = 0;
+    virtual void steerTurn(const QString &threadId, const QString &text,
+                           const QStringList &images, ResultHandler handler) = 0;
     virtual void interruptTurn(const QString &threadId, ResultHandler handler) = 0;
 
 signals:

@@ -18,6 +18,11 @@ Item {
     readonly property bool isDiff: eventType === "diff"
     readonly property bool isRunning: metadata && metadata.lifecycle === "started"
     readonly property string compactContent: content.replace(/\s+/g, " ").trim()
+    readonly property var images: metadata && metadata.images ? metadata.images : []
+
+    function localImageUrl(path) {
+        return path.length > 0 ? "file://" + encodeURI(path) : ""
+    }
 
     implicitHeight: card.implicitHeight
 
@@ -149,7 +154,6 @@ Item {
         id: messageComponent
         ColumnLayout {
             spacing: Kirigami.Units.smallSpacing
-            implicitHeight: messageText.implicitHeight + Kirigami.Units.largeSpacing * 2
 
             Label {
                 Layout.fillWidth: true
@@ -164,6 +168,27 @@ Item {
                 color: root.eventType === "error"
                        ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
             }
+            ListView {
+                Layout.fillWidth: true
+                Layout.preferredHeight: root.images.length > 0 ? 150 : 0
+                Layout.leftMargin: Kirigami.Units.largeSpacing
+                Layout.rightMargin: Kirigami.Units.largeSpacing
+                visible: root.images.length > 0
+                orientation: ListView.Horizontal
+                spacing: Kirigami.Units.smallSpacing
+                clip: true
+                model: root.images
+
+                delegate: Image {
+                    required property string modelData
+                    width: Math.min(220, implicitWidth)
+                    height: 150
+                    source: root.localImageUrl(modelData)
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    cache: false
+                }
+            }
             TextArea {
                 id: messageText
                 Layout.fillWidth: true
@@ -173,6 +198,7 @@ Item {
                 Layout.topMargin: root.eventType === "user" || root.eventType === "error"
                                   ? 0 : Kirigami.Units.largeSpacing
                 text: root.content
+                visible: root.content.length > 0
                 readOnly: true
                 wrapMode: TextEdit.Wrap
                 selectByMouse: true

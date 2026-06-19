@@ -408,8 +408,9 @@ void CodexClient::sendTurn(const QString &threadId, const QString &text,
                            ResultHandler handler)
 {
     QJsonArray input;
-    input.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("text")},
-                             {QStringLiteral("text"), text}});
+    if (!text.isEmpty())
+        input.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("text")},
+                                 {QStringLiteral("text"), text}});
     for (const auto &image : images)
         input.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("localImage")},
                                  {QStringLiteral("path"), image}});
@@ -421,10 +422,16 @@ void CodexClient::sendTurn(const QString &threadId, const QString &text,
             std::move(handler));
 }
 
-void CodexClient::steerTurn(const QString &threadId, const QString &text, ResultHandler handler)
+void CodexClient::steerTurn(const QString &threadId, const QString &text,
+                            const QStringList &images, ResultHandler handler)
 {
-    const QJsonArray input{QJsonObject{{QStringLiteral("type"), QStringLiteral("text")},
-                                       {QStringLiteral("text"), text}}};
+    QJsonArray input;
+    if (!text.isEmpty())
+        input.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("text")},
+                                 {QStringLiteral("text"), text}});
+    for (const auto &image : images)
+        input.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("localImage")},
+                                 {QStringLiteral("path"), image}});
     request(QStringLiteral("turn/steer"),
             {{QStringLiteral("threadId"), threadId}, {QStringLiteral("input"), input}},
             std::move(handler));

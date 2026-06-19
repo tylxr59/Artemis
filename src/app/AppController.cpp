@@ -1,17 +1,24 @@
 #include "app/AppController.h"
 #include "platform/Paths.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QDesktopServices>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QImage>
+#include <QImageReader>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
+#include <QMimeData>
 #include <QProcess>
 #include <QTime>
 #include <QUrl>
+#include <QUuid>
 
 #include <utility>
 
@@ -346,10 +353,12 @@ void AppController::loadThreads(const QString &threadToSelect)
                 } else {
                     selectThread(i);
                 }
-                if (!m_pendingPrompt.isEmpty()) {
+                if (!m_pendingPrompt.isEmpty() || !m_pendingImages.isEmpty()) {
                     const QString prompt = std::exchange(m_pendingPrompt, {});
                     m_pendingModelId.clear();
-                    startPromptTurn(selectedThreadId(), prompt, m_pendingPermissionProfile, true);
+                    const auto images = std::exchange(m_pendingImages, {});
+                    startPromptTurn(selectedThreadId(), prompt, images,
+                                    m_pendingPermissionProfile, true);
                 }
                 break;
             }
@@ -493,9 +502,12 @@ void AppController::beginThread(const QString &modelId, PermissionProfile permis
     m_codex.startThread(config, [this, project, permissionProfile](const QJsonObject &result, const QString &error) {
         m_threadCreationPending = false;
         if (!error.isEmpty()) {
-            if (!m_pendingPrompt.isEmpty())
-                emit promptRestoreRequested(m_pendingPrompt);
+            if (!m_pendingPrompt.isEmpty() || !m_pendingImages.isEmpty())
+                emit promptRestoreRequested(m_pendingPrompt,
+                                            QVariantList(m_pendingImages.cbegin(),
+                                                         m_pendingImages.cend()));
             m_pendingPrompt.clear();
+            m_pendingImages.clear();
             m_pendingModelId.clear();
             setStatus(error);
             return;
@@ -517,71 +529,136 @@ void AppController::beginThread(const QString &modelId, PermissionProfile permis
         emit threadsChanged();
         emit selectedThreadChanged();
         emit currentPlanChanged();
-        if (!m_pendingPrompt.isEmpty()) {
+        if (!m_pendingPrompt.isEmpty() || !m_pendingImages.isEmpty()) {
             const QString prompt = std::exchange(m_pendingPrompt, {});
             m_pendingModelId.clear();
-            startPromptTurn(id, prompt, permissionProfile, true);
+            const auto images = std::exchange(m_pendingImages, {});
+            startPromptTurn(id, prompt, images, permissionProfile, true);
         } else {
             setStatus(QStringLiteral("Thread created"));
         }
     });
 }
 
-void AppController::sendPrompt(const QString &text, const QString &modelId,
-                               const QString &permissionMode)
+bool AppController::sendPrompt(const QString &text, const QVariantList &imageValues,
+                               const QString &modelId, const QString &permissionMode)
 {
     const QString prompt = text.trimmed();
-    if (prompt.isEmpty())
-        return;
+    QStringList images;
+    for (const auto &value : imageValues) {
+        const auto path = value.toString();
+        const QFileInfo info(path);
+        if (info.exists() && info.isFile())
+            images.push_back(info.absoluteFilePath());
+    }
+    images.removeDuplicates();
+    if (prompt.isEmpty() && images.isEmpty())
+        return false;
     if (selectedThreadId().isEmpty()) {
         if (selectedProjectPath().isEmpty() || !m_codex.ready() || m_threadCreationPending)
-            return;
+            return false;
         m_pendingPrompt = prompt;
+        m_pendingImages = images;
         m_pendingModelId = modelId;
         m_pendingPermissionProfile = permissionProfile(permissionMode);
         createThread(modelId, permissionMode);
-        return;
+        return true;
     }
     if (m_turnRunning) {
         if (selectedThreadId() != m_activeThreadId) {
             setStatus(QStringLiteral("Another thread is active in this Artemis session. Stop it before starting this turn."));
-            return;
+            return false;
         }
-        m_codex.steerTurn(selectedThreadId(), text, [this](const QJsonObject &, const QString &error) {
+        const ConversationEvent userEvent{
+            selectedThreadId(), QStringLiteral("user"), QStringLiteral("You"), prompt,
+            {{QStringLiteral("images"), images}}};
+        m_conversation.append(userEvent);
+        m_database.saveConversationEvent(userEvent.threadId, userEvent.type, userEvent.title,
+                                         userEvent.content, userEvent.metadata);
+        m_codex.steerTurn(selectedThreadId(), prompt, images,
+                         [this, prompt, images](const QJsonObject &, const QString &error) {
             if (!error.isEmpty())
                 setStatus(error);
+            if (!error.isEmpty())
+                emit promptRestoreRequested(prompt,
+                                            QVariantList(images.cbegin(), images.cend()));
         });
-        return;
+        return true;
     }
     const bool generateTitle = m_selectedThread >= 0
         && !m_threads.at(m_selectedThread).toMap().value(QStringLiteral("named")).toBool();
-    startPromptTurn(selectedThreadId(), prompt, permissionProfile(permissionMode), generateTitle);
+    startPromptTurn(selectedThreadId(), prompt, images,
+                    permissionProfile(permissionMode), generateTitle);
+    return true;
 }
 
 void AppController::startPromptTurn(const QString &threadId, const QString &prompt,
+                                    const QStringList &images,
                                     PermissionProfile permissionProfile, bool generateTitle)
 {
     m_conversation.setThread(threadId);
     const ConversationEvent userEvent{
-        threadId, QStringLiteral("user"), QStringLiteral("You"), prompt, {}};
+        threadId, QStringLiteral("user"), QStringLiteral("You"), prompt,
+        {{QStringLiteral("images"), images}}};
     m_conversation.append(userEvent);
     m_database.saveConversationEvent(userEvent.threadId, userEvent.type, userEvent.title,
                                      userEvent.content, userEvent.metadata);
     m_activeThreadId = threadId;
     setTurnRunning(true);
-    m_codex.sendTurn(threadId, prompt, {}, permissionProfile,
-                     [this, threadId, prompt, generateTitle](const QJsonObject &,
-                                                             const QString &error) {
+    m_codex.sendTurn(threadId, prompt, images, permissionProfile,
+                     [this, threadId, prompt, images, generateTitle](const QJsonObject &,
+                                                                     const QString &error) {
         if (!error.isEmpty()) {
             setTurnRunning(false);
             setStatus(error);
-            emit promptRestoreRequested(prompt);
+            emit promptRestoreRequested(prompt,
+                                        QVariantList(images.cbegin(), images.cend()));
             return;
         }
         if (generateTitle)
-            generateThreadTitle(threadId, prompt);
+            generateThreadTitle(threadId, prompt.isEmpty()
+                ? QStringLiteral("Image attachment") : prompt);
         loadThreads(threadId);
     });
+}
+
+QString AppController::pasteClipboardImage()
+{
+    const auto *clipboard = QApplication::clipboard();
+    const auto *mime = clipboard->mimeData();
+    QImage image = clipboard->image();
+    if (image.isNull() && mime->hasImage()) {
+        const auto imageData = mime->imageData();
+        if (imageData.canConvert<QImage>())
+            image = imageData.value<QImage>();
+    }
+    if (image.isNull() && mime->hasUrls()) {
+        for (const auto &url : mime->urls()) {
+            if (!url.isLocalFile())
+                continue;
+            QImageReader reader(url.toLocalFile());
+            if (reader.canRead()) {
+                image = reader.read();
+                if (!image.isNull())
+                    break;
+            }
+        }
+    }
+    if (image.isNull())
+        return {};
+    if (image.width() > 12000 || image.height() > 12000
+        || qint64(image.width()) * image.height() > 40000000) {
+        setStatus(QStringLiteral("Clipboard image is too large"));
+        return {};
+    }
+    const auto path = QDir(Paths::attachmentRoot()).filePath(
+        QUuid::createUuid().toString(QUuid::WithoutBraces) + QStringLiteral(".png"));
+    if (!image.save(path, "PNG")) {
+        setStatus(QStringLiteral("Could not save the clipboard image"));
+        return {};
+    }
+    setStatus(QStringLiteral("Image attached"));
+    return path;
 }
 
 void AppController::interruptTurn()

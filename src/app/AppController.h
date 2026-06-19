@@ -79,8 +79,9 @@ public:
     Q_INVOKABLE void selectProject(int index);
     Q_INVOKABLE void selectThread(int index);
     Q_INVOKABLE void createThread(const QString &modelId, const QString &permissionMode);
-    Q_INVOKABLE void sendPrompt(const QString &text, const QString &modelId,
-                                const QString &permissionMode);
+    Q_INVOKABLE bool sendPrompt(const QString &text, const QVariantList &images,
+                                const QString &modelId, const QString &permissionMode);
+    Q_INVOKABLE QString pasteClipboardImage();
     Q_INVOKABLE void interruptTurn();
     Q_INVOKABLE void refreshGit();
     Q_INVOKABLE void generateCommitMessage();
@@ -109,7 +110,7 @@ signals:
     void diffChanged();
     void commitDraftReady(const QString &message);
     void commitFinished(bool success, const QString &message);
-    void promptRestoreRequested(const QString &text);
+    void promptRestoreRequested(const QString &text, const QVariantList &images);
 
 private:
     void loadProjects();
@@ -122,6 +123,7 @@ private:
                            const QVariantMap &metadata);
     void beginThread(const QString &modelId, PermissionProfile permissionProfile);
     void startPromptTurn(const QString &threadId, const QString &prompt,
+                         const QStringList &images,
                          PermissionProfile permissionProfile, bool generateTitle = false);
     void generateThreadTitle(const QString &threadId, const QString &prompt);
     void applyThreadTitle(const QString &threadId, const QString &title);
@@ -157,6 +159,7 @@ private:
     QHash<QString, QVariantList> m_threadPlans;
     QHash<QString, QString> m_threadPlanExplanations;
     QString m_pendingPrompt;
+    QStringList m_pendingImages;
     QString m_pendingModelId;
     PermissionProfile m_pendingPermissionProfile = PermissionProfile::FullAccess;
     bool m_threadCreationPending = false;

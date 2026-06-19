@@ -7,5 +7,6 @@ QString dataRoot();
 QString stateRoot();
 QString databasePath();
 QString logRoot();
+QString attachmentRoot();
 bool ensureRuntimeDirectories(QString *error = nullptr);
 }

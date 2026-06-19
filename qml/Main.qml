@@ -19,6 +19,7 @@ Kirigami.ApplicationWindow {
     property bool navigationVisible: width >= 780
     readonly property bool hasProject: appController.selectedProjectPath.length > 0
     readonly property bool hasThread: appController.selectedThreadId.length > 0
+    property var composerImages: []
 
     function modelIndex(modelId) {
         const exact = modelPicker.indexOfValue(modelId)
@@ -29,6 +30,10 @@ Kirigami.ApplicationWindow {
                 return i
         }
         return appController.models.length > 0 ? 0 : -1
+    }
+
+    function localImageUrl(path) {
+        return path.length > 0 ? "file://" + encodeURI(path) : ""
     }
 
     CommitDialog {
@@ -43,9 +48,14 @@ Kirigami.ApplicationWindow {
 
     Connections {
         target: appController
-        function onPromptRestoreRequested(text) {
+        function onPromptRestoreRequested(text, images) {
             if (composer.text.length === 0)
                 composer.text = text
+            const restored = Array.from(images || [])
+            for (let i = 0; i < restored.length; ++i) {
+                if (root.composerImages.indexOf(restored[i]) < 0)
+                    root.composerImages = root.composerImages.concat([restored[i]])
+            }
         }
     }
 
@@ -605,6 +615,53 @@ Kirigami.ApplicationWindow {
 
                     ColumnLayout {
                         anchors.fill: parent
+                        Flickable {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: root.composerImages.length > 0 ? 92 : 0
+                            visible: root.composerImages.length > 0
+                            contentWidth: attachmentRow.implicitWidth
+                            contentHeight: height
+                            clip: true
+
+                            Row {
+                                id: attachmentRow
+                                height: parent.height
+                                spacing: Kirigami.Units.smallSpacing
+
+                                Repeater {
+                                    model: root.composerImages
+                                    delegate: Frame {
+                                        required property string modelData
+                                        required property int index
+                                        width: 112
+                                        height: 88
+                                        padding: 3
+
+                                        Image {
+                                            anchors.fill: parent
+                                            source: root.localImageUrl(modelData)
+                                            fillMode: Image.PreserveAspectCrop
+                                            asynchronous: true
+                                            cache: false
+                                        }
+                                        RoundButton {
+                                            anchors.top: parent.top
+                                            anchors.right: parent.right
+                                            anchors.margins: 3
+                                            width: 26
+                                            height: 26
+                                            text: "×"
+                                            Accessible.name: "Remove image"
+                                            onClicked: {
+                                                const next = root.composerImages.slice()
+                                                next.splice(index, 1)
+                                                root.composerImages = next
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         TextArea {
                             id: composer
                             Layout.fillWidth: true
@@ -616,6 +673,15 @@ Kirigami.ApplicationWindow {
                             wrapMode: TextEdit.Wrap
                             enabled: root.hasProject && appController.providerReady
                             Keys.onPressed: event => {
+                                if (event.matches(StandardKey.Paste)) {
+                                    const imagePath = appController.pasteClipboardImage()
+                                    if (imagePath.length > 0) {
+                                        root.composerImages =
+                                                root.composerImages.concat([imagePath])
+                                        event.accepted = true
+                                        return
+                                    }
+                                }
                                 if (!(event.modifiers & Qt.ShiftModifier)
                                         && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)) {
                                     sendButton.clicked()
@@ -672,14 +738,19 @@ Kirigami.ApplicationWindow {
                                 ToolTip.text: appController.turnRunning
                                               ? "Send guidance" : "Send (Enter)"
                                 ToolTip.visible: hovered
-                                enabled: composer.text.trim().length > 0
+                                enabled: (composer.text.trim().length > 0
+                                          || root.composerImages.length > 0)
                                          && root.hasProject
                                          && appController.providerReady
                                 onClicked: {
-                                    appController.sendPrompt(composer.text,
-                                                             appController.codingModelId,
-                                                             permissionPicker.currentValue)
-                                    composer.clear()
+                                    if (appController.sendPrompt(
+                                                composer.text,
+                                                root.composerImages,
+                                                appController.codingModelId,
+                                                permissionPicker.currentValue)) {
+                                        composer.clear()
+                                        root.composerImages = []
+                                    }
                                 }
                             }
                         }

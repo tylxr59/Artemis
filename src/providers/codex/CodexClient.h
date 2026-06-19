@@ -26,7 +26,8 @@ public:
     void sendTurn(const QString &threadId, const QString &text,
                   const QStringList &images, PermissionProfile permissionProfile,
                   ResultHandler handler) override;
-    void steerTurn(const QString &threadId, const QString &text, ResultHandler handler) override;
+    void steerTurn(const QString &threadId, const QString &text,
+                   const QStringList &images, ResultHandler handler) override;
     void interruptTurn(const QString &threadId, ResultHandler handler) override;
 
     bool ready() const;
