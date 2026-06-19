@@ -5,9 +5,11 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QHash>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QPixmap>
 #include <QSettings>
 #include <QSet>
 #include <QStandardPaths>
@@ -427,9 +429,22 @@ bool openTerminal(const QString &desktopId, const QString &path, QString *error)
 
 void showNotification(const QString &title, const QString &text)
 {
+    if (QGuiApplication::applicationState() == Qt::ApplicationActive)
+        return;
+
+    const QPixmap icon(QStringLiteral(":/icons/artemis-bow-256.png"));
+    const auto configuration = QStandardPaths::locate(
+        QStandardPaths::GenericDataLocation,
+        QStringLiteral("knotifications6/artemis.notifyrc"));
+    if (!configuration.isEmpty()) {
+        KNotification::event(
+            QStringLiteral("threadFinished"), title, text, icon,
+            KNotification::CloseOnTimeout, QStringLiteral("artemis"));
+        return;
+    }
     KNotification::event(
-        QStringLiteral("threadFinished"), title, text, QStringLiteral("artemis"),
-        KNotification::CloseOnTimeout, QStringLiteral("artemis"));
+        KNotification::Notification, title, text, icon,
+        KNotification::CloseOnTimeout);
 }
 
 }
