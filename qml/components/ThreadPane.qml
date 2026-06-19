@@ -117,6 +117,7 @@ Pane {
                         Layout.fillWidth: true
                         Layout.leftMargin: Kirigami.Units.largeSpacing
                         Layout.rightMargin: Kirigami.Units.largeSpacing
+                        Layout.bottomMargin: Kirigami.Units.largeSpacing
                         spacing: Kirigami.Units.smallSpacing
 
                         Label {
@@ -208,7 +209,6 @@ Pane {
                         }
                         Kirigami.PlaceholderMessage {
                             Layout.fillWidth: true
-                            Layout.topMargin: Kirigami.Units.gridUnit * 2
                             visible: root.controller.currentPlan.length === 0
                             text: root.controller.selectedThreadId.length > 0
                                   ? "No plan steps yet" : "No thread selected"

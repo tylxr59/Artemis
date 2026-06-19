@@ -8,7 +8,13 @@ Kirigami.ApplicationWindow {
     id: root
     width: 1500
     height: 900
-    minimumWidth: 760
+    readonly property real conversationMinimumWidth: 760
+    readonly property real navigationMinimumWidth: 220
+    readonly property real threadPanelMinimumWidth: 300
+    readonly property real splitHandleWidth: 5
+    minimumWidth: conversationMinimumWidth
+                  + (sidePanelVisible
+                     ? threadPanelMinimumWidth + splitHandleWidth : 0)
     minimumHeight: 560
     visible: true
     title: appController.selectedThreadTitle.length > 0
@@ -16,7 +22,12 @@ Kirigami.ApplicationWindow {
 
     property bool sidePanelVisible: false
     property string sidePanelMode: "thread"
-    property bool navigationVisible: width >= 780
+    property bool navigationVisible: width >= conversationMinimumWidth
+                                     + navigationMinimumWidth
+                                     + splitHandleWidth
+                                     + (sidePanelVisible
+                                        ? threadPanelMinimumWidth
+                                          + splitHandleWidth : 0)
     readonly property bool hasProject: appController.selectedProjectPath.length > 0
     readonly property bool hasThread: appController.selectedThreadId.length > 0
     property var composerImages: []
@@ -315,7 +326,7 @@ Kirigami.ApplicationWindow {
         orientation: Qt.Horizontal
 
         handle: Rectangle {
-            implicitWidth: 5
+            implicitWidth: root.splitHandleWidth
             color: SplitHandle.pressed
                    ? Kirigami.Theme.highlightColor
                    : SplitHandle.hovered
@@ -335,7 +346,8 @@ Kirigami.ApplicationWindow {
             id: navigationPane
             visible: root.navigationVisible || navigationDrawer.visible
             SplitView.preferredWidth: 310
-            SplitView.minimumWidth: root.navigationVisible ? 220 : 0
+            SplitView.minimumWidth: root.navigationVisible
+                                    ? root.navigationMinimumWidth : 0
             SplitView.maximumWidth: root.navigationVisible ? 480 : 0
             padding: Kirigami.Units.largeSpacing
             clip: true
@@ -575,7 +587,7 @@ Kirigami.ApplicationWindow {
         Pane {
             id: conversationPane
             SplitView.fillWidth: true
-            SplitView.minimumWidth: 360
+            SplitView.minimumWidth: root.conversationMinimumWidth
             padding: 0
 
             ColumnLayout {
@@ -586,6 +598,10 @@ Kirigami.ApplicationWindow {
                     id: conversationList
                     property bool followTail: true
                     property bool tailScrollPending: false
+                    readonly property real contentViewportWidth: Math.max(
+                        0, width - (conversationScrollBar.visible
+                                    ? conversationScrollBar.width
+                                      + Kirigami.Units.smallSpacing : 0))
 
                     function updateFollowTail() {
                         const distanceFromEnd = contentHeight - height - contentY
@@ -624,7 +640,7 @@ Kirigami.ApplicationWindow {
                     topMargin: Kirigami.Units.largeSpacing
                     bottomMargin: Kirigami.Units.largeSpacing
                     footer: Item {
-                        width: conversationList.width
+                        width: conversationList.contentViewportWidth
                         implicitHeight: workingStatus.visible
                                         ? workingStatus.implicitHeight : 0
 
@@ -650,7 +666,7 @@ Kirigami.ApplicationWindow {
                         required property var metadata
 
                         readonly property real horizontalGutter: Kirigami.Units.largeSpacing
-                        width: conversationList.width
+                        width: conversationList.contentViewportWidth
                         implicitHeight: conversationDelegate.implicitHeight
                         onImplicitHeightChanged: {
                             if (index === conversationList.count - 1)
@@ -811,11 +827,20 @@ Kirigami.ApplicationWindow {
                                 }
                             }
                         }
-                        RowLayout {
+                        GridLayout {
+                            id: composerControls
+                            readonly property bool compact: conversationPane.width < 800
                             Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            columns: compact ? 2 : 7
+
                             ComboBox {
                                 id: modelPicker
-                                Layout.preferredWidth: 180
+                                Layout.row: 0
+                                Layout.column: 0
+                                Layout.fillWidth: composerControls.compact
+                                Layout.minimumWidth: 0
+                                Layout.preferredWidth: composerControls.compact ? 0 : 180
                                 model: appController.models
                                 textRole: "name"
                                 valueRole: "id"
@@ -838,7 +863,11 @@ Kirigami.ApplicationWindow {
                             }
                             ComboBox {
                                 id: reasoningPicker
-                                Layout.preferredWidth: 150
+                                Layout.row: 0
+                                Layout.column: 1
+                                Layout.fillWidth: composerControls.compact
+                                Layout.minimumWidth: 0
+                                Layout.preferredWidth: composerControls.compact ? 0 : 150
                                 model: root.reasoningOptions()
                                 textRole: "label"
                                 valueRole: "value"
@@ -852,7 +881,11 @@ Kirigami.ApplicationWindow {
                             }
                             ComboBox {
                                 id: permissionPicker
-                                Layout.preferredWidth: 170
+                                Layout.row: composerControls.compact ? 1 : 0
+                                Layout.column: composerControls.compact ? 0 : 2
+                                Layout.fillWidth: composerControls.compact
+                                Layout.minimumWidth: 0
+                                Layout.preferredWidth: composerControls.compact ? 0 : 170
                                 model: [
                                     { value: "approval-required", label: "Supervised" },
                                     { value: "auto-accept-edits", label: "Auto-accept edits" },
@@ -871,7 +904,11 @@ Kirigami.ApplicationWindow {
                             }
                             Button {
                                 id: collaborationModeButton
-                                Layout.preferredWidth: 92
+                                Layout.row: composerControls.compact ? 1 : 0
+                                Layout.column: composerControls.compact ? 1 : 3
+                                Layout.fillWidth: composerControls.compact
+                                Layout.minimumWidth: 0
+                                Layout.preferredWidth: composerControls.compact ? 0 : 92
                                 text: checked ? "Plan" : "Build"
                                 checkable: true
                                 enabled: !appController.turnRunning
@@ -881,11 +918,20 @@ Kirigami.ApplicationWindow {
                                               : "Work on the task and make changes."
                                 ToolTip.visible: hovered
                             }
-                            Item { Layout.fillWidth: true }
+                            Item {
+                                visible: !composerControls.compact
+                                Layout.row: 0
+                                Layout.column: 4
+                                Layout.fillWidth: true
+                            }
                             Item {
                                 id: contextUsageIndicator
+                                Layout.row: composerControls.compact ? 2 : 0
+                                Layout.column: composerControls.compact ? 0 : 5
                                 Layout.preferredWidth: 36
                                 Layout.preferredHeight: 36
+                                Layout.alignment: composerControls.compact
+                                                  ? Qt.AlignLeft : Qt.AlignCenter
                                 visible: appController.hasTokenUsage
 
                                 Canvas {
@@ -980,6 +1026,10 @@ Kirigami.ApplicationWindow {
                             }
                             RoundButton {
                                 id: sendButton
+                                Layout.row: composerControls.compact ? 2 : 0
+                                Layout.column: composerControls.compact ? 1 : 6
+                                Layout.alignment: composerControls.compact
+                                                  ? Qt.AlignRight : Qt.AlignCenter
                                 text: appController.turnRunning ? "■" : "↑"
                                 ToolTip.text: appController.turnRunning
                                               ? "Stop" : "Send (Enter)"
@@ -1017,7 +1067,7 @@ Kirigami.ApplicationWindow {
         ThreadPane {
             visible: root.sidePanelVisible
             SplitView.preferredWidth: Math.min(620, Math.max(390, root.width * 0.32))
-            SplitView.minimumWidth: visible ? 300 : 0
+            SplitView.minimumWidth: visible ? root.threadPanelMinimumWidth : 0
             SplitView.maximumWidth: visible ? 700 : 0
             controller: appController
             mode: root.sidePanelMode
