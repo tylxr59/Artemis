@@ -463,6 +463,7 @@ Kirigami.ApplicationWindow {
                 ListView {
                     id: conversationList
                     property bool followTail: true
+                    property bool tailScrollPending: false
 
                     function updateFollowTail() {
                         const distanceFromEnd = contentHeight - height - contentY
@@ -470,9 +471,12 @@ Kirigami.ApplicationWindow {
                     }
 
                     function scrollToEndIfFollowing() {
-                        if (!followTail || conversationScrollBar.pressed)
+                        if (!followTail || conversationScrollBar.pressed
+                                || tailScrollPending)
                             return
+                        tailScrollPending = true
                         Qt.callLater(function() {
+                            conversationList.tailScrollPending = false
                             if (conversationList.followTail
                                     && !conversationScrollBar.pressed)
                                 conversationList.positionViewAtEnd()
@@ -521,6 +525,7 @@ Kirigami.ApplicationWindow {
                     }
                     onCountChanged: scrollToEndIfFollowing()
                     onContentHeightChanged: scrollToEndIfFollowing()
+                    onMovementStarted: followTail = false
                     onMovementEnded: updateFollowTail()
                     onWidthChanged: forceLayout()
 
