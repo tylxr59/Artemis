@@ -301,7 +301,9 @@ Kirigami.ApplicationWindow {
                                     onClicked: {
                                         if (!projectDelegate.selected)
                                             appController.selectProject(projectDelegate.index)
-                                        newThreadMenu.open()
+                                        appController.createThread(
+                                            appController.codingModelId,
+                                            permissionPicker.currentValue)
                                     }
                                 }
                             }
@@ -355,9 +357,8 @@ Kirigami.ApplicationWindow {
                                                 elide: Text.ElideRight
                                             }
                                             Label {
-                                                text: (modelData.location === "worktree"
-                                                       ? "Worktree" : "Local")
-                                                      + (modelData.external ? " · External" : "")
+                                                visible: modelData.external
+                                                text: "External"
                                                 font: Kirigami.Theme.smallFont
                                                 opacity: 0.55
                                             }
@@ -417,22 +418,6 @@ Kirigami.ApplicationWindow {
                             wrapMode: Text.Wrap
                             opacity: 0.65
                         }
-                    }
-                }
-                Menu {
-                    id: newThreadMenu
-                    MenuItem {
-                        text: "New local thread"
-                        onTriggered: appController.createThread(
-                                         false, appController.codingModelId,
-                                         permissionPicker.currentValue)
-                    }
-                    MenuItem {
-                        text: "New worktree thread"
-                        enabled: appController.selectedProjectIsGit
-                        onTriggered: appController.createThread(
-                                         true, appController.codingModelId,
-                                         permissionPicker.currentValue)
                     }
                 }
                 Kirigami.Separator { Layout.fillWidth: true }

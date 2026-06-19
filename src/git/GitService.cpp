@@ -86,14 +86,6 @@ void GitService::diff(const QString &path, Handler handler)
                QStringLiteral("--binary"), QStringLiteral("HEAD")}, std::move(handler));
 }
 
-void GitService::createWorktree(const QString &projectPath, const QString &destination, Handler handler)
-{
-    QDir().mkpath(QFileInfo(destination).absolutePath());
-    run(projectPath, {QStringLiteral("worktree"), QStringLiteral("add"),
-                      QStringLiteral("--detach"), destination, QStringLiteral("HEAD")},
-        std::move(handler));
-}
-
 void GitService::commitAllAndPush(const QString &path, const QString &message, Handler handler)
 {
     const auto add = runSync(path, {QStringLiteral("add"), QStringLiteral("-A")});

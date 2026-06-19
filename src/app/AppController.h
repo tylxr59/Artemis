@@ -37,7 +37,6 @@ class AppController : public QObject {
     Q_PROPERTY(QString diffText READ diffText NOTIFY diffChanged)
     Q_PROPERTY(QString gitStatusText READ gitStatusText NOTIFY diffChanged)
     Q_PROPERTY(QString databasePath READ databasePath CONSTANT)
-    Q_PROPERTY(QString worktreeRoot READ worktreeRoot CONSTANT)
 public:
     explicit AppController(QObject *parent = nullptr);
 
@@ -65,7 +64,6 @@ public:
     QString diffText() const;
     QString gitStatusText() const;
     QString databasePath() const;
-    QString worktreeRoot() const;
 
     Q_INVOKABLE void chooseProjectFolder();
     Q_INVOKABLE void addProject(const QString &path);
@@ -74,8 +72,7 @@ public:
     Q_INVOKABLE void removeThread(int index);
     Q_INVOKABLE void selectProject(int index);
     Q_INVOKABLE void selectThread(int index);
-    Q_INVOKABLE void createThread(bool worktree, const QString &modelId,
-                                  const QString &permissionMode);
+    Q_INVOKABLE void createThread(const QString &modelId, const QString &permissionMode);
     Q_INVOKABLE void sendPrompt(const QString &text, const QString &modelId,
                                 const QString &permissionMode);
     Q_INVOKABLE void interruptTurn();
@@ -116,9 +113,7 @@ private:
     void handleDomainEvent(const QString &threadId, const QString &type,
                            const QString &title, const QString &content,
                            const QVariantMap &metadata);
-    void beginThread(const QString &workspace, const QString &location,
-                     const QString &modelId, PermissionProfile permissionProfile,
-                     bool saveWorktree);
+    void beginThread(const QString &modelId, PermissionProfile permissionProfile);
     void startPromptTurn(const QString &threadId, const QString &prompt,
                          PermissionProfile permissionProfile, bool generateTitle = false);
     void generateThreadTitle(const QString &threadId, const QString &prompt);

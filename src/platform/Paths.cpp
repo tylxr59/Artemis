@@ -21,11 +21,6 @@ QString databasePath()
     return QDir(dataRoot()).filePath(QStringLiteral("artemis.sqlite3"));
 }
 
-QString worktreeRoot()
-{
-    return QDir(dataRoot()).filePath(QStringLiteral("worktrees"));
-}
-
 QString logRoot()
 {
     return QDir(stateRoot()).filePath(QStringLiteral("logs"));
@@ -33,7 +28,7 @@ QString logRoot()
 
 bool ensureRuntimeDirectories(QString *error)
 {
-    for (const auto &path : {dataRoot(), worktreeRoot(), logRoot()}) {
+    for (const auto &path : {dataRoot(), logRoot()}) {
         if (!QDir().mkpath(path)) {
             if (error)
                 *error = QStringLiteral("Could not create %1").arg(path);

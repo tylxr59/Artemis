@@ -45,7 +45,7 @@ private slots:
         QVERIFY2(id > 0, qPrintable(error));
         QVERIFY(!database.projects().isEmpty());
         QVERIFY(database.bindThread(id, QStringLiteral("thread-to-hide"),
-                                    QDir::tempPath(), QStringLiteral("local"), false, &error));
+                                    QDir::tempPath(), false, &error));
         QVERIFY(database.hideThread(id, QStringLiteral("thread-to-hide"), &error));
         QVERIFY(database.hiddenThreadIds(id).contains(QStringLiteral("thread-to-hide")));
         QVERIFY(database.threadBindings(id).isEmpty());

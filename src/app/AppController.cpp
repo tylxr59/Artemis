@@ -10,7 +10,6 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QUrl>
-#include <QUuid>
 
 #include <utility>
 
@@ -134,7 +133,6 @@ QString AppController::statusText() const { return m_status; }
 QString AppController::diffText() const { return m_diff; }
 QString AppController::gitStatusText() const { return m_gitStatus; }
 QString AppController::databasePath() const { return m_database.path(); }
-QString AppController::worktreeRoot() const { return Paths::worktreeRoot(); }
 
 void AppController::chooseProjectFolder()
 {
@@ -275,20 +273,11 @@ void AppController::loadThreads(const QString &threadToSelect)
         return;
     const auto bindings = m_database.threadBindings(project.id);
     const auto hiddenThreadIds = m_database.hiddenThreadIds(project.id);
-    QJsonArray workspaces;
-    workspaces.append(project.path);
     QHash<QString, QVariantMap> bindingById;
-    for (const auto &binding : bindings) {
+    for (const auto &binding : bindings)
         bindingById.insert(binding.value(QStringLiteral("threadId")).toString(), binding);
-        const auto workspace = binding.value(QStringLiteral("workspacePath")).toString();
-        bool present = false;
-        for (const auto &existing : workspaces)
-            present = present || existing.toString() == workspace;
-        if (!present)
-            workspaces.append(workspace);
-    }
     m_codex.request(QStringLiteral("thread/list"),
-        {{QStringLiteral("cwd"), workspaces},
+        {{QStringLiteral("cwd"), QJsonArray{project.path}},
          {QStringLiteral("limit"), 100},
          {QStringLiteral("sortKey"), QStringLiteral("updated_at")},
          {QStringLiteral("sortDirection"), QStringLiteral("desc")}},
@@ -317,16 +306,9 @@ void AppController::loadThreads(const QString &threadToSelect)
                                        {QStringLiteral("cwd"), cwd},
                                        {QStringLiteral("model"), thread.value(QStringLiteral("model")).toString()},
                                        {QStringLiteral("external"), known
-                                            ? binding.value(QStringLiteral("external")).toBool() : true},
-                                       {QStringLiteral("location"), known
-                                            ? binding.value(QStringLiteral("location")).toString()
-                                            : (cwd == project.path ? QStringLiteral("local") : QStringLiteral("worktree"))}});
-            if (!known) {
-                m_database.bindThread(project.id, id, cwd,
-                                      cwd == project.path ? QStringLiteral("local")
-                                                          : QStringLiteral("worktree"),
-                                      true);
-            }
+                                            ? binding.value(QStringLiteral("external")).toBool() : true}});
+            if (!known)
+                m_database.bindThread(project.id, id, project.path, true);
         }
         m_threads = rows;
         emit threadsChanged();
@@ -439,46 +421,22 @@ PermissionProfile AppController::permissionProfile(const QString &mode) const
     return PermissionProfile::FullAccess;
 }
 
-void AppController::createThread(bool worktree, const QString &modelId,
-                                 const QString &permissionMode)
+void AppController::createThread(const QString &modelId, const QString &permissionMode)
 {
     const auto project = m_projects.row(m_selectedProject);
     if (project.id < 0 || !m_codex.ready())
         return;
-    if (worktree && !project.git) {
-        setStatus(QStringLiteral("Managed worktrees require a Git repository"));
-        return;
-    }
     if (m_threadCreationPending)
         return;
     m_threadCreationPending = true;
-    const auto profile = permissionProfile(permissionMode);
-    if (!worktree) {
-        beginThread(project.path, QStringLiteral("local"), modelId, profile, false);
-        return;
-    }
-    const auto token = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    const auto destination = QDir(Paths::worktreeRoot())
-        .filePath(QStringLiteral("%1/%2").arg(project.id).arg(token));
-    setStatus(QStringLiteral("Creating managed worktree…"));
-    m_git.createWorktree(project.path, destination,
-                         [this, destination, modelId, profile](const GitResult &result) {
-        if (!result.ok()) {
-            m_threadCreationPending = false;
-            setStatus(QString::fromUtf8(result.error));
-            return;
-        }
-        beginThread(destination, QStringLiteral("worktree"), modelId, profile, true);
-    });
+    beginThread(modelId, permissionProfile(permissionMode));
 }
 
-void AppController::beginThread(const QString &workspace, const QString &location,
-                                const QString &modelId, PermissionProfile permissionProfile,
-                                bool saveWorktree)
+void AppController::beginThread(const QString &modelId, PermissionProfile permissionProfile)
 {
     const auto project = m_projects.row(m_selectedProject);
-    ThreadConfiguration config{project.path, workspace, modelId, {}, permissionProfile, false};
-    m_codex.startThread(config, [this, project, workspace, location, permissionProfile, saveWorktree](const QJsonObject &result, const QString &error) {
+    ThreadConfiguration config{project.path, project.path, modelId, {}, permissionProfile, false};
+    m_codex.startThread(config, [this, project, permissionProfile](const QJsonObject &result, const QString &error) {
         m_threadCreationPending = false;
         if (!error.isEmpty()) {
             if (!m_pendingPrompt.isEmpty())
@@ -490,22 +448,16 @@ void AppController::beginThread(const QString &workspace, const QString &locatio
         }
         const auto thread = result.value(QStringLiteral("thread")).toObject();
         const auto id = thread.value(QStringLiteral("id")).toString();
-        m_database.bindThread(project.id, id, workspace, location, false);
-        if (saveWorktree) {
-            const auto head = GitService::runSync(workspace, {QStringLiteral("rev-parse"), QStringLiteral("HEAD")});
-            m_database.saveWorktree(project.id, id, workspace,
-                                    QString::fromUtf8(head.output).trimmed());
-        }
+        m_database.bindThread(project.id, id, project.path, false);
         loadProjects();
         m_threads.prepend(QVariantMap{
             {QStringLiteral("id"), id},
             {QStringLiteral("title"), QStringLiteral("Untitled thread")},
             {QStringLiteral("named"), false},
-            {QStringLiteral("cwd"), workspace},
+            {QStringLiteral("cwd"), project.path},
             {QStringLiteral("model"), m_pendingModelId.isEmpty()
                 ? m_codingModelId : m_pendingModelId},
-            {QStringLiteral("external"), false},
-            {QStringLiteral("location"), location}});
+            {QStringLiteral("external"), false}});
         m_selectedThread = 0;
         m_conversation.setThread(id);
         emit threadsChanged();
@@ -533,7 +485,7 @@ void AppController::sendPrompt(const QString &text, const QString &modelId,
         m_pendingPrompt = prompt;
         m_pendingModelId = modelId;
         m_pendingPermissionProfile = permissionProfile(permissionMode);
-        createThread(false, modelId, permissionMode);
+        createThread(modelId, permissionMode);
         return;
     }
     if (m_turnRunning) {

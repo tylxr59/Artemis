@@ -95,8 +95,7 @@ Pane {
                         }
                         Label { text: "Workspace"; opacity: 0.6 }
                         Label {
-                            text: root.controller.selectedThreadInfo.location === "worktree"
-                                  ? "Managed worktree" : "Project folder"
+                            text: "Project folder"
                             Layout.fillWidth: true
                         }
                         Label { text: "Path"; opacity: 0.6 }

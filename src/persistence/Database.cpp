@@ -46,13 +46,13 @@ bool Database::migrate(QString *error)
     const QStringList statements = {
         QStringLiteral("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
-        QStringLiteral("CREATE TABLE IF NOT EXISTS thread_bindings (provider_thread_id TEXT PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, workspace_path TEXT NOT NULL, location TEXT NOT NULL DEFAULT 'local', external INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+        QStringLiteral("CREATE TABLE IF NOT EXISTS thread_bindings (provider_thread_id TEXT PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, workspace_path TEXT NOT NULL, external INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS hidden_threads (provider_thread_id TEXT NOT NULL, project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, hidden_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(provider_thread_id, project_id))"),
-        QStringLiteral("CREATE TABLE IF NOT EXISTS managed_worktrees (provider_thread_id TEXT PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, path TEXT NOT NULL UNIQUE, base_commit TEXT NOT NULL, stale INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+        QStringLiteral("DROP TABLE IF EXISTS managed_worktrees"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS project_preferences (project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(project_id, key))"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS application_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS recent_models (model_id TEXT PRIMARY KEY, used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
-        QStringLiteral("INSERT OR IGNORE INTO schema_migrations(version) VALUES (1)")
+        QStringLiteral("INSERT OR IGNORE INTO schema_migrations(version) VALUES (2)")
     };
     if (!m_db.transaction()) {
         if (error)
@@ -119,18 +119,17 @@ bool Database::removeProject(qint64 id, QString *error)
 }
 
 bool Database::bindThread(qint64 projectId, const QString &threadId, const QString &workspacePath,
-                          const QString &location, bool external, QString *error)
+                          bool external, QString *error)
 {
     QSqlQuery query(m_db);
     query.prepare(QStringLiteral(
-        "INSERT INTO thread_bindings(provider_thread_id, project_id, workspace_path, location, external) "
-        "VALUES (?, ?, ?, ?, ?) ON CONFLICT(provider_thread_id) DO UPDATE SET "
-        "project_id=excluded.project_id, workspace_path=excluded.workspace_path, location=excluded.location, "
+        "INSERT INTO thread_bindings(provider_thread_id, project_id, workspace_path, external) "
+        "VALUES (?, ?, ?, ?) ON CONFLICT(provider_thread_id) DO UPDATE SET "
+        "project_id=excluded.project_id, workspace_path=excluded.workspace_path, "
         "external=excluded.external, updated_at=CURRENT_TIMESTAMP"));
     query.addBindValue(threadId);
     query.addBindValue(projectId);
     query.addBindValue(workspacePath);
-    query.addBindValue(location);
     query.addBindValue(external);
     if (!query.exec()) {
         if (error)
@@ -144,14 +143,16 @@ QVector<QVariantMap> Database::threadBindings(qint64 projectId) const
 {
     QVector<QVariantMap> result;
     QSqlQuery query(m_db);
-    query.prepare(QStringLiteral("SELECT provider_thread_id, workspace_path, location, external FROM thread_bindings WHERE project_id=? ORDER BY updated_at DESC"));
+    query.prepare(QStringLiteral(
+        "SELECT b.provider_thread_id, b.workspace_path, b.external "
+        "FROM thread_bindings b JOIN projects p ON p.id=b.project_id "
+        "WHERE b.project_id=? AND b.workspace_path=p.path ORDER BY b.updated_at DESC"));
     query.addBindValue(projectId);
     query.exec();
     while (query.next())
         result.push_back({{QStringLiteral("threadId"), query.value(0)},
                           {QStringLiteral("workspacePath"), query.value(1)},
-                          {QStringLiteral("location"), query.value(2)},
-                          {QStringLiteral("external"), query.value(3)}});
+                          {QStringLiteral("external"), query.value(2)}});
     return result;
 }
 
@@ -199,23 +200,6 @@ bool Database::hideThread(qint64 projectId, const QString &threadId, QString *er
         return false;
     }
     return m_db.commit();
-}
-
-bool Database::saveWorktree(qint64 projectId, const QString &threadId, const QString &path,
-                            const QString &baseCommit, QString *error)
-{
-    QSqlQuery query(m_db);
-    query.prepare(QStringLiteral("INSERT OR REPLACE INTO managed_worktrees(provider_thread_id, project_id, path, base_commit, stale) VALUES (?, ?, ?, ?, 0)"));
-    query.addBindValue(threadId);
-    query.addBindValue(projectId);
-    query.addBindValue(path);
-    query.addBindValue(baseCommit);
-    if (!query.exec()) {
-        if (error)
-            *error = query.lastError().text();
-        return false;
-    }
-    return true;
 }
 
 QString Database::setting(const QString &key, const QString &fallback) const

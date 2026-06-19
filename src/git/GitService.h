@@ -30,7 +30,6 @@ public:
 
     void status(const QString &path, Handler handler);
     void diff(const QString &path, Handler handler);
-    void createWorktree(const QString &projectPath, const QString &destination, Handler handler);
     void commitAllAndPush(const QString &path, const QString &message, Handler handler);
     void createBranchCommitPush(const QString &path, const QString &branch,
                                 const QString &message, const QString &remote, Handler handler);

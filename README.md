@@ -6,7 +6,7 @@ Kirigami, and the Codex app-server protocol.
 Current vertical slice:
 
 - Project and persistent Codex thread navigation
-- Local and managed-worktree threads
+- Local project threads
 - Streamed agent activity
 - Git status and diff review
 - AI-generated commit messages

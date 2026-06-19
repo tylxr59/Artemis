@@ -20,8 +20,6 @@ ScrollView {
             Label { text: root.controller.providerReady ? "Connected" : "Disconnected" }
             Label { text: "Database" }
             Label { text: root.controller.databasePath; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
-            Label { text: "Worktrees" }
-            Label { text: root.controller.worktreeRoot; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
             Label { text: "Project" }
             Label { text: root.controller.selectedProjectPath || "None"; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
             Label { text: "Status" }
