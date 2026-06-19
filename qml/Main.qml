@@ -116,19 +116,10 @@ Kirigami.ApplicationWindow {
             dismissTimer.restart()
         }
 
-        x: {
-            const position = composerFrame.mapToItem(Overlay.overlay, 0, 0)
-            return Math.max(Kirigami.Units.largeSpacing,
-                            position.x + (composerFrame.width - width) / 2)
-        }
-        y: {
-            const position = composerFrame.mapToItem(Overlay.overlay, 0, 0)
-            return Math.max(Kirigami.Units.largeSpacing,
-                            position.y - height - Kirigami.Units.smallSpacing)
-        }
-        width: Math.min(840, Math.max(280,
-                                     conversationPane.width
-                                     - Kirigami.Units.largeSpacing * 2))
+        x: Kirigami.Units.largeSpacing
+        y: Kirigami.Units.largeSpacing
+        width: Math.min(360, Overlay.overlay.width
+                             - Kirigami.Units.largeSpacing * 2)
         padding: Kirigami.Units.smallSpacing
         modal: false
         focus: false
@@ -147,7 +138,7 @@ Kirigami.ApplicationWindow {
                 text: statusToast.message
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
-                maximumLineCount: 3
+                maximumLineCount: 4
                 elide: Text.ElideRight
             }
             ToolButton {
@@ -883,6 +874,8 @@ Kirigami.ApplicationWindow {
                                         const context = getContext("2d")
                                         const center = width / 2
                                         const radius = Math.min(width, height) / 2 - 2
+                                        if (radius <= 0)
+                                            return
                                         const start = -Math.PI / 2
                                         const progress = Math.min(
                                             1, appController.contextUsagePercent / 100)
