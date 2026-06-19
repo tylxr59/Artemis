@@ -1,10 +1,13 @@
 #include "git/GitService.h"
 #include "persistence/Database.h"
+#include "platform/Paths.h"
+#include "providers/codex/CodexClient.h"
 
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
 #include <QStandardPaths>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
@@ -18,6 +21,9 @@ private slots:
     void initTestCase()
     {
         QStandardPaths::setTestModeEnabled(true);
+        QFile::remove(Paths::databasePath());
+        QFile::remove(Paths::databasePath() + QStringLiteral("-wal"));
+        QFile::remove(Paths::databasePath() + QStringLiteral("-shm"));
     }
 
     void branchSuggestion()
@@ -34,6 +40,9 @@ private slots:
         const auto init = GitService::runSync(directory.path(), {QStringLiteral("init")});
         QVERIFY2(init.ok(), init.error.constData());
         QVERIFY(GitService::isRepository(directory.path()));
+        QVERIFY(QDir().mkpath(directory.filePath(QStringLiteral("nested/project"))));
+        QVERIFY(GitService::isRepository(
+            directory.filePath(QStringLiteral("nested/project"))));
     }
 
     void gitStatusChangeDetection()
@@ -59,6 +68,7 @@ private slots:
         Database database;
         QString error;
         QVERIFY2(database.open(&error), qPrintable(error));
+        QCOMPARE(database.schemaVersion(), 3);
         const auto id = database.addProject(QDir::tempPath() + QStringLiteral("/artemis-test-project"),
                                             QStringLiteral("Test"), &error);
         QVERIFY2(id > 0, qPrintable(error));
@@ -84,7 +94,9 @@ private slots:
         QVERIFY(database.saveConversationEvent(
             historyThread, QStringLiteral("assistant"),
             QStringLiteral("Artemis"), QStringLiteral("Final answer"),
-            {{QStringLiteral("itemId"), QStringLiteral("item-2")}}, &error));
+            {{QStringLiteral("itemId"), QStringLiteral("item-2")},
+             {QStringLiteral("images"),
+              QStringList{QStringLiteral("/tmp/artemis-reference.png")}}}, &error));
         const auto events = database.conversationEvents(historyThread);
         QCOMPARE(events.size(), 2);
         QCOMPARE(events.at(0).value(QStringLiteral("title")).toString(),
@@ -93,8 +105,98 @@ private slots:
                  QStringLiteral("completed output"));
         QCOMPARE(events.at(1).value(QStringLiteral("content")).toString(),
                  QStringLiteral("Final answer"));
+        QVERIFY(database.referencedAttachmentPaths().contains(
+            QStringLiteral("/tmp/artemis-reference.png")));
         QVERIFY(database.setSetting(QStringLiteral("test"), QStringLiteral("value"), &error));
         QCOMPARE(database.setting(QStringLiteral("test")), QStringLiteral("value"));
+    }
+
+    void databaseMigrationIsIdempotent()
+    {
+        Database database;
+        QString error;
+        QVERIFY2(database.open(&error), qPrintable(error));
+        QCOMPARE(database.schemaVersion(), 3);
+        QVERIFY2(database.migrate(&error), qPrintable(error));
+        QCOMPARE(database.schemaVersion(), 3);
+    }
+
+    void asynchronousGitStartupFailureCompletes()
+    {
+        const auto previousPath = qgetenv("PATH");
+        qputenv("PATH", QByteArray());
+
+        GitService service;
+        GitResult result;
+        bool completed = false;
+        QEventLoop loop;
+        QTimer timeout;
+        timeout.setSingleShot(true);
+        connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
+        timeout.start(3000);
+        service.status(QDir::tempPath(), [&result, &completed, &loop](const GitResult &value) {
+            result = value;
+            completed = true;
+            loop.quit();
+        });
+        loop.exec();
+        qputenv("PATH", previousPath);
+
+        QVERIFY2(timeout.isActive(), "Timed out waiting for Git startup failure");
+        QVERIFY(completed);
+        QVERIFY(!result.ok());
+        QVERIFY(!result.error.isEmpty());
+    }
+
+    void codexStartupFailureIsReported()
+    {
+        qputenv("ARTEMIS_CODEX_EXECUTABLE",
+                QByteArray("/definitely/missing/artemis-codex"));
+        CodexClient client;
+        QSignalSpy errors(&client, &CodexClient::providerError);
+        client.start();
+        QTRY_VERIFY_WITH_TIMEOUT(!errors.isEmpty(), 2000);
+        QVERIFY(errors.constFirst().constFirst().toString().contains(
+            QStringLiteral("not found"), Qt::CaseInsensitive));
+        qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
+    }
+
+    void codexRestartsAfterCrash()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto executable = directory.filePath(QStringLiteral("fake-codex"));
+        QFile script(executable);
+        QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Text));
+        script.write(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = \"--version\" ]; then\n"
+            "  echo 'codex-cli 0.141.0'\n"
+            "  exit 0\n"
+            "fi\n"
+            "IFS= read -r request\n"
+            "id=$(printf '%s' \"$request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
+            "printf '{\"id\":%s,\"result\":{}}\\n' \"$id\"\n"
+            "IFS= read -r initialized\n"
+            "sleep 0.1\n"
+            "exit 1\n");
+        script.close();
+        QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                      | QFileDevice::ExeOwner));
+
+        qputenv("ARTEMIS_CODEX_EXECUTABLE", executable.toUtf8());
+        CodexClient client;
+        QSignalSpy readyChanges(&client, &CodexClient::readyChanged);
+        client.start();
+
+        QTRY_VERIFY_WITH_TIMEOUT(readyChanges.count() >= 3, 5000);
+        int readyCount = 0;
+        for (const auto &arguments : readyChanges) {
+            if (arguments.constFirst().toBool())
+                ++readyCount;
+        }
+        QVERIFY2(readyCount >= 2, "Codex did not become ready after restarting");
+        qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
     }
 
     void commitAllPushesCurrentBranch()

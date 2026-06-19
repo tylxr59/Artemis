@@ -6,7 +6,7 @@ ProjectTreeModel::ProjectTreeModel(QObject *parent) : QAbstractListModel(parent)
 
 int ProjectTreeModel::rowCount(const QModelIndex &parent) const
 {
-    return parent.isValid() ? 0 : m_rows.size();
+    return parent.isValid() ? 0 : static_cast<int>(m_rows.size());
 }
 
 QVariant ProjectTreeModel::data(const QModelIndex &index, int role) const

@@ -1,11 +1,11 @@
 #include "app/AppController.h"
+#include "platform/DesktopIntegration.h"
 #include "platform/Paths.h"
 
 #include <QApplication>
 #include <QClipboard>
-#include <QDesktopServices>
+#include <QDateTime>
 #include <QDir>
-#include <QDirIterator>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -16,9 +16,6 @@
 #include <QJsonObject>
 #include <QLocale>
 #include <QMimeData>
-#include <QProcess>
-#include <QProcessEnvironment>
-#include <QStandardPaths>
 #include <QTextStream>
 #include <QTime>
 #include <QUrl>
@@ -55,7 +52,10 @@ QJsonObject commitDraftObject(const QString &text)
         } else if (character == QChar(u'{')) {
             if (depth++ == 0)
                 start = i;
-        } else if (character == QChar(u'}') && depth > 0 && --depth == 0 && start >= 0) {
+        } else if (character == QChar(u'}') && depth > 0) {
+            --depth;
+            if (depth != 0 || start < 0)
+                continue;
             const auto candidate = text.mid(start, i - start + 1);
             const auto document = QJsonDocument::fromJson(candidate.toUtf8());
             if (document.isObject()
@@ -81,119 +81,17 @@ QString elapsedText(qint64 elapsedMilliseconds)
     return QStringLiteral("%1s").arg(seconds);
 }
 
-QString defaultEditorDesktopId()
+void removeOrphanedAttachments(const Database &database)
 {
-    const auto xdgMime = QStandardPaths::findExecutable(QStringLiteral("xdg-mime"));
-    if (xdgMime.isEmpty())
-        return {};
-
-    QProcess query;
-    query.start(xdgMime, {QStringLiteral("query"), QStringLiteral("default"),
-                          QStringLiteral("text/plain")});
-    if (!query.waitForFinished(1000) || query.exitCode() != 0)
-        return {};
-    return QString::fromUtf8(query.readAllStandardOutput()).trimmed();
-}
-
-QString desktopFilePath(const QString &desktopId)
-{
-    if (desktopId.isEmpty())
-        return {};
-    return QStandardPaths::locate(
-        QStandardPaths::GenericDataLocation,
-        QStringLiteral("applications/%1").arg(desktopId));
-}
-
-QVariantMap desktopEditor(const QString &path)
-{
-    QFile desktopFile(path);
-    if (!desktopFile.open(QIODevice::ReadOnly | QIODevice::Text))
-        return {};
-
-    QHash<QString, QString> values;
-    QTextStream stream(&desktopFile);
-    bool inDesktopEntry = false;
-    while (!stream.atEnd()) {
-        const auto line = stream.readLine().trimmed();
-        if (line.startsWith(QChar(u'['))) {
-            if (inDesktopEntry)
-                break;
-            inDesktopEntry = line == QStringLiteral("[Desktop Entry]");
-            continue;
-        }
-        if (!inDesktopEntry || line.isEmpty() || line.startsWith(QChar(u'#')))
-            continue;
-        const auto separator = line.indexOf(QChar(u'='));
-        if (separator <= 0)
-            continue;
-        values.insert(line.left(separator), line.mid(separator + 1));
-    }
-
-    if (values.value(QStringLiteral("Type")) != QStringLiteral("Application")
-        || values.value(QStringLiteral("Hidden")).compare(
-               QStringLiteral("true"), Qt::CaseInsensitive) == 0
-        || values.value(QStringLiteral("NoDisplay")).compare(
-               QStringLiteral("true"), Qt::CaseInsensitive) == 0
-        || values.value(QStringLiteral("Terminal")).compare(
-               QStringLiteral("true"), Qt::CaseInsensitive) == 0) {
-        return {};
-    }
-
-    const auto categories = values.value(QStringLiteral("Categories"))
-                                .split(QChar(u';'), Qt::SkipEmptyParts);
-    if (!categories.contains(QStringLiteral("TextEditor"))
-        && !categories.contains(QStringLiteral("IDE"))) {
-        return {};
-    }
-
-    const auto name = values.value(QStringLiteral("Name")).trimmed();
-    const auto desktopId = QFileInfo(path).fileName();
-    if (name.isEmpty() || desktopId.isEmpty())
-        return {};
-    return {{QStringLiteral("name"), name},
-            {QStringLiteral("id"), desktopId}};
-}
-
-QVariantList availableEditors()
-{
-    QVariantList editors;
-    QSet<QString> seenIds;
-    for (const auto &dataPath :
-         QStandardPaths::standardLocations(QStandardPaths::GenericDataLocation)) {
-        const auto applicationsPath = QDir(dataPath).filePath(QStringLiteral("applications"));
-        QDirIterator iterator(applicationsPath, {QStringLiteral("*.desktop")},
-                              QDir::Files, QDirIterator::Subdirectories);
-        while (iterator.hasNext()) {
-            const auto editor = desktopEditor(iterator.next());
-            const auto desktopId = editor.value(QStringLiteral("id")).toString();
-            if (desktopId.isEmpty() || seenIds.contains(desktopId))
-                continue;
-            seenIds.insert(desktopId);
-            editors.append(editor);
+    const auto referenced = database.referencedAttachmentPaths();
+    QDir directory(Paths::attachmentRoot());
+    const auto cutoff = QDateTime::currentDateTimeUtc().addDays(-1);
+    for (const auto &info : directory.entryInfoList(QDir::Files | QDir::NoDotAndDotDot)) {
+        if (!referenced.contains(info.absoluteFilePath())
+            && info.lastModified().toUTC() < cutoff) {
+            QFile::remove(info.absoluteFilePath());
         }
     }
-    std::sort(editors.begin(), editors.end(), [](const QVariant &left, const QVariant &right) {
-        return left.toMap().value(QStringLiteral("name")).toString().localeAwareCompare(
-                   right.toMap().value(QStringLiteral("name")).toString()) < 0;
-    });
-
-    QString defaultLabel = QStringLiteral("System default");
-    const auto defaultEditor = desktopEditor(desktopFilePath(defaultEditorDesktopId()));
-    const auto defaultName = defaultEditor.value(QStringLiteral("name")).toString();
-    if (!defaultName.isEmpty())
-        defaultLabel += QStringLiteral(" (%1)").arg(defaultName);
-    editors.prepend(QVariantMap{{QStringLiteral("name"), defaultLabel},
-                                {QStringLiteral("id"), QString()}});
-    return editors;
-}
-
-bool launchDesktopApplication(const QString &desktopId, const QString &path)
-{
-    const auto desktopFile = desktopFilePath(desktopId);
-    const auto gio = QStandardPaths::findExecutable(QStringLiteral("gio"));
-    return !desktopFile.isEmpty() && !gio.isEmpty()
-        && QProcess::startDetached(
-            gio, {QStringLiteral("launch"), desktopFile, path}, path);
 }
 
 } // namespace
@@ -251,11 +149,12 @@ bool AppController::initialize()
         setStatus(QStringLiteral("Database error: %1").arg(error));
         return false;
     }
+    removeOrphanedAttachments(m_database);
     m_codingModelId = m_database.setting(QStringLiteral("coding_model"));
     m_codingReasoningEffort = m_database.setting(QStringLiteral("coding_reasoning_effort"));
     m_commitModelId = m_database.setting(QStringLiteral("commit_model"));
     m_titleModelId = m_database.setting(QStringLiteral("title_model"));
-    m_editorOptions = availableEditors();
+    m_editorOptions = DesktopIntegration::availableEditors();
     m_selectedEditorId = m_database.setting(QStringLiteral("editor_desktop_id"));
     loadProjects();
     m_codex.start();
@@ -329,7 +228,9 @@ int AppController::contextUsagePercent() const
     const auto window = modelContextWindow();
     if (window <= 0)
         return 0;
-    return qBound(0, qRound(100.0 * contextTokens() / window), 100);
+    const auto ratio = static_cast<double>(contextTokens())
+        / static_cast<double>(window);
+    return qBound(0, qRound(100.0 * ratio), 100);
 }
 bool AppController::hasTokenUsage() const
 {
@@ -360,7 +261,7 @@ void AppController::loadProjects()
         row.path = project.value(QStringLiteral("path")).toString();
         row.name = project.value(QStringLiteral("name")).toString();
         row.git = GitService::isRepository(row.path);
-        row.threadCount = m_database.threadBindings(row.id).size();
+        row.threadCount = static_cast<int>(m_database.threadBindings(row.id).size());
         rows.push_back(row);
     }
     m_projects.setRows(std::move(rows));
@@ -457,7 +358,7 @@ void AppController::removeThread(int index)
     emit currentPlanChanged();
 
     if (removedSelected && !m_threads.isEmpty())
-        selectThread(qMin(index, m_threads.size() - 1));
+        selectThread(qMin(index, static_cast<int>(m_threads.size()) - 1));
 }
 
 void AppController::removeProjectThread(int projectIndex, const QString &threadId)
@@ -560,8 +461,11 @@ void AppController::loadThreads(const QString &threadToSelect)
                                        {QStringLiteral("model"), thread.value(QStringLiteral("model")).toString()},
                                        {QStringLiteral("external"), known
                                             ? binding.value(QStringLiteral("external")).toBool() : true}});
-            if (!known)
-                m_database.bindThread(project.id, id, project.path, true);
+            if (!known) {
+                QString bindError;
+                if (!m_database.bindThread(project.id, id, project.path, true, &bindError))
+                    setStatus(QStringLiteral("Could not save thread binding: %1").arg(bindError));
+            }
         }
         emit projectThreadsLoaded(project.path, rows);
         if (m_projects.row(m_selectedProject).id != project.id)
@@ -711,8 +615,7 @@ void AppController::selectThread(int index)
                      {QStringLiteral("turnId"), turn.value(QStringLiteral("id")).toString()}}};
                 if (eventType != QStringLiteral("task"))
                     m_conversation.append(event);
-                m_database.saveConversationEvent(
-                    event.threadId, event.type, event.title, event.content, event.metadata);
+                persistConversationEvent(event);
                 if (eventType == QStringLiteral("task"))
                     m_threadTasks.insert(threadId, content);
             }
@@ -763,7 +666,10 @@ void AppController::beginThread(const QString &modelId, const QString &reasoning
         }
         const auto thread = result.value(QStringLiteral("thread")).toObject();
         const auto id = thread.value(QStringLiteral("id")).toString();
-        m_database.bindThread(project.id, id, project.path, false);
+        QString bindError;
+        if (!m_database.bindThread(project.id, id, project.path, false, &bindError)) {
+            setStatus(QStringLiteral("Could not save thread binding: %1").arg(bindError));
+        }
         loadProjects();
         m_threads.prepend(QVariantMap{
             {QStringLiteral("id"), id},
@@ -832,8 +738,7 @@ bool AppController::sendPrompt(const QString &text, const QVariantList &imageVal
             selectedThreadId(), QStringLiteral("user"), QStringLiteral("You"), prompt,
             {{QStringLiteral("images"), images}}};
         m_conversation.append(userEvent);
-        m_database.saveConversationEvent(userEvent.threadId, userEvent.type, userEvent.title,
-                                         userEvent.content, userEvent.metadata);
+        persistConversationEvent(userEvent);
         m_codex.steerTurn(selectedThreadId(), prompt, images,
                          [this, prompt, images](const QJsonObject &, const QString &error) {
             if (!error.isEmpty())
@@ -868,8 +773,7 @@ void AppController::startPromptTurn(const QString &threadId, const QString &prom
         threadId, QStringLiteral("user"), QStringLiteral("You"), prompt,
         {{QStringLiteral("images"), images}}};
     m_conversation.append(userEvent);
-    m_database.saveConversationEvent(userEvent.threadId, userEvent.type, userEvent.title,
-                                     userEvent.content, userEvent.metadata);
+    persistConversationEvent(userEvent);
     m_activeThreadId = threadId;
     setTurnRunning(true);
     m_codex.sendTurn(threadId, prompt, images, modelId, reasoningEffort,
@@ -919,7 +823,7 @@ QString AppController::pasteClipboardImage()
         setStatus(QStringLiteral("Clipboard image is too large"));
         return {};
     }
-    const auto path = QDir(Paths::attachmentRoot()).filePath(
+    auto path = QDir(Paths::attachmentRoot()).filePath(
         QUuid::createUuid().toString(QUuid::WithoutBraces) + QStringLiteral(".png"));
     if (!image.save(path, "PNG")) {
         setStatus(QStringLiteral("Could not save the clipboard image"));
@@ -972,7 +876,13 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
             }
         }
         if (type == QStringLiteral("status")) {
-            emit commitDraftReady(cleanCommitDraft(m_commitDraftBuffer));
+            const auto draft = cleanCommitDraft(m_commitDraftBuffer);
+            if (draft.isEmpty()) {
+                emit commitDraftFinished(
+                    false, QStringLiteral("Codex returned an empty commit message."));
+            } else {
+                emit commitDraftFinished(true, draft);
+            }
             m_commitThreadId.clear();
             m_commitDraftBuffer.clear();
         }
@@ -995,8 +905,7 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
         m_assistantDraftBuffers.remove(draftKey);
     }
     if (!isAssistantDelta || !itemId.isEmpty()) {
-        m_database.saveConversationEvent(
-            event.threadId, event.type, event.title, persistedContent, event.metadata);
+        persistConversationEvent(event, persistedContent);
     }
     if (type == QStringLiteral("plan")) {
         m_threadPlans.insert(threadId, metadata.value(QStringLiteral("plan")).toList());
@@ -1056,12 +965,20 @@ void AppController::refreshGit()
 
 void AppController::generateCommitMessage()
 {
-    if (!selectedProjectIsGit())
+    if (!selectedProjectIsGit()) {
+        emit commitDraftFinished(false, QStringLiteral("Select a Git repository first."));
         return;
+    }
+    if (!m_codex.ready()) {
+        emit commitDraftFinished(false, QStringLiteral("Codex is offline."));
+        return;
+    }
     setStatus(QStringLiteral("Preparing commit snapshot…"));
     m_git.generateCommitSnapshot(selectedWorkspacePath(), [this](const GitResult &snapshot) {
         if (!snapshot.ok()) {
-            setStatus(QString::fromUtf8(snapshot.error));
+            const auto message = QString::fromUtf8(snapshot.error).trimmed();
+            setStatus(message);
+            emit commitDraftFinished(false, message);
             return;
         }
         const auto workspace = selectedWorkspacePath();
@@ -1070,6 +987,7 @@ void AppController::generateCommitMessage()
         m_codex.startThread(config, [this, snapshot](const QJsonObject &result, const QString &error) {
             if (!error.isEmpty()) {
                 setStatus(error);
+                emit commitDraftFinished(false, error);
                 return;
             }
             m_commitThreadId = result.value(QStringLiteral("thread")).toObject()
@@ -1081,6 +999,7 @@ void AppController::generateCommitMessage()
                 if (!turnError.isEmpty()) {
                     setStatus(turnError);
                     m_commitThreadId.clear();
+                    emit commitDraftFinished(false, turnError);
                 }
             });
             setStatus(QStringLiteral("Generating commit message…"));
@@ -1149,8 +1068,10 @@ void AppController::applyThreadTitle(const QString &threadId, const QString &tit
 
 QString AppController::commitPrompt(const QByteArray &snapshot) const
 {
-    const auto branch = GitService::runSync(selectedWorkspacePath(),
-        {QStringLiteral("branch"), QStringLiteral("--show-current")});
+    QString branch;
+    const auto firstStatusLine = m_gitStatus.section(QChar(u'\n'), 0, 0);
+    if (firstStatusLine.startsWith(QStringLiteral("## ")))
+        branch = firstStatusLine.mid(3).section(QStringLiteral("..."), 0, 0).trimmed();
     return QStringLiteral(
         "You write concise Git commit messages.\n"
         "Return JSON only with exactly these string keys: "
@@ -1167,7 +1088,7 @@ QString AppController::commitPrompt(const QByteArray &snapshot) const
         "\nRepository: %1\n"
         "Branch: %2\n"
         "\nStaged snapshot:\n%3")
-        .arg(selectedProjectName(), QString::fromUtf8(branch.output).trimmed(),
+        .arg(selectedProjectName(), branch,
              QString::fromUtf8(snapshot).left(120000));
 }
 
@@ -1263,9 +1184,8 @@ void AppController::commitAllAndPush(const QString &subject, const QString &body
 void AppController::commitFeatureBranch(const QString &subject, const QString &body,
                                         const QString &branch, const QString &remote)
 {
-    const auto validation = validateBranch(branch);
-    if (!validation.isEmpty()) {
-        emit commitFinished(false, validation);
+    if (branch.trimmed().isEmpty()) {
+        emit commitFinished(false, QStringLiteral("Branch name is empty"));
         return;
     }
     m_git.createBranchCommitPush(selectedWorkspacePath(), branch, subject, body,
@@ -1284,11 +1204,6 @@ QString AppController::suggestBranch(const QString &message) const
     return GitService::suggestedBranch(message.section(QChar(u'\n'), 0, 0));
 }
 
-QString AppController::validateBranch(const QString &branch) const
-{
-    return GitService::validateBranchName(selectedWorkspacePath(), branch);
-}
-
 QString AppController::selectedWorkspacePath() const
 {
     if (m_selectedThread >= 0 && m_selectedThread < m_threads.size()) {
@@ -1302,67 +1217,26 @@ QString AppController::selectedWorkspacePath() const
 
 void AppController::openProjectFolder()
 {
-    QDesktopServices::openUrl(QUrl::fromLocalFile(selectedProjectPath()));
+    if (!DesktopIntegration::openFolder(selectedProjectPath()))
+        setStatus(QStringLiteral("Could not open the project folder."));
 }
 
 void AppController::openProjectEditor()
 {
-    const auto path = selectedProjectPath();
-    if (path.isEmpty())
-        return;
-
-    if (!m_selectedEditorId.isEmpty()) {
-        if (launchDesktopApplication(m_selectedEditorId, path))
-            return;
-        setStatus(QStringLiteral(
-            "The selected editor is unavailable. Choose another editor in Settings."));
-        return;
+    QString error;
+    if (!DesktopIntegration::openEditor(
+            m_selectedEditorId, selectedProjectPath(), &error) && !error.isEmpty()) {
+        setStatus(error);
     }
-
-    const auto defaultDesktopId = defaultEditorDesktopId();
-    if (launchDesktopApplication(defaultDesktopId, path))
-        return;
-
-    const auto environment = QProcessEnvironment::systemEnvironment();
-    QString editor = environment.value(QStringLiteral("VISUAL")).trimmed();
-    if (editor.isEmpty())
-        editor = environment.value(QStringLiteral("EDITOR")).trimmed();
-
-    if (!editor.isEmpty()) {
-        auto command = QProcess::splitCommand(editor);
-        if (!command.isEmpty()) {
-            const auto program = command.takeFirst();
-            command.append(path);
-            if (QProcess::startDetached(program, command, path))
-                return;
-        }
-    }
-
-    const QStringList fallbackEditors = {
-        QStringLiteral("code"),
-        QStringLiteral("codium"),
-        QStringLiteral("kate"),
-        QStringLiteral("gnome-text-editor"),
-        QStringLiteral("gedit")
-    };
-    for (const auto &fallback : fallbackEditors) {
-        const auto executable = QStandardPaths::findExecutable(fallback);
-        if (!executable.isEmpty()
-            && QProcess::startDetached(executable, {path}, path)) {
-            return;
-        }
-    }
-
-    setStatus(QStringLiteral(
-        "Could not find an editor. Set the VISUAL or EDITOR environment variable."));
 }
 
 void AppController::openTerminal()
 {
-    if (selectedWorkspacePath().isEmpty())
-        return;
-    QProcess::startDetached(QStringLiteral("xdg-terminal-exec"), {},
-                            selectedWorkspacePath());
+    QString error;
+    if (!DesktopIntegration::openTerminal(selectedWorkspacePath(), &error)
+        && !error.isEmpty()) {
+        setStatus(error);
+    }
 }
 
 void AppController::setStatus(const QString &text)
@@ -1373,6 +1247,17 @@ void AppController::setStatus(const QString &text)
         return;
     m_status = text;
     emit statusTextChanged();
+}
+
+void AppController::persistConversationEvent(const ConversationEvent &event,
+                                             const QString &contentOverride)
+{
+    QString error;
+    const auto content = contentOverride.isNull() ? event.content : contentOverride;
+    if (!m_database.saveConversationEvent(
+            event.threadId, event.type, event.title, content, event.metadata, &error)) {
+        setStatus(QStringLiteral("Could not save conversation history: %1").arg(error));
+    }
 }
 
 void AppController::setTurnRunning(bool running)

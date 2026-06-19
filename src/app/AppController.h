@@ -90,7 +90,7 @@ public:
     QString databasePath() const;
 
     Q_INVOKABLE void chooseProjectFolder();
-    Q_INVOKABLE void addProject(const QString &path);
+    Q_INVOKABLE void addProject(const QString &input);
     Q_INVOKABLE void removeSelectedProject();
     Q_INVOKABLE void removeProject(int index);
     Q_INVOKABLE void removeThread(int index);
@@ -100,7 +100,7 @@ public:
     Q_INVOKABLE void selectThread(int index);
     Q_INVOKABLE void createThread(const QString &modelId, const QString &reasoningEffort,
                                   const QString &permissionMode);
-    Q_INVOKABLE bool sendPrompt(const QString &text, const QVariantList &images,
+    Q_INVOKABLE bool sendPrompt(const QString &text, const QVariantList &imageValues,
                                 const QString &modelId, const QString &reasoningEffort,
                                 const QString &permissionMode,
                                 const QString &collaborationMode);
@@ -113,7 +113,6 @@ public:
     Q_INVOKABLE void commitFeatureBranch(const QString &subject, const QString &body,
                                          const QString &branch, const QString &remote);
     Q_INVOKABLE QString suggestBranch(const QString &message) const;
-    Q_INVOKABLE QString validateBranch(const QString &branch) const;
     Q_INVOKABLE void openProjectFolder();
     Q_INVOKABLE void openProjectEditor();
     Q_INVOKABLE void openTerminal();
@@ -141,7 +140,7 @@ signals:
     void statusMessage(const QString &text);
     void tokenUsageChanged();
     void diffChanged();
-    void commitDraftReady(const QString &message);
+    void commitDraftFinished(bool success, const QString &message);
     void commitFinished(bool success, const QString &message);
     void promptRestoreRequested(const QString &text, const QVariantList &images);
 
@@ -169,6 +168,8 @@ private:
     QString commitPrompt(const QByteArray &snapshot) const;
     QString cleanCommitDraft(const QString &raw) const;
     QString cleanTitleDraft(const QString &raw) const;
+    void persistConversationEvent(const ConversationEvent &event,
+                                  const QString &contentOverride = {});
 
     Database m_database;
     ProjectTreeModel m_projects;

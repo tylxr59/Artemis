@@ -3,6 +3,7 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSqlError>
@@ -38,40 +39,108 @@ bool Database::open(QString *error)
             *error = m_db.lastError().text();
         return false;
     }
-    execute(QStringLiteral("PRAGMA foreign_keys = ON"));
-    execute(QStringLiteral("PRAGMA journal_mode = WAL"));
+    if (!execute(QStringLiteral("PRAGMA foreign_keys = ON"), error)
+        || !execute(QStringLiteral("PRAGMA journal_mode = WAL"), error)) {
+        return false;
+    }
     return migrate(error);
 }
 
 bool Database::migrate(QString *error)
 {
-    const QStringList statements = {
-        QStringLiteral("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
-        QStringLiteral("CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
-        QStringLiteral("CREATE TABLE IF NOT EXISTS thread_bindings (provider_thread_id TEXT PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, workspace_path TEXT NOT NULL, external INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
-        QStringLiteral("CREATE TABLE IF NOT EXISTS hidden_threads (provider_thread_id TEXT NOT NULL, project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, hidden_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(provider_thread_id, project_id))"),
-        QStringLiteral("DROP TABLE IF EXISTS managed_worktrees"),
-        QStringLiteral("CREATE TABLE IF NOT EXISTS project_preferences (project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(project_id, key))"),
-        QStringLiteral("CREATE TABLE IF NOT EXISTS application_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"),
-        QStringLiteral("CREATE TABLE IF NOT EXISTS recent_models (model_id TEXT PRIMARY KEY, used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
-        QStringLiteral("CREATE TABLE IF NOT EXISTS conversation_events (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_thread_id TEXT NOT NULL, event_key TEXT, type TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, metadata TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
-        QStringLiteral("CREATE UNIQUE INDEX IF NOT EXISTS conversation_events_thread_key ON conversation_events(provider_thread_id, event_key) WHERE event_key IS NOT NULL"),
-        QStringLiteral("CREATE INDEX IF NOT EXISTS conversation_events_thread_order ON conversation_events(provider_thread_id, id)"),
-        QStringLiteral("INSERT OR IGNORE INTO schema_migrations(version) VALUES (2)"),
-        QStringLiteral("INSERT OR IGNORE INTO schema_migrations(version) VALUES (3)")
-    };
-    if (!m_db.transaction()) {
-        if (error)
-            *error = m_db.lastError().text();
+    if (!execute(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+            "version INTEGER PRIMARY KEY, "
+            "applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"), error)) {
         return false;
     }
-    for (const auto &statement : statements) {
-        if (!execute(statement, error)) {
+
+    QSqlQuery versionQuery(m_db);
+    if (!versionQuery.exec(QStringLiteral(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"))
+        || !versionQuery.next()) {
+        if (error)
+            *error = versionQuery.lastError().text();
+        return false;
+    }
+    const int currentVersion = versionQuery.value(0).toInt();
+
+    struct Migration {
+        int version;
+        QStringList statements;
+    };
+    const QVector<Migration> migrations = {
+        {1, {
+            QStringLiteral(
+                "CREATE TABLE IF NOT EXISTS projects ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL UNIQUE, "
+                "name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+            QStringLiteral(
+                "CREATE TABLE IF NOT EXISTS thread_bindings ("
+                "provider_thread_id TEXT PRIMARY KEY, project_id INTEGER NOT NULL "
+                "REFERENCES projects(id) ON DELETE CASCADE, workspace_path TEXT NOT NULL, "
+                "external INTEGER NOT NULL DEFAULT 0, "
+                "updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+            QStringLiteral(
+                "CREATE TABLE IF NOT EXISTS hidden_threads ("
+                "provider_thread_id TEXT NOT NULL, project_id INTEGER NOT NULL "
+                "REFERENCES projects(id) ON DELETE CASCADE, "
+                "hidden_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                "PRIMARY KEY(provider_thread_id, project_id))")
+        }},
+        {2, {
+            QStringLiteral(
+                "CREATE TABLE IF NOT EXISTS application_settings ("
+                "key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        }},
+        {3, {
+            QStringLiteral(
+                "CREATE TABLE IF NOT EXISTS conversation_events ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, provider_thread_id TEXT NOT NULL, "
+                "event_key TEXT, type TEXT NOT NULL, title TEXT NOT NULL, "
+                "content TEXT NOT NULL, metadata TEXT NOT NULL DEFAULT '{}', "
+                "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+            QStringLiteral(
+                "CREATE UNIQUE INDEX IF NOT EXISTS conversation_events_thread_key "
+                "ON conversation_events(provider_thread_id, event_key) "
+                "WHERE event_key IS NOT NULL"),
+            QStringLiteral(
+                "CREATE INDEX IF NOT EXISTS conversation_events_thread_order "
+                "ON conversation_events(provider_thread_id, id)")
+        }}
+    };
+
+    for (const auto &migration : migrations) {
+        if (migration.version <= currentVersion)
+            continue;
+        if (!m_db.transaction()) {
+            if (error)
+                *error = m_db.lastError().text();
+            return false;
+        }
+        for (const auto &statement : migration.statements) {
+            if (execute(statement, error))
+                continue;
             m_db.rollback();
             return false;
         }
+        QSqlQuery record(m_db);
+        record.prepare(QStringLiteral(
+            "INSERT INTO schema_migrations(version) VALUES (?)"));
+        record.addBindValue(migration.version);
+        if (!record.exec()) {
+            if (error)
+                *error = record.lastError().text();
+            m_db.rollback();
+            return false;
+        }
+        if (!m_db.commit()) {
+            if (error)
+                *error = m_db.lastError().text();
+            return false;
+        }
     }
-    return m_db.commit();
+    return true;
 }
 
 bool Database::execute(const QString &sql, QString *error) const
@@ -266,6 +335,27 @@ bool Database::saveConversationEvent(const QString &threadId, const QString &typ
     return true;
 }
 
+QSet<QString> Database::referencedAttachmentPaths() const
+{
+    QSet<QString> result;
+    QSqlQuery query(m_db);
+    if (!query.exec(QStringLiteral(
+            "SELECT metadata FROM conversation_events "
+            "WHERE metadata LIKE '%\"images\"%'"))) {
+        return result;
+    }
+    while (query.next()) {
+        const auto document = QJsonDocument::fromJson(query.value(0).toByteArray());
+        const auto images = document.object().value(QStringLiteral("images")).toArray();
+        for (const auto &image : images) {
+            const auto path = image.toString();
+            if (!path.isEmpty())
+                result.insert(path);
+        }
+    }
+    return result;
+}
+
 QString Database::setting(const QString &key, const QString &fallback) const
 {
     QSqlQuery query(m_db);
@@ -288,29 +378,14 @@ bool Database::setSetting(const QString &key, const QString &value, QString *err
     return true;
 }
 
-QString Database::projectPreference(qint64 projectId, const QString &key) const
+int Database::schemaVersion() const
 {
     QSqlQuery query(m_db);
-    query.prepare(QStringLiteral("SELECT value FROM project_preferences WHERE project_id=? AND key=?"));
-    query.addBindValue(projectId);
-    query.addBindValue(key);
-    return query.exec() && query.next() ? query.value(0).toString() : QString();
-}
-
-bool Database::setProjectPreference(qint64 projectId, const QString &key, const QString &value,
-                                    QString *error)
-{
-    QSqlQuery query(m_db);
-    query.prepare(QStringLiteral("INSERT INTO project_preferences(project_id, key, value) VALUES (?, ?, ?) ON CONFLICT(project_id, key) DO UPDATE SET value=excluded.value"));
-    query.addBindValue(projectId);
-    query.addBindValue(key);
-    query.addBindValue(value);
-    if (!query.exec()) {
-        if (error)
-            *error = query.lastError().text();
-        return false;
-    }
-    return true;
+    return query.exec(QStringLiteral(
+               "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"))
+            && query.next()
+        ? query.value(0).toInt()
+        : 0;
 }
 
 QString Database::path() const

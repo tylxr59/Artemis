@@ -2,7 +2,6 @@
 
 #include <QObject>
 #include <QProcessEnvironment>
-#include <QVariantList>
 
 #include <functional>
 
@@ -26,7 +25,6 @@ public:
     static bool isRepository(const QString &path);
     static bool statusHasChanges(const QByteArray &porcelainStatus);
     static QString canonicalProjectPath(const QString &path);
-    static QString validateBranchName(const QString &path, const QString &branch);
     static QString suggestedBranch(const QString &subject);
 
     void status(const QString &path, Handler handler);
@@ -40,7 +38,9 @@ public:
 
 private:
     void run(const QString &cwd, const QStringList &arguments, Handler handler,
-             const QProcessEnvironment &environment = {});
+             const QProcessEnvironment &environment = {}, int timeoutMs = 120000);
+    void commitStagedAndPush(const QString &path, const QString &subject,
+                             const QString &body, Handler handler);
     void pushCurrentBranch(const QString &path, const QByteArray &commitOutput,
                            Handler handler);
 };

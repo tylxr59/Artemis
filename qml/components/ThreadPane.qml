@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -100,11 +102,16 @@ Pane {
                         }
                         Label { text: "Path"; opacity: 0.6 }
                         Label {
+                            id: workspacePathLabel
                             text: root.controller.selectedThreadInfo.cwd || ""
                             Layout.fillWidth: true
                             elide: Text.ElideMiddle
                             ToolTip.text: text
-                            ToolTip.visible: hovered && truncated
+                            ToolTip.visible: workspacePathHover.hovered
+                                             && workspacePathLabel.truncated
+                            HoverHandler {
+                                id: workspacePathHover
+                            }
                         }
                     }
 
@@ -145,6 +152,7 @@ Pane {
                         Repeater {
                             model: root.controller.currentPlan
                             delegate: Frame {
+                                id: planStep
                                 required property var modelData
                                 Layout.fillWidth: true
                                 padding: Kirigami.Units.smallSpacing
@@ -153,28 +161,28 @@ Pane {
                                     anchors.fill: parent
                                     spacing: Kirigami.Units.smallSpacing
                                     Kirigami.Icon {
-                                        source: modelData.status === "completed"
+                                        source: planStep.modelData.status === "completed"
                                                 ? "task-complete"
-                                                : modelData.status === "in_progress"
-                                                  || modelData.status === "inProgress"
+                                                : planStep.modelData.status === "in_progress"
+                                                  || planStep.modelData.status === "inProgress"
                                                   ? "media-playback-start"
                                                   : "media-playback-pause"
                                         Layout.preferredWidth: 18
                                         Layout.preferredHeight: 18
-                                        color: modelData.status === "completed"
+                                        color: planStep.modelData.status === "completed"
                                                ? Kirigami.Theme.positiveTextColor
-                                               : modelData.status === "in_progress"
-                                                 || modelData.status === "inProgress"
+                                               : planStep.modelData.status === "in_progress"
+                                                 || planStep.modelData.status === "inProgress"
                                                  ? Kirigami.Theme.highlightColor
                                                  : Kirigami.Theme.textColor
-                                        opacity: modelData.status === "pending" ? 0.45 : 1
+                                        opacity: planStep.modelData.status === "pending" ? 0.45 : 1
                                     }
                                     Label {
-                                        text: modelData.step || ""
+                                        text: planStep.modelData.step || ""
                                         Layout.fillWidth: true
                                         wrapMode: Text.Wrap
-                                        font.strikeout: modelData.status === "completed"
-                                        opacity: modelData.status === "pending" ? 0.62 : 1
+                                        font.strikeout: planStep.modelData.status === "completed"
+                                        opacity: planStep.modelData.status === "pending" ? 0.62 : 1
                                     }
                                 }
                             }

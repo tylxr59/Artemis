@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -331,7 +333,7 @@ Kirigami.ApplicationWindow {
                         }
                     }
                     MenuItem {
-                        text: "Review and select changes"
+                        text: "Review changes before committing"
                         onTriggered: {
                             root.sidePanelMode = "diff"
                             root.sidePanelVisible = true
@@ -1201,86 +1203,8 @@ Kirigami.ApplicationWindow {
         }
     }
 
-    Dialog {
+    ImageViewerDialog {
         id: imageViewer
-        property string imagePath: ""
-        property bool actualSize: false
-
-        function showImage(path) {
-            imagePath = path
-            actualSize = false
-            open()
-        }
-
-        modal: true
-        width: Math.min(root.width - 40, 1400)
-        height: Math.min(root.height - 40, 900)
-        anchors.centerIn: parent
-        padding: 0
-
-        header: ToolBar {
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Kirigami.Units.largeSpacing
-                anchors.rightMargin: Kirigami.Units.smallSpacing
-
-                Label {
-                    text: "Image"
-                    font.bold: true
-                    Layout.fillWidth: true
-                }
-                ToolButton {
-                    text: imageViewer.actualSize ? "Fit" : "Actual size"
-                    onClicked: imageViewer.actualSize = !imageViewer.actualSize
-                }
-                ToolButton {
-                    icon.name: "window-close"
-                    Accessible.name: "Close image"
-                    ToolTip.text: Accessible.name
-                    ToolTip.visible: hovered
-                    onClicked: imageViewer.close()
-                }
-            }
-        }
-
-        contentItem: Rectangle {
-            color: "#111111"
-
-            Flickable {
-                id: imageViewport
-                anchors.fill: parent
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                contentWidth: Math.max(width, fullImage.width)
-                contentHeight: Math.max(height, fullImage.height)
-
-                Image {
-                    id: fullImage
-                    readonly property real fitScale: status === Image.Ready
-                                                     ? Math.min(1,
-                                                                imageViewport.width / implicitWidth,
-                                                                imageViewport.height / implicitHeight)
-                                                     : 1
-                    x: Math.max(0, (imageViewport.width - width) / 2)
-                    y: Math.max(0, (imageViewport.height - height) / 2)
-                    width: implicitWidth * (imageViewer.actualSize ? 1 : fitScale)
-                    height: implicitHeight * (imageViewer.actualSize ? 1 : fitScale)
-                    source: root.localImageUrl(imageViewer.imagePath)
-                    fillMode: Image.PreserveAspectFit
-                    asynchronous: true
-                    cache: false
-                }
-
-                ScrollBar.horizontal: ScrollBar {}
-                ScrollBar.vertical: ScrollBar {}
-            }
-
-            BusyIndicator {
-                anchors.centerIn: parent
-                running: fullImage.status === Image.Loading
-                visible: running
-            }
-        }
     }
 
     Dialog {

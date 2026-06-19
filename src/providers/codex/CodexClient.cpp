@@ -4,9 +4,18 @@
 #include <QJsonDocument>
 #include <QRegularExpression>
 
+#include <memory>
+#include <utility>
+
 namespace Artemis {
 
 namespace {
+
+QString codexExecutable()
+{
+    const auto override = qEnvironmentVariable("ARTEMIS_CODEX_EXECUTABLE").trimmed();
+    return override.isEmpty() ? QStringLiteral("codex") : override;
+}
 
 QString approvalPolicy(PermissionProfile profile)
 {
@@ -76,6 +85,15 @@ void appendText(const QJsonValue &value, QStringList &parts)
 CodexClient::CodexClient(QObject *parent)
     : AgentProvider(parent)
 {
+    m_restartTimer.setSingleShot(true);
+    connect(&m_restartTimer, &QTimer::timeout, this, [this] {
+        if (m_process.state() != QProcess::NotRunning) {
+            m_restartTimer.start(100);
+            return;
+        }
+        m_restartScheduled = false;
+        startProcess();
+    });
     connect(&m_process, &QProcess::readyReadStandardOutput, this, [this] {
         m_buffer += m_process.readAllStandardOutput();
         while (true) {
@@ -88,6 +106,7 @@ CodexClient::CodexClient(QObject *parent)
                 handleLine(line);
         }
     });
+    connect(&m_process, &QProcess::started, this, &CodexClient::initializeProcess);
     connect(&m_process, &QProcess::readyReadStandardError, this, [this] {
         const auto text = QString::fromUtf8(m_process.readAllStandardError()).trimmed();
         if (!text.isEmpty())
@@ -149,14 +168,28 @@ void CodexClient::start()
 void CodexClient::startVersionProbe()
 {
     auto *probe = new QProcess(this);
-    connect(probe, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, probe](int code, QProcess::ExitStatus) {
-        const auto output = QString::fromUtf8(probe->readAllStandardOutput()).trimmed();
+    auto *timeout = new QTimer(probe);
+    timeout->setSingleShot(true);
+    const auto finishWithError = [this, probe, timeout,
+                                  completed = std::make_shared<bool>(false)](
+                                     const QString &message) {
+        if (std::exchange(*completed, true))
+            return false;
+        timeout->stop();
         probe->deleteLater();
-        if (code != 0) {
-            emit providerError(QStringLiteral("Codex CLI was not found. Install it and run codex login."));
+        emit providerError(message);
+        return true;
+    };
+    connect(probe, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
+            [this, probe, timeout, finishWithError](int code, QProcess::ExitStatus status) {
+        if (status != QProcess::NormalExit || code != 0) {
+            finishWithError(QStringLiteral(
+                "Codex CLI was not found. Install it and run codex login."));
             return;
         }
+        timeout->stop();
+        const auto output = QString::fromUtf8(probe->readAllStandardOutput()).trimmed();
+        probe->deleteLater();
         m_version = output;
         emit versionChanged();
         const QRegularExpression expression(QStringLiteral("(\\d+)\\.(\\d+)\\.(\\d+)"));
@@ -168,7 +201,19 @@ void CodexClient::startVersionProbe()
         }
         startProcess();
     });
-    probe->start(QStringLiteral("codex"), {QStringLiteral("--version")});
+    connect(probe, &QProcess::errorOccurred, this,
+            [finishWithError](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart) {
+            finishWithError(QStringLiteral(
+                "Codex CLI was not found. Install it and run codex login."));
+        }
+    });
+    connect(timeout, &QTimer::timeout, this, [probe, finishWithError] {
+        probe->kill();
+        finishWithError(QStringLiteral("Timed out while checking the Codex CLI version."));
+    });
+    probe->start(codexExecutable(), {QStringLiteral("--version")});
+    timeout->start(5000);
 }
 
 void CodexClient::startProcess()
@@ -176,13 +221,13 @@ void CodexClient::startProcess()
     if (m_process.state() != QProcess::NotRunning)
         return;
     m_stopping = false;
-    m_process.setProgram(QStringLiteral("codex"));
+    m_process.setProgram(codexExecutable());
     m_process.setArguments({QStringLiteral("app-server"), QStringLiteral("--listen"), QStringLiteral("stdio://")});
     m_process.start();
-    if (!m_process.waitForStarted(3000)) {
-        scheduleRestart(m_process.errorString());
-        return;
-    }
+}
+
+void CodexClient::initializeProcess()
+{
     request(QStringLiteral("initialize"),
             {{QStringLiteral("clientInfo"),
               QJsonObject{{QStringLiteral("name"), QStringLiteral("artemis")},
@@ -213,11 +258,18 @@ void CodexClient::scheduleRestart(const QString &reason)
             it->handler({}, QStringLiteral("Codex disconnected: %1").arg(reason));
     }
     m_pending.clear();
-    emit providerError(reason);
+    if (!reason.isEmpty())
+        emit providerError(reason);
     if (m_stopping)
         return;
+    if (m_restartScheduled)
+        return;
+    m_restartScheduled = true;
     const int delay = qMin(16000, 500 * (1 << qMin(m_restartAttempt++, 5)));
-    QTimer::singleShot(delay, this, &CodexClient::startProcess);
+    if (m_process.state() != QProcess::NotRunning)
+        m_process.kill();
+    m_buffer.clear();
+    m_restartTimer.start(delay);
 }
 
 void CodexClient::request(const QString &method, const QJsonObject &params, ResultHandler handler)

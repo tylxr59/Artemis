@@ -20,5 +20,7 @@ jobs:
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
       - name: Build
         run: cmake --build build
+      - name: QML lint
+        run: cmake --build build --target artemis_qmllint
       - name: Test
         run: ctest --test-dir build --output-on-failure

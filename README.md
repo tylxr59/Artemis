@@ -73,6 +73,7 @@ Run the test suite:
 
 ```bash
 ctest --test-dir build --output-on-failure
+cmake --build build --target artemis_qmllint
 ```
 
 Run Artemis directly from the build directory:

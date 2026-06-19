@@ -50,6 +50,7 @@ private:
 
     void startVersionProbe();
     void startProcess();
+    void initializeProcess();
     void scheduleRestart(const QString &reason);
     void handleLine(const QByteArray &line);
     void handleNotification(const QString &method, const QJsonObject &params);
@@ -57,11 +58,13 @@ private:
     void setReady(bool ready);
 
     QProcess m_process;
+    QTimer m_restartTimer;
     QByteArray m_buffer;
     QHash<qint64, Pending> m_pending;
     qint64 m_nextId = 1;
     bool m_ready = false;
     bool m_stopping = false;
+    bool m_restartScheduled = false;
     int m_restartAttempt = 0;
     QString m_version;
 };

@@ -27,12 +27,11 @@ public:
     bool saveConversationEvent(const QString &threadId, const QString &type,
                                const QString &title, const QString &content,
                                const QVariantMap &metadata, QString *error = nullptr);
+    QSet<QString> referencedAttachmentPaths() const;
     QString setting(const QString &key, const QString &fallback = {}) const;
     bool setSetting(const QString &key, const QString &value, QString *error = nullptr);
-    QString projectPreference(qint64 projectId, const QString &key) const;
-    bool setProjectPreference(qint64 projectId, const QString &key, const QString &value,
-                              QString *error = nullptr);
 
+    int schemaVersion() const;
     QString path() const;
 
 private:

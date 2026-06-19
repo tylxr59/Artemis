@@ -6,7 +6,7 @@ ConversationModel::ConversationModel(QObject *parent) : QAbstractListModel(paren
 
 int ConversationModel::rowCount(const QModelIndex &parent) const
 {
-    return parent.isValid() ? 0 : m_events.size();
+    return parent.isValid() ? 0 : static_cast<int>(m_events.size());
 }
 
 QVariant ConversationModel::data(const QModelIndex &index, int role) const
@@ -45,7 +45,7 @@ void ConversationModel::append(const ConversationEvent &event)
         return;
     const auto itemId = event.metadata.value(QStringLiteral("itemId")).toString();
     if (!itemId.isEmpty()) {
-        for (int row = m_events.size() - 1; row >= 0; --row) {
+        for (int row = static_cast<int>(m_events.size()) - 1; row >= 0; --row) {
             auto &existing = m_events[row];
             if (existing.metadata.value(QStringLiteral("itemId")).toString() != itemId)
                 continue;
@@ -55,7 +55,7 @@ void ConversationModel::append(const ConversationEvent &event)
             return;
         }
     }
-    const int row = m_events.size();
+    const int row = static_cast<int>(m_events.size());
     beginInsertRows({}, row, row);
     m_events.push_back(event);
     endInsertRows();
@@ -66,7 +66,7 @@ void ConversationModel::appendOrMergeDelta(const ConversationEvent &event)
     const bool completed = event.metadata.value(QStringLiteral("lifecycle")).toString()
                            == QStringLiteral("completed");
     if (completed) {
-        for (int row = m_events.size() - 1; row >= 0; --row) {
+        for (int row = static_cast<int>(m_events.size()) - 1; row >= 0; --row) {
             auto &existing = m_events[row];
             if (existing.type != QStringLiteral("assistant"))
                 continue;
@@ -85,7 +85,7 @@ void ConversationModel::appendOrMergeDelta(const ConversationEvent &event)
     if (!m_events.isEmpty() && event.type == QStringLiteral("assistant")
         && m_events.last().type == event.type && m_events.last().title == event.title) {
         m_events.last().content += event.content;
-        const auto idx = index(m_events.size() - 1);
+        const auto idx = index(static_cast<int>(m_events.size()) - 1);
         emit dataChanged(idx, idx, {ContentRole});
         return;
     }

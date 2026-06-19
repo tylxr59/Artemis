@@ -43,7 +43,14 @@ Dialog {
 
     Connections {
         target: root.controller
-        function onCommitDraftReady(message) {
+        function onCommitDraftFinished(success, message) {
+            if (!success) {
+                root.busy = false
+                root.generating = false
+                resultLabel.text = message
+                resultLabel.color = Kirigami.Theme.negativeTextColor
+                return
+            }
             const separator = message.indexOf("\n\n")
             if (separator < 0) {
                 subjectEdit.text = message.trim()
