@@ -44,10 +44,18 @@ void ConversationModel::append(const ConversationEvent &event)
     if (!m_threadId.isEmpty() && event.threadId != m_threadId)
         return;
     const auto itemId = event.metadata.value(QStringLiteral("itemId")).toString();
-    if (!itemId.isEmpty()) {
+    const auto turnId = event.metadata.value(QStringLiteral("turnId")).toString();
+    const bool replacesTurnDiff = event.type == QStringLiteral("diff")
+        && !turnId.isEmpty();
+    if (!itemId.isEmpty() || replacesTurnDiff) {
         for (int row = static_cast<int>(m_events.size()) - 1; row >= 0; --row) {
             auto &existing = m_events[row];
-            if (existing.metadata.value(QStringLiteral("itemId")).toString() != itemId)
+            const bool sameItem = !itemId.isEmpty()
+                && existing.metadata.value(QStringLiteral("itemId")).toString() == itemId;
+            const bool sameTurnDiff = replacesTurnDiff
+                && existing.type == QStringLiteral("diff")
+                && existing.metadata.value(QStringLiteral("turnId")).toString() == turnId;
+            if (!sameItem && !sameTurnDiff)
                 continue;
             existing = event;
             const auto idx = index(row);

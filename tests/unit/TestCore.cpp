@@ -161,6 +161,37 @@ private slots:
                  QStringLiteral("right thread"));
     }
 
+    void conversationKeepsLatestDiffForTurn()
+    {
+        ConversationModel model;
+        model.setThread(QStringLiteral("thread-a"));
+        model.append(
+            {QStringLiteral("thread-a"), QStringLiteral("diff"),
+             QStringLiteral("Changes"), QStringLiteral("first diff"),
+             {{QStringLiteral("turnId"), QStringLiteral("turn-1")}}});
+        model.append(
+            {QStringLiteral("thread-a"), QStringLiteral("command"),
+             QStringLiteral("Ran command"), QStringLiteral("build"),
+             {{QStringLiteral("itemId"), QStringLiteral("command-1")},
+              {QStringLiteral("turnId"), QStringLiteral("turn-1")}}});
+        model.append(
+            {QStringLiteral("thread-a"), QStringLiteral("diff"),
+             QStringLiteral("Changes"), QStringLiteral("latest diff"),
+             {{QStringLiteral("turnId"), QStringLiteral("turn-1")}}});
+
+        QCOMPARE(model.rowCount(), 2);
+        QCOMPARE(model.data(model.index(0), ConversationModel::TypeRole).toString(),
+                 QStringLiteral("diff"));
+        QCOMPARE(model.data(model.index(0), ConversationModel::ContentRole).toString(),
+                 QStringLiteral("latest diff"));
+
+        model.append(
+            {QStringLiteral("thread-a"), QStringLiteral("diff"),
+             QStringLiteral("Changes"), QStringLiteral("next turn diff"),
+             {{QStringLiteral("turnId"), QStringLiteral("turn-2")}}});
+        QCOMPARE(model.rowCount(), 3);
+    }
+
     void concurrentThreadsKeepIndependentOutputAndRunningState()
     {
         QTemporaryDir root;
