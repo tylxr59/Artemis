@@ -149,6 +149,7 @@ private:
     QString m_commitDraftBuffer;
     QHash<QString, QString> m_titleTargets;
     QHash<QString, QString> m_titleDraftBuffers;
+    QHash<QString, QString> m_assistantDraftBuffers;
     QString m_activeThreadId;
     QHash<QString, QVariantList> m_threadPlans;
     QHash<QString, QString> m_threadPlanExplanations;

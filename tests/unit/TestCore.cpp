@@ -8,6 +8,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
+#include <QUuid>
 
 using namespace Artemis;
 
@@ -49,6 +50,31 @@ private slots:
         QVERIFY(database.hideThread(id, QStringLiteral("thread-to-hide"), &error));
         QVERIFY(database.hiddenThreadIds(id).contains(QStringLiteral("thread-to-hide")));
         QVERIFY(database.threadBindings(id).isEmpty());
+        const auto historyThread = QStringLiteral("thread-history-%1").arg(
+            QUuid::createUuid().toString(QUuid::WithoutBraces));
+        QVERIFY(database.saveConversationEvent(
+            historyThread, QStringLiteral("command"),
+            QStringLiteral("Running command"), QStringLiteral("first"),
+            {{QStringLiteral("itemId"), QStringLiteral("item-1")},
+             {QStringLiteral("lifecycle"), QStringLiteral("started")}}, &error));
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QVERIFY(database.saveConversationEvent(
+            historyThread, QStringLiteral("command"),
+            QStringLiteral("Ran command"), QStringLiteral("completed output"),
+            {{QStringLiteral("itemId"), QStringLiteral("item-1")},
+             {QStringLiteral("lifecycle"), QStringLiteral("completed")}}, &error));
+        QVERIFY(database.saveConversationEvent(
+            historyThread, QStringLiteral("assistant"),
+            QStringLiteral("Artemis"), QStringLiteral("Final answer"),
+            {{QStringLiteral("itemId"), QStringLiteral("item-2")}}, &error));
+        const auto events = database.conversationEvents(historyThread);
+        QCOMPARE(events.size(), 2);
+        QCOMPARE(events.at(0).value(QStringLiteral("title")).toString(),
+                 QStringLiteral("Ran command"));
+        QCOMPARE(events.at(0).value(QStringLiteral("content")).toString(),
+                 QStringLiteral("completed output"));
+        QCOMPARE(events.at(1).value(QStringLiteral("content")).toString(),
+                 QStringLiteral("Final answer"));
         QVERIFY(database.setSetting(QStringLiteral("test"), QStringLiteral("value"), &error));
         QCOMPARE(database.setting(QStringLiteral("test")), QStringLiteral("value"));
     }

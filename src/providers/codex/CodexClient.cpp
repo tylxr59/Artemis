@@ -271,6 +271,7 @@ void CodexClient::handleLine(const QByteArray &line)
 void CodexClient::handleNotification(const QString &method, const QJsonObject &params)
 {
     emit rawNotification(method, params);
+    const auto turnId = params.value(QStringLiteral("turnId")).toString();
     if (method == QStringLiteral("item/started") || method == QStringLiteral("item/completed")) {
         normalizeItem(method.endsWith(QStringLiteral("started")) ? QStringLiteral("started")
                                                                  : QStringLiteral("completed"),
@@ -279,24 +280,31 @@ void CodexClient::handleNotification(const QString &method, const QJsonObject &p
         emit domainEvent(params.value(QStringLiteral("threadId")).toString(),
                          QStringLiteral("assistant"), QStringLiteral("Artemis"),
                          params.value(QStringLiteral("delta")).toString(),
-                         {{QStringLiteral("delta"), true}});
+                         {{QStringLiteral("delta"), true},
+                          {QStringLiteral("itemId"),
+                           params.value(QStringLiteral("itemId")).toString()},
+                          {QStringLiteral("turnId"), turnId}});
     } else if (method == QStringLiteral("turn/diff/updated")) {
         emit domainEvent(params.value(QStringLiteral("threadId")).toString(),
                          QStringLiteral("diff"), QStringLiteral("Changes"),
-                         params.value(QStringLiteral("diff")).toString(), {});
+                         params.value(QStringLiteral("diff")).toString(),
+                         {{QStringLiteral("turnId"), turnId}});
     } else if (method == QStringLiteral("turn/plan/updated")) {
         const auto explanation = params.value(QStringLiteral("explanation")).toString();
         emit domainEvent(params.value(QStringLiteral("threadId")).toString(),
                          QStringLiteral("plan"), QStringLiteral("Plan"),
                          explanation,
                          {{QStringLiteral("explanation"), explanation},
+                          {QStringLiteral("turnId"), turnId},
                           {QStringLiteral("plan"),
                            params.value(QStringLiteral("plan")).toArray().toVariantList()}});
     } else if (method == QStringLiteral("turn/completed")) {
         const auto turn = params.value(QStringLiteral("turn")).toObject();
         emit domainEvent(params.value(QStringLiteral("threadId")).toString(),
                          QStringLiteral("status"), QStringLiteral("Turn completed"),
-                         turn.value(QStringLiteral("status")).toString(), {});
+                         turn.value(QStringLiteral("status")).toString(),
+                         {{QStringLiteral("turnId"),
+                           turn.value(QStringLiteral("id")).toString(turnId)}});
     } else if (method.contains(QStringLiteral("approval"), Qt::CaseInsensitive)) {
         emit domainEvent(params.value(QStringLiteral("threadId")).toString(),
                          QStringLiteral("approval"), QStringLiteral("Approval required"),
@@ -340,7 +348,9 @@ void CodexClient::normalizeItem(const QString &lifecycle, const QJsonObject &par
         return;
     emit domainEvent(params.value(QStringLiteral("threadId")).toString(), domainType,
                      title, content, {{QStringLiteral("lifecycle"), lifecycle},
-                                      {QStringLiteral("itemId"), itemId}});
+                                      {QStringLiteral("itemId"), itemId},
+                                      {QStringLiteral("turnId"),
+                                       params.value(QStringLiteral("turnId")).toString()}});
 }
 
 QString CodexClient::itemContent(const QJsonObject &item)

@@ -392,9 +392,36 @@ void AppController::selectThread(int index)
     m_conversation.setThread(selectedThreadId());
     emit selectedThreadChanged();
     emit currentPlanChanged();
-    m_codex.resumeThread(selectedThreadId(), [this](const QJsonObject &result, const QString &error) {
+    const auto threadId = selectedThreadId();
+    m_codex.resumeThread(threadId, [this, threadId](const QJsonObject &result, const QString &error) {
         if (!error.isEmpty()) {
             setStatus(error);
+            return;
+        }
+        if (threadId != selectedThreadId())
+            return;
+        const auto persistedEvents = m_database.conversationEvents(threadId);
+        if (!persistedEvents.isEmpty()) {
+            for (const auto &stored : persistedEvents) {
+                const auto type = stored.value(QStringLiteral("type")).toString();
+                const auto content = stored.value(QStringLiteral("content")).toString();
+                const auto metadata = stored.value(QStringLiteral("metadata")).toMap();
+                m_conversation.append(
+                    {threadId,
+                     type,
+                     stored.value(QStringLiteral("title")).toString(),
+                     content,
+                     metadata});
+                if (type == QStringLiteral("plan")) {
+                    m_threadPlans.insert(threadId, metadata.value(QStringLiteral("plan")).toList());
+                    m_threadPlanExplanations.insert(
+                        threadId, metadata.value(QStringLiteral("explanation")).toString());
+                } else if (type == QStringLiteral("diff")) {
+                    m_diff = content;
+                }
+            }
+            emit currentPlanChanged();
+            emit diffChanged();
             return;
         }
         const auto thread = result.value(QStringLiteral("thread")).toObject();
@@ -426,9 +453,13 @@ void AppController::selectThread(int index)
                 } else {
                     continue;
                 }
-                m_conversation.append({selectedThreadId(), eventType, title, content,
+                ConversationEvent event{threadId, eventType, title, content,
                     {{QStringLiteral("lifecycle"), QStringLiteral("completed")},
-                     {QStringLiteral("itemId"), item.value(QStringLiteral("id")).toString()}}});
+                     {QStringLiteral("itemId"), item.value(QStringLiteral("id")).toString()},
+                     {QStringLiteral("turnId"), turn.value(QStringLiteral("id")).toString()}}};
+                m_conversation.append(event);
+                m_database.saveConversationEvent(
+                    event.threadId, event.type, event.title, event.content, event.metadata);
             }
         }
     });
@@ -530,7 +561,11 @@ void AppController::startPromptTurn(const QString &threadId, const QString &prom
                                     PermissionProfile permissionProfile, bool generateTitle)
 {
     m_conversation.setThread(threadId);
-    m_conversation.append({threadId, QStringLiteral("user"), QStringLiteral("You"), prompt, {}});
+    const ConversationEvent userEvent{
+        threadId, QStringLiteral("user"), QStringLiteral("You"), prompt, {}};
+    m_conversation.append(userEvent);
+    m_database.saveConversationEvent(userEvent.threadId, userEvent.type, userEvent.title,
+                                     userEvent.content, userEvent.metadata);
     m_activeThreadId = threadId;
     setTurnRunning(true);
     m_codex.sendTurn(threadId, prompt, {}, permissionProfile,
@@ -602,6 +637,20 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
         event.content = QStringLiteral("Complete · %1 · %2 total")
                             .arg(QLocale().toString(QTime::currentTime(), QLocale::ShortFormat),
                                  turnElapsedText());
+    }
+    const bool isAssistantDelta = type == QStringLiteral("assistant")
+        && metadata.value(QStringLiteral("delta")).toBool();
+    QString persistedContent = event.content;
+    const auto itemId = metadata.value(QStringLiteral("itemId")).toString();
+    const auto draftKey = threadId + QLatin1Char(':') + itemId;
+    if (isAssistantDelta && !itemId.isEmpty()) {
+        persistedContent = m_assistantDraftBuffers[draftKey] += event.content;
+    } else if (type == QStringLiteral("assistant") && !itemId.isEmpty()) {
+        m_assistantDraftBuffers.remove(draftKey);
+    }
+    if (!isAssistantDelta || !itemId.isEmpty()) {
+        m_database.saveConversationEvent(
+            event.threadId, event.type, event.title, persistedContent, event.metadata);
     }
     if (type == QStringLiteral("plan")) {
         m_threadPlans.insert(threadId, metadata.value(QStringLiteral("plan")).toList());

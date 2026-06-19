@@ -3,6 +3,8 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QUuid>
@@ -52,7 +54,11 @@ bool Database::migrate(QString *error)
         QStringLiteral("CREATE TABLE IF NOT EXISTS project_preferences (project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(project_id, key))"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS application_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS recent_models (model_id TEXT PRIMARY KEY, used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
-        QStringLiteral("INSERT OR IGNORE INTO schema_migrations(version) VALUES (2)")
+        QStringLiteral("CREATE TABLE IF NOT EXISTS conversation_events (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_thread_id TEXT NOT NULL, event_key TEXT, type TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, metadata TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+        QStringLiteral("CREATE UNIQUE INDEX IF NOT EXISTS conversation_events_thread_key ON conversation_events(provider_thread_id, event_key) WHERE event_key IS NOT NULL"),
+        QStringLiteral("CREATE INDEX IF NOT EXISTS conversation_events_thread_order ON conversation_events(provider_thread_id, id)"),
+        QStringLiteral("INSERT OR IGNORE INTO schema_migrations(version) VALUES (2)"),
+        QStringLiteral("INSERT OR IGNORE INTO schema_migrations(version) VALUES (3)")
     };
     if (!m_db.transaction()) {
         if (error)
@@ -200,6 +206,64 @@ bool Database::hideThread(qint64 projectId, const QString &threadId, QString *er
         return false;
     }
     return m_db.commit();
+}
+
+QVector<QVariantMap> Database::conversationEvents(const QString &threadId) const
+{
+    QVector<QVariantMap> result;
+    QSqlQuery query(m_db);
+    query.prepare(QStringLiteral(
+        "SELECT type, title, content, metadata FROM conversation_events "
+        "WHERE provider_thread_id=? ORDER BY id"));
+    query.addBindValue(threadId);
+    if (!query.exec())
+        return result;
+    while (query.next()) {
+        const auto metadataDocument = QJsonDocument::fromJson(query.value(3).toByteArray());
+        result.push_back({
+            {QStringLiteral("type"), query.value(0)},
+            {QStringLiteral("title"), query.value(1)},
+            {QStringLiteral("content"), query.value(2)},
+            {QStringLiteral("metadata"), metadataDocument.object().toVariantMap()}
+        });
+    }
+    return result;
+}
+
+bool Database::saveConversationEvent(const QString &threadId, const QString &type,
+                                     const QString &title, const QString &content,
+                                     const QVariantMap &metadata, QString *error)
+{
+    QString eventKey;
+    const auto itemId = metadata.value(QStringLiteral("itemId")).toString();
+    const auto turnId = metadata.value(QStringLiteral("turnId")).toString();
+    if (!itemId.isEmpty()) {
+        eventKey = QStringLiteral("item:%1").arg(itemId);
+    } else if (!turnId.isEmpty()
+               && (type == QStringLiteral("diff") || type == QStringLiteral("plan")
+                   || type == QStringLiteral("status"))) {
+        eventKey = QStringLiteral("%1:%2").arg(type, turnId);
+    }
+
+    QSqlQuery query(m_db);
+    query.prepare(QStringLiteral(
+        "INSERT INTO conversation_events(provider_thread_id, event_key, type, title, content, metadata) "
+        "VALUES (?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(provider_thread_id, event_key) WHERE event_key IS NOT NULL DO UPDATE SET "
+        "type=excluded.type, title=excluded.title, content=excluded.content, metadata=excluded.metadata"));
+    query.addBindValue(threadId);
+    query.addBindValue(eventKey.isEmpty() ? QVariant{} : QVariant{eventKey});
+    query.addBindValue(type);
+    query.addBindValue(title);
+    query.addBindValue(content);
+    query.addBindValue(QString::fromUtf8(
+        QJsonDocument(QJsonObject::fromVariantMap(metadata)).toJson(QJsonDocument::Compact)));
+    if (!query.exec()) {
+        if (error)
+            *error = query.lastError().text();
+        return false;
+    }
+    return true;
 }
 
 QString Database::setting(const QString &key, const QString &fallback) const

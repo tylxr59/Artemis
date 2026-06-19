@@ -10,8 +10,11 @@ Item {
 
     required property string diffText
     property bool compact: false
+    property int compactFileLimit: 5
+    property int compactLineLimit: 10
 
     readonly property var files: parseDiff(diffText)
+    readonly property var visibleFiles: compact ? files.slice(0, compactFileLimit) : files
     readonly property int additions: totalFor("additions")
     readonly property int deletions: totalFor("deletions")
 
@@ -188,12 +191,15 @@ Item {
         }
 
         Repeater {
-            model: root.files
+            model: root.visibleFiles
 
             delegate: Rectangle {
                 id: fileCard
                 required property var modelData
                 property bool expanded: true
+                readonly property var visibleLines: root.compact
+                                                    ? modelData.lines.slice(0, root.compactLineLimit)
+                                                    : modelData.lines
 
                 Layout.fillWidth: true
                 implicitHeight: fileLayout.implicitHeight
@@ -266,7 +272,7 @@ Item {
                         visible: fileCard.expanded
 
                         Repeater {
-                            model: fileCard.modelData.lines
+                            model: fileCard.visibleLines
 
                             delegate: Rectangle {
                                 id: diffLine
@@ -361,9 +367,33 @@ Item {
                                 }
                             }
                         }
+
+                        Label {
+                            width: fileCard.width
+                            visible: root.compact
+                                     && fileCard.modelData.lines.length > fileCard.visibleLines.length
+                            text: "… " + (fileCard.modelData.lines.length
+                                           - fileCard.visibleLines.length) + " more lines"
+                            leftPadding: Kirigami.Units.largeSpacing
+                            topPadding: Kirigami.Units.smallSpacing
+                            bottomPadding: Kirigami.Units.smallSpacing
+                            font: Kirigami.Theme.smallFont
+                            opacity: 0.55
+                        }
                     }
                 }
             }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: root.compact && root.files.length > root.visibleFiles.length
+            text: "… " + (root.files.length - root.visibleFiles.length) + " more changed files"
+            horizontalAlignment: Text.AlignHCenter
+            topPadding: Kirigami.Units.smallSpacing
+            bottomPadding: Kirigami.Units.smallSpacing
+            font: Kirigami.Theme.smallFont
+            opacity: 0.55
         }
     }
 }
