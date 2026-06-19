@@ -277,6 +277,11 @@ Kirigami.ApplicationWindow {
                 onClicked: appController.openProjectEditor()
             }
             ToolButton {
+                text: "Open terminal"
+                visible: root.hasProject
+                onClicked: appController.openTerminal()
+            }
+            ToolButton {
                 text: "Thread"
                 visible: root.hasThread
                 checkable: true
@@ -688,14 +693,6 @@ Kirigami.ApplicationWindow {
                 Kirigami.Separator { Layout.fillWidth: true }
                 RowLayout {
                     Layout.fillWidth: true
-                    ToolButton {
-                        icon.name: "utilities-terminal"
-                        enabled: root.hasProject
-                        onClicked: appController.openTerminal()
-                        Accessible.name: "Open terminal"
-                        ToolTip.text: Accessible.name
-                        ToolTip.visible: hovered
-                    }
                     Item { Layout.fillWidth: true }
                     ToolButton {
                         icon.name: "settings-configure"

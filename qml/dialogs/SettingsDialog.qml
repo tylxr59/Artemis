@@ -29,6 +29,8 @@ Dialog {
         titleModel.currentIndex = modelIndex(controller.titleModelId)
         const editorIndex = editorPicker.indexOfValue(controller.selectedEditorId)
         editorPicker.currentIndex = editorIndex >= 0 ? editorIndex : 0
+        const terminalIndex = terminalPicker.indexOfValue(controller.selectedTerminalId)
+        terminalPicker.currentIndex = terminalIndex >= 0 ? terminalIndex : 0
     }
 
     onOpened: loadValues()
@@ -37,6 +39,7 @@ Dialog {
         controller.commitModelId = commitModel.currentValue || ""
         controller.titleModelId = titleModel.currentValue || ""
         controller.selectedEditorId = editorPicker.currentValue || ""
+        controller.selectedTerminalId = terminalPicker.currentValue || ""
     }
 
     ColumnLayout {
@@ -91,7 +94,7 @@ Dialog {
         }
 
         Label {
-            text: "Editor"
+            text: "Applications"
             font.bold: true
             font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
         }
@@ -111,9 +114,24 @@ Dialog {
             }
         }
 
+        GridLayout {
+            Layout.fillWidth: true
+            columns: 2
+            columnSpacing: Kirigami.Units.largeSpacing
+
+            Label { text: "Open terminals with" }
+            ComboBox {
+                id: terminalPicker
+                Layout.fillWidth: true
+                model: root.controller.terminalOptions
+                textRole: "name"
+                valueRole: "id"
+            }
+        }
+
         Label {
             Layout.fillWidth: true
-            text: "Editors and IDEs are detected from installed desktop applications."
+            text: "Editors, IDEs, and terminal emulators are detected from installed desktop applications."
             wrapMode: Text.Wrap
             opacity: 0.65
         }

@@ -156,6 +156,8 @@ bool AppController::initialize()
     m_titleModelId = m_database.setting(QStringLiteral("title_model"));
     m_editorOptions = DesktopIntegration::availableEditors();
     m_selectedEditorId = m_database.setting(QStringLiteral("editor_desktop_id"));
+    m_terminalOptions = DesktopIntegration::availableTerminals();
+    m_selectedTerminalId = m_database.setting(QStringLiteral("terminal_desktop_id"));
     loadProjects();
     m_codex.start();
     return true;
@@ -171,6 +173,8 @@ QString AppController::commitModelId() const { return m_commitModelId; }
 QString AppController::titleModelId() const { return m_titleModelId; }
 QVariantList AppController::editorOptions() const { return m_editorOptions; }
 QString AppController::selectedEditorId() const { return m_selectedEditorId; }
+QVariantList AppController::terminalOptions() const { return m_terminalOptions; }
+QString AppController::selectedTerminalId() const { return m_selectedTerminalId; }
 int AppController::selectedProjectIndex() const { return m_selectedProject; }
 QString AppController::selectedProjectPath() const { return m_projects.row(m_selectedProject).path; }
 QString AppController::selectedProjectName() const { return m_projects.row(m_selectedProject).name; }
@@ -1170,6 +1174,11 @@ void AppController::setSelectedEditorId(const QString &desktopId)
     setModelSetting(QStringLiteral("editor_desktop_id"), m_selectedEditorId, desktopId);
 }
 
+void AppController::setSelectedTerminalId(const QString &desktopId)
+{
+    setModelSetting(QStringLiteral("terminal_desktop_id"), m_selectedTerminalId, desktopId);
+}
+
 void AppController::commitAllAndPush(const QString &subject, const QString &body)
 {
     m_git.commitAllAndPush(selectedWorkspacePath(), subject, body, [this](const GitResult &result) {
@@ -1274,7 +1283,8 @@ void AppController::openProjectEditor()
 void AppController::openTerminal()
 {
     QString error;
-    if (!DesktopIntegration::openTerminal(selectedWorkspacePath(), &error)
+    if (!DesktopIntegration::openTerminal(
+            m_selectedTerminalId, selectedWorkspacePath(), &error)
         && !error.isEmpty()) {
         setStatus(error);
     }

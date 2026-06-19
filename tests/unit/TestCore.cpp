@@ -1,5 +1,6 @@
 #include "git/GitService.h"
 #include "persistence/Database.h"
+#include "platform/DesktopIntegration.h"
 #include "platform/Paths.h"
 #include "providers/codex/CodexClient.h"
 
@@ -163,6 +164,79 @@ private slots:
         QVERIFY(completed);
         QVERIFY(!result.ok());
         QVERIFY(!result.error.isEmpty());
+    }
+
+    void terminalLauncherFallsBackToInstalledEmulator()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto executable = directory.filePath(QStringLiteral("konsole"));
+        const auto output = directory.filePath(QStringLiteral("terminal-cwd"));
+        QFile script(executable);
+        QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Text));
+        script.write("#!/bin/sh\npwd > \"$ARTEMIS_TEST_TERMINAL_OUTPUT\"\n");
+        script.close();
+        QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                      | QFileDevice::ExeOwner));
+
+        const auto previousPath = qgetenv("PATH");
+        qputenv("PATH", directory.path().toUtf8());
+        qputenv("ARTEMIS_TEST_TERMINAL_OUTPUT", output.toUtf8());
+        QString error;
+        const auto launched = DesktopIntegration::openTerminal(
+            QString{}, directory.path(), &error);
+        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(output), 2000);
+        qunsetenv("ARTEMIS_TEST_TERMINAL_OUTPUT");
+        qputenv("PATH", previousPath);
+
+        QVERIFY2(launched, qPrintable(error));
+        QFile result(output);
+        QVERIFY(result.open(QIODevice::ReadOnly | QIODevice::Text));
+        QCOMPARE(QString::fromUtf8(result.readAll()).trimmed(), directory.path());
+    }
+
+    void selectedTerminalUsesDesktopWorkingDirectoryArgument()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto executable = directory.filePath(QStringLiteral("fake-terminal"));
+        const auto output = directory.filePath(QStringLiteral("terminal-argument"));
+        QFile script(executable);
+        QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Text));
+        script.write("#!/bin/sh\nprintf '%s' \"$1\" > \"$ARTEMIS_TEST_TERMINAL_OUTPUT\"\n");
+        script.close();
+        QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                      | QFileDevice::ExeOwner));
+
+        const auto applicationsPath = QDir(
+            QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation))
+                                          .filePath(QStringLiteral("applications"));
+        QVERIFY(QDir().mkpath(applicationsPath));
+        const auto desktopId = QStringLiteral("artemis-test-terminal.desktop");
+        const auto desktopPath = QDir(applicationsPath).filePath(desktopId);
+        QFile desktopFile(desktopPath);
+        QVERIFY(desktopFile.open(QIODevice::WriteOnly | QIODevice::Text));
+        desktopFile.write(QStringLiteral(
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=Artemis Test Terminal\n"
+            "Exec=%1\n"
+            "Categories=System;TerminalEmulator;\n"
+            "X-TerminalArgDir=--cwd=\n").arg(executable).toUtf8());
+        desktopFile.close();
+
+        qputenv("ARTEMIS_TEST_TERMINAL_OUTPUT", output.toUtf8());
+        QString error;
+        const auto launched = DesktopIntegration::openTerminal(
+            desktopId, directory.path(), &error);
+        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(output), 2000);
+        qunsetenv("ARTEMIS_TEST_TERMINAL_OUTPUT");
+        QFile::remove(desktopPath);
+
+        QVERIFY2(launched, qPrintable(error));
+        QFile result(output);
+        QVERIFY(result.open(QIODevice::ReadOnly | QIODevice::Text));
+        QCOMPARE(QString::fromUtf8(result.readAll()), QStringLiteral("--cwd=") + directory.path());
     }
 
     void codexStartupFailureIsReported()
