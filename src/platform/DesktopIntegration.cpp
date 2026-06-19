@@ -445,6 +445,9 @@ void showNotification(const QString &title, const QString &text)
     KNotification::event(
         KNotification::Notification, title, text, icon,
         KNotification::CloseOnTimeout);
+    KNotification::event(
+        QStringLiteral("messageInformation"), QString{}, QPixmap(),
+        KNotification::CloseOnTimeout, QStringLiteral("plasma_workspace"));
 }
 
 }

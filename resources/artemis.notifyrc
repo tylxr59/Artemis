@@ -6,4 +6,5 @@ Comment=Artemis
 [Event/threadFinished]
 Name=Thread finished
 Comment=A coding thread finished working
-Action=Popup
+Action=Popup|Sound
+Sound=completion-success
