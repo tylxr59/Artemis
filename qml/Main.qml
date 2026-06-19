@@ -137,7 +137,6 @@ Kirigami.ApplicationWindow {
                 onClicked: {
                     commitDialog.featureMode = false
                     commitDialog.open()
-                    appController.generateCommitMessage()
                 }
             }
             ToolButton {
@@ -155,7 +154,6 @@ Kirigami.ApplicationWindow {
                         onTriggered: {
                             commitDialog.featureMode = false
                             commitDialog.open()
-                            appController.generateCommitMessage()
                         }
                     }
                     MenuItem {
@@ -172,7 +170,6 @@ Kirigami.ApplicationWindow {
                         onTriggered: {
                             commitDialog.featureMode = true
                             commitDialog.open()
-                            appController.generateCommitMessage()
                         }
                     }
                 }

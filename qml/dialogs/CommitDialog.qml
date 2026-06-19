@@ -7,6 +7,8 @@ Dialog {
     id: root
     required property var controller
     property bool featureMode: false
+    property bool busy: false
+    property bool generating: false
     title: featureMode ? "Commit to feature branch" : "Commit and push changes"
     modal: true
     anchors.centerIn: parent
@@ -18,10 +20,11 @@ Dialog {
 
         Button {
             text: root.featureMode ? "Create, commit, and push" : "Commit and push all changes"
-            enabled: subjectEdit.text.trim().length > 0 && !busy.running
+            enabled: subjectEdit.text.trim().length > 0 && !root.busy
             DialogButtonBox.buttonRole: DialogButtonBox.ActionRole
             onClicked: {
-                busy.running = true
+                root.busy = true
+                root.generating = false
                 resultLabel.text = ""
                 if (root.featureMode)
                     root.controller.commitFeatureBranch(
@@ -45,10 +48,11 @@ Dialog {
             }
             if (root.featureMode)
                 branchEdit.text = root.controller.suggestBranch(subjectEdit.text)
-            busy.running = false
+            root.busy = false
+            root.generating = false
         }
         function onCommitFinished(success, message) {
-            busy.running = false
+            root.busy = false
             resultLabel.text = message
             resultLabel.color = success ? Kirigami.Theme.positiveTextColor
                                         : Kirigami.Theme.negativeTextColor
@@ -73,15 +77,10 @@ Dialog {
                 text: "Generated with the commit model configured in Settings"
                 opacity: 0.65
             }
-            Button {
-                text: "Generate"
-                onClicked: {
-                    busy.running = true
-                    resultLabel.text = ""
-                    root.controller.generateCommitMessage()
-                }
+            Label {
+                text: "Generating..."
+                visible: root.generating
             }
-            BusyIndicator { id: busy; running: false }
         }
 
         Label { text: "Subject"; font.bold: true }
@@ -136,6 +135,8 @@ Dialog {
         subjectEdit.text = ""
         bodyEdit.text = ""
         branchEdit.text = ""
-        busy.running = false
+        root.busy = true
+        root.generating = true
+        root.controller.generateCommitMessage()
     }
 }
