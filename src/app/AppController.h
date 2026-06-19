@@ -95,6 +95,7 @@ public:
     Q_INVOKABLE bool sendPrompt(const QString &text, const QVariantList &images,
                                 const QString &modelId, const QString &reasoningEffort,
                                 const QString &permissionMode);
+    Q_INVOKABLE void copyText(const QString &text);
     Q_INVOKABLE QString pasteClipboardImage();
     Q_INVOKABLE void interruptTurn();
     Q_INVOKABLE void refreshGit();
@@ -122,6 +123,7 @@ signals:
     void turnElapsedChanged();
     void providerReadyChanged();
     void statusTextChanged();
+    void statusMessage(const QString &text);
     void tokenUsageChanged();
     void diffChanged();
     void commitDraftReady(const QString &message);

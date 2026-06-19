@@ -98,6 +98,77 @@ Kirigami.ApplicationWindow {
                     root.composerImages = root.composerImages.concat([restored[i]])
             }
         }
+        function onStatusMessage(text) {
+            statusToast.showMessage(text)
+        }
+    }
+
+    Popup {
+        id: statusToast
+        parent: Overlay.overlay
+        property string message: ""
+
+        function showMessage(text) {
+            if (text.length === 0)
+                return
+            message = text
+            open()
+            dismissTimer.restart()
+        }
+
+        x: {
+            const position = composerFrame.mapToItem(Overlay.overlay, 0, 0)
+            return Math.max(Kirigami.Units.largeSpacing,
+                            position.x + (composerFrame.width - width) / 2)
+        }
+        y: {
+            const position = composerFrame.mapToItem(Overlay.overlay, 0, 0)
+            return Math.max(Kirigami.Units.largeSpacing,
+                            position.y - height - Kirigami.Units.smallSpacing)
+        }
+        width: Math.min(840, Math.max(280,
+                                     conversationPane.width
+                                     - Kirigami.Units.largeSpacing * 2))
+        padding: Kirigami.Units.smallSpacing
+        modal: false
+        focus: false
+        closePolicy: Popup.NoAutoClose
+
+        background: Rectangle {
+            radius: Kirigami.Units.smallSpacing
+            color: Kirigami.Theme.backgroundColor
+            border.color: Qt.alpha(Kirigami.Theme.textColor, 0.28)
+        }
+
+        contentItem: RowLayout {
+            spacing: Kirigami.Units.smallSpacing
+
+            Label {
+                text: statusToast.message
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                maximumLineCount: 3
+                elide: Text.ElideRight
+            }
+            ToolButton {
+                icon.name: "edit-copy"
+                Accessible.name: "Copy notification"
+                ToolTip.text: Accessible.name
+                ToolTip.visible: hovered
+                onClicked: appController.copyText(statusToast.message)
+            }
+        }
+
+        Timer {
+            id: dismissTimer
+            interval: 5000
+            onTriggered: statusToast.close()
+        }
+
+        Component.onCompleted: {
+            if (appController.statusText.length > 0)
+                showMessage(appController.statusText)
+        }
     }
 
     header: ToolBar {
@@ -501,6 +572,7 @@ Kirigami.ApplicationWindow {
         }
 
         Pane {
+            id: conversationPane
             SplitView.fillWidth: true
             SplitView.minimumWidth: 360
             padding: 0
@@ -654,6 +726,7 @@ Kirigami.ApplicationWindow {
                 }
 
                 Frame {
+                    id: composerFrame
                     visible: root.hasProject && appController.providerReady
                     Layout.fillWidth: true
                     Layout.maximumWidth: 840
@@ -795,13 +868,7 @@ Kirigami.ApplicationWindow {
                                                 : "Allow commands and edits without prompts."
                                 ToolTip.visible: hovered
                             }
-                            Label {
-                                text: appController.statusText
-                                Layout.fillWidth: true
-                                horizontalAlignment: Text.AlignRight
-                                elide: Text.ElideRight
-                                opacity: 0.7
-                            }
+                            Item { Layout.fillWidth: true }
                             Item {
                                 id: contextUsageIndicator
                                 Layout.preferredWidth: 36

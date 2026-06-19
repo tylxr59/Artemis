@@ -16,6 +16,7 @@
 #include <QLocale>
 #include <QMimeData>
 #include <QProcess>
+#include <QTextStream>
 #include <QTime>
 #include <QUrl>
 #include <QUuid>
@@ -649,6 +650,11 @@ bool AppController::sendPrompt(const QString &text, const QVariantList &imageVal
     return true;
 }
 
+void AppController::copyText(const QString &text)
+{
+    QApplication::clipboard()->setText(text);
+}
+
 void AppController::startPromptTurn(const QString &threadId, const QString &prompt,
                                     const QStringList &images,
                                     PermissionProfile permissionProfile, bool generateTitle)
@@ -1090,6 +1096,8 @@ void AppController::openTerminal()
 
 void AppController::setStatus(const QString &text)
 {
+    QTextStream(stdout) << text << Qt::endl;
+    emit statusMessage(text);
     if (m_status == text)
         return;
     m_status = text;
