@@ -344,6 +344,11 @@ void CodexClient::normalizeItem(const QString &lifecycle, const QJsonObject &par
             return;
         domainType = QStringLiteral("reasoning");
         title = QStringLiteral("Reasoning");
+    } else if (type == QStringLiteral("plan")) {
+        if (lifecycle == QStringLiteral("started"))
+            return;
+        domainType = QStringLiteral("task");
+        title = QStringLiteral("Tasks");
     }
     const auto content = itemContent(item);
     if (content.isEmpty())

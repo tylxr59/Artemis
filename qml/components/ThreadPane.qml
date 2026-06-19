@@ -117,11 +117,48 @@ Pane {
                         Layout.fillWidth: true
                         Layout.leftMargin: Kirigami.Units.largeSpacing
                         Layout.rightMargin: Kirigami.Units.largeSpacing
+                        spacing: Kirigami.Units.smallSpacing
+
+                        Label {
+                            text: "Tasks"
+                            font.bold: true
+                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
+                        }
+                        TextArea {
+                            Layout.fillWidth: true
+                            visible: root.controller.currentTasks.length > 0
+                            text: root.controller.currentTasks
+                            textFormat: TextEdit.PlainText
+                            readOnly: true
+                            wrapMode: TextEdit.Wrap
+                            selectByMouse: true
+                            background: null
+                        }
+                        Kirigami.PlaceholderMessage {
+                            Layout.fillWidth: true
+                            visible: root.controller.currentTasks.length === 0
+                            text: root.controller.selectedThreadId.length > 0
+                                  ? "No tasks yet" : "No thread selected"
+                            explanation: root.controller.selectedThreadId.length > 0
+                                         ? "Generated task details will appear here."
+                                         : "Select or start a thread to see its task details."
+                        }
+                    }
+
+                    Kirigami.Separator {
+                        Layout.fillWidth: true
+                        visible: root.controller.selectedThreadId.length > 0
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Kirigami.Units.largeSpacing
+                        Layout.rightMargin: Kirigami.Units.largeSpacing
                         Layout.bottomMargin: Kirigami.Units.largeSpacing
                         spacing: Kirigami.Units.smallSpacing
 
                         Label {
-                            text: "Plan"
+                            text: "Plan steps"
                             font.bold: true
                             font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
                         }
@@ -146,6 +183,7 @@ Pane {
                                         source: modelData.status === "completed"
                                                 ? "task-complete"
                                                 : modelData.status === "in_progress"
+                                                  || modelData.status === "inProgress"
                                                   ? "media-playback-start"
                                                   : "media-playback-pause"
                                         Layout.preferredWidth: 18
@@ -153,6 +191,7 @@ Pane {
                                         color: modelData.status === "completed"
                                                ? Kirigami.Theme.positiveTextColor
                                                : modelData.status === "in_progress"
+                                                 || modelData.status === "inProgress"
                                                  ? Kirigami.Theme.highlightColor
                                                  : Kirigami.Theme.textColor
                                         opacity: modelData.status === "pending" ? 0.45 : 1
@@ -172,10 +211,10 @@ Pane {
                             Layout.topMargin: Kirigami.Units.gridUnit * 2
                             visible: root.controller.currentPlan.length === 0
                             text: root.controller.selectedThreadId.length > 0
-                                  ? "No plan yet" : "No thread selected"
+                                  ? "No plan steps yet" : "No thread selected"
                             explanation: root.controller.selectedThreadId.length > 0
                                          ? "Plan steps will appear here when Artemis creates them."
-                                         : "Select or start a thread to see its task details."
+                                         : "Select or start a thread to see its plan."
                         }
                     }
                 }

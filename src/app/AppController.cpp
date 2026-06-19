@@ -289,6 +289,10 @@ QVariantMap AppController::selectedThreadInfo() const
     return m_selectedThread >= 0 && m_selectedThread < m_threads.size()
         ? m_threads.at(m_selectedThread).toMap() : QVariantMap{};
 }
+QString AppController::currentTasks() const
+{
+    return m_threadTasks.value(selectedThreadId());
+}
 QVariantList AppController::currentPlan() const
 {
     return m_threadPlans.value(selectedThreadId());
@@ -439,6 +443,7 @@ void AppController::removeThread(int index)
     m_threads.removeAt(index);
     m_threadPlans.remove(threadId);
     m_threadPlanExplanations.remove(threadId);
+    m_threadTasks.remove(threadId);
     if (removedSelected) {
         m_selectedThread = -1;
         m_conversation.setThread({});
@@ -447,6 +452,7 @@ void AppController::removeThread(int index)
     }
     emit threadsChanged();
     emit selectedThreadChanged();
+    emit currentTasksChanged();
     emit currentPlanChanged();
 
     if (removedSelected && !m_threads.isEmpty())
@@ -463,6 +469,7 @@ void AppController::selectProject(int index)
     emit selectedProjectChanged();
     emit selectedThreadChanged();
     emit tokenUsageChanged();
+    emit currentTasksChanged();
     emit currentPlanChanged();
     loadThreads();
     refreshGit();
@@ -523,6 +530,7 @@ void AppController::loadThreads(const QString &threadToSelect)
                 if (threadToSelect == m_activeThreadId) {
                     m_selectedThread = i;
                     emit selectedThreadChanged();
+                    emit currentTasksChanged();
                     emit currentPlanChanged();
                 } else {
                     selectThread(i);
@@ -581,6 +589,7 @@ void AppController::selectThread(int index)
     m_conversation.setThread(selectedThreadId());
     emit selectedThreadChanged();
     emit tokenUsageChanged();
+    emit currentTasksChanged();
     emit currentPlanChanged();
     const auto threadId = selectedThreadId();
     m_codex.resumeThread(threadId, [this, threadId](const QJsonObject &result, const QString &error) {
@@ -596,20 +605,25 @@ void AppController::selectThread(int index)
                 const auto type = stored.value(QStringLiteral("type")).toString();
                 const auto content = stored.value(QStringLiteral("content")).toString();
                 const auto metadata = stored.value(QStringLiteral("metadata")).toMap();
-                m_conversation.append(
-                    {threadId,
-                     type,
-                     stored.value(QStringLiteral("title")).toString(),
-                     content,
-                     metadata});
+                if (type != QStringLiteral("plan") && type != QStringLiteral("task")) {
+                    m_conversation.append(
+                        {threadId,
+                         type,
+                         stored.value(QStringLiteral("title")).toString(),
+                         content,
+                         metadata});
+                }
                 if (type == QStringLiteral("plan")) {
                     m_threadPlans.insert(threadId, metadata.value(QStringLiteral("plan")).toList());
                     m_threadPlanExplanations.insert(
                         threadId, metadata.value(QStringLiteral("explanation")).toString());
+                } else if (type == QStringLiteral("task")) {
+                    m_threadTasks.insert(threadId, content);
                 } else if (type == QStringLiteral("diff")) {
                     m_diff = content;
                 }
             }
+            emit currentTasksChanged();
             emit currentPlanChanged();
             emit diffChanged();
             return;
@@ -640,6 +654,9 @@ void AppController::selectThread(int index)
                 } else if (type == QStringLiteral("fileChange")) {
                     eventType = QStringLiteral("file");
                     title = QStringLiteral("File changes");
+                } else if (type == QStringLiteral("plan")) {
+                    eventType = QStringLiteral("task");
+                    title = QStringLiteral("Tasks");
                 } else {
                     continue;
                 }
@@ -647,11 +664,15 @@ void AppController::selectThread(int index)
                     {{QStringLiteral("lifecycle"), QStringLiteral("completed")},
                      {QStringLiteral("itemId"), item.value(QStringLiteral("id")).toString()},
                      {QStringLiteral("turnId"), turn.value(QStringLiteral("id")).toString()}}};
-                m_conversation.append(event);
+                if (eventType != QStringLiteral("task"))
+                    m_conversation.append(event);
                 m_database.saveConversationEvent(
                     event.threadId, event.type, event.title, event.content, event.metadata);
+                if (eventType == QStringLiteral("task"))
+                    m_threadTasks.insert(threadId, content);
             }
         }
+        emit currentTasksChanged();
     });
 }
 
@@ -712,6 +733,7 @@ void AppController::beginThread(const QString &modelId, const QString &reasoning
         emit threadsChanged();
         emit selectedThreadChanged();
         emit tokenUsageChanged();
+        emit currentTasksChanged();
         emit currentPlanChanged();
         if (!m_pendingPrompt.isEmpty() || !m_pendingImages.isEmpty()) {
             const QString prompt = std::exchange(m_pendingPrompt, {});
@@ -935,8 +957,16 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
         m_threadPlans.insert(threadId, metadata.value(QStringLiteral("plan")).toList());
         m_threadPlanExplanations.insert(
             threadId, metadata.value(QStringLiteral("explanation")).toString());
-        if (threadId == selectedThreadId())
+        if (threadId == selectedThreadId()) {
             emit currentPlanChanged();
+            emit taskPanelRequested();
+        }
+    } else if (type == QStringLiteral("task")) {
+        m_threadTasks.insert(threadId, content);
+        if (threadId == selectedThreadId()) {
+            emit currentTasksChanged();
+            emit taskPanelRequested();
+        }
     } else if (type == QStringLiteral("assistant"))
         m_conversation.appendOrMergeDelta(event);
     else

@@ -33,6 +33,7 @@ class AppController : public QObject {
     Q_PROPERTY(QString selectedThreadId READ selectedThreadId NOTIFY selectedThreadChanged)
     Q_PROPERTY(QString selectedThreadTitle READ selectedThreadTitle NOTIFY selectedThreadChanged)
     Q_PROPERTY(QVariantMap selectedThreadInfo READ selectedThreadInfo NOTIFY selectedThreadChanged)
+    Q_PROPERTY(QString currentTasks READ currentTasks NOTIFY currentTasksChanged)
     Q_PROPERTY(QVariantList currentPlan READ currentPlan NOTIFY currentPlanChanged)
     Q_PROPERTY(QString currentPlanExplanation READ currentPlanExplanation NOTIFY currentPlanChanged)
     Q_PROPERTY(bool turnRunning READ turnRunning NOTIFY turnRunningChanged)
@@ -70,6 +71,7 @@ public:
     QString selectedThreadId() const;
     QString selectedThreadTitle() const;
     QVariantMap selectedThreadInfo() const;
+    QString currentTasks() const;
     QVariantList currentPlan() const;
     QString currentPlanExplanation() const;
     bool turnRunning() const;
@@ -125,7 +127,9 @@ signals:
     void settingsChanged();
     void selectedProjectChanged();
     void selectedThreadChanged();
+    void currentTasksChanged();
     void currentPlanChanged();
+    void taskPanelRequested();
     void turnRunningChanged();
     void turnElapsedChanged();
     void providerReadyChanged();
@@ -186,6 +190,7 @@ private:
     QString m_activeThreadId;
     QHash<QString, QVariantList> m_threadPlans;
     QHash<QString, QString> m_threadPlanExplanations;
+    QHash<QString, QString> m_threadTasks;
     QString m_pendingPrompt;
     QStringList m_pendingImages;
     QString m_pendingModelId;

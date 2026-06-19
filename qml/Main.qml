@@ -101,6 +101,10 @@ Kirigami.ApplicationWindow {
         function onStatusMessage(text) {
             statusToast.showMessage(text)
         }
+        function onTaskPanelRequested() {
+            root.sidePanelMode = "thread"
+            root.sidePanelVisible = true
+        }
     }
 
     Popup {
