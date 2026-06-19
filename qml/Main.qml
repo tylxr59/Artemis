@@ -33,6 +33,10 @@ Kirigami.ApplicationWindow {
                                           + splitHandleWidth : 0)
     readonly property bool hasProject: appController.selectedProjectPath.length > 0
     readonly property bool hasThread: appController.selectedThreadId.length > 0
+    readonly property bool pendingQuestionVisible:
+        appController.hasPendingUserInput
+        && appController.pendingUserInputQuestion.threadId
+           === appController.selectedThreadId
     property var composerImages: []
     property var projectThreadCache: ({})
     property var expandedProjects: ({})
@@ -118,6 +122,14 @@ Kirigami.ApplicationWindow {
         if (value >= 1000)
             return Math.round(value / 1000) + "k"
         return value.toString()
+    }
+
+    function answerPendingQuestion(answer) {
+        if (!appController.answerPendingUserInput(answer))
+            return false
+        composer.clear()
+        composer.forceActiveFocus()
+        return true
     }
 
     CommitDialog {
@@ -961,6 +973,64 @@ Kirigami.ApplicationWindow {
 
                     ColumnLayout {
                         anchors.fill: parent
+                        Frame {
+                            id: userInputFrame
+                            visible: root.pendingQuestionVisible
+                            Layout.fillWidth: true
+                            padding: Kirigami.Units.largeSpacing
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                spacing: Kirigami.Units.smallSpacing
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: appController.pendingUserInputQuestion.header
+                                              || "Question"
+                                        font.bold: true
+                                    }
+                                    Label {
+                                        visible: appController.pendingUserInputQuestionCount > 1
+                                        text: appController.pendingUserInputQuestionNumber
+                                              + " of "
+                                              + appController.pendingUserInputQuestionCount
+                                        font: Kirigami.Theme.smallFont
+                                        opacity: 0.6
+                                    }
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: appController.pendingUserInputQuestion.question || ""
+                                    wrapMode: Text.Wrap
+                                }
+                                Flow {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: childrenRect.height
+                                    spacing: Kirigami.Units.smallSpacing
+
+                                    Repeater {
+                                        model: appController.pendingUserInputQuestion.options || []
+                                        delegate: Button {
+                                            required property var modelData
+                                            text: modelData.label
+                                            Accessible.description: modelData.description || ""
+                                            ToolTip.text: modelData.description || ""
+                                            ToolTip.visible: hovered
+                                            onClicked: root.answerPendingQuestion(modelData.label)
+                                        }
+                                    }
+                                    Button {
+                                        text: "Other…"
+                                        icon.name: "document-edit"
+                                        onClicked: composer.forceActiveFocus()
+                                        ToolTip.text: "Type a different answer below."
+                                        ToolTip.visible: hovered
+                                    }
+                                }
+                            }
+                        }
                         Flickable {
                             Layout.fillWidth: true
                             Layout.preferredHeight: root.composerImages.length > 0 ? 92 : 0
@@ -1013,13 +1083,16 @@ Kirigami.ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Math.max(90, implicitHeight)
                             Layout.maximumHeight: 260
-                            placeholderText: appController.turnRunning
+                            placeholderText: root.pendingQuestionVisible
+                                             ? "Type a different answer…"
+                                             : appController.turnRunning
                                              ? "Add guidance while Artemis is working…"
                                              : "Describe a task, ask a question, or paste an error…"
                             wrapMode: TextEdit.Wrap
                             enabled: root.hasProject && appController.providerReady
                             Keys.onPressed: event => {
-                                if (event.matches(StandardKey.Paste)) {
+                                if (!root.pendingQuestionVisible
+                                        && event.matches(StandardKey.Paste)) {
                                     const imagePath = appController.pasteClipboardImage()
                                     if (imagePath.length > 0) {
                                         root.composerImages =
@@ -1259,10 +1332,15 @@ Kirigami.ApplicationWindow {
                                                   : "Send (Enter)"
                                     ToolTip.visible: hovered
                                     enabled: (composer.text.trim().length > 0
-                                              || root.composerImages.length > 0)
+                                              || (!root.pendingQuestionVisible
+                                                  && root.composerImages.length > 0))
                                              && root.hasProject
                                              && appController.providerReady
                                     onClicked: {
+                                        if (root.pendingQuestionVisible) {
+                                            root.answerPendingQuestion(composer.text)
+                                            return
+                                        }
                                         if (appController.sendPrompt(
                                                     composer.text,
                                                     root.composerImages,

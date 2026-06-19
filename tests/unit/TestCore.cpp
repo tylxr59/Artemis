@@ -37,7 +37,14 @@ public:
 
     void listThreads(const QString &, ResultHandler handler) override
     {
-        handler({{QStringLiteral("data"), QJsonArray{}}}, {});
+        QJsonArray data;
+        if (!availableThreadId.isEmpty()) {
+            data.append(QJsonObject{
+                {QStringLiteral("id"), availableThreadId},
+                {QStringLiteral("title"), QStringLiteral("Test thread")},
+                {QStringLiteral("cwd"), lastThreadConfiguration.workspacePath}});
+        }
+        handler({{QStringLiteral("data"), data}}, {});
     }
 
     void startThread(const ThreadConfiguration &configuration,
@@ -74,6 +81,14 @@ public:
         handler({}, {});
     }
 
+    void respondToUserInput(const QString &itemId, const QVariantMap &answers,
+                            ResultHandler handler) override
+    {
+        lastUserInputItemId = itemId;
+        lastUserInputAnswers = answers;
+        handler({}, {});
+    }
+
     void setThreadName(const QString &, const QString &, ResultHandler handler) override
     {
         handler({}, {});
@@ -86,6 +101,7 @@ public:
 
     void completeThreadStart(const QString &threadId)
     {
+        availableThreadId = threadId;
         auto handler = std::move(pendingStartThread);
         QVERIFY(handler);
         handler({{QStringLiteral("thread"),
@@ -96,6 +112,9 @@ public:
     ResultHandler pendingStartThread;
     QString lastTurnText;
     QString lastTurnModelId;
+    QString lastUserInputItemId;
+    QVariantMap lastUserInputAnswers;
+    QString availableThreadId;
 
 private:
     bool m_ready = false;
@@ -403,6 +422,72 @@ private slots:
         qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
     }
 
+    void codexUserInputRequestWritesProtocolResponse()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto executable = directory.filePath(QStringLiteral("fake-codex"));
+        const auto responsePath = directory.filePath(QStringLiteral("response.json"));
+        QFile script(executable);
+        QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Text));
+        script.write(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = \"--version\" ]; then\n"
+            "  echo 'codex-cli 0.141.0'\n"
+            "  exit 0\n"
+            "fi\n"
+            "IFS= read -r request\n"
+            "id=$(printf '%s' \"$request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
+            "printf '{\"id\":%s,\"result\":{}}\\n' \"$id\"\n"
+            "IFS= read -r initialized\n"
+            "printf '%s\\n' '{\"id\":77,\"method\":\"item/tool/requestUserInput\","
+            "\"params\":{\"threadId\":\"thread-1\",\"turnId\":\"turn-1\","
+            "\"itemId\":\"input-1\",\"questions\":[{\"id\":\"scope\","
+            "\"header\":\"Scope\",\"question\":\"Which scope?\","
+            "\"options\":[{\"label\":\"Focused\",\"description\":\"Small change\"}]}]}}'\n"
+            "IFS= read -r response\n"
+            "printf '%s' \"$response\" > \"$ARTEMIS_TEST_USER_INPUT_RESPONSE\"\n"
+            "sleep 5\n");
+        script.close();
+        QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                      | QFileDevice::ExeOwner));
+
+        qputenv("ARTEMIS_CODEX_EXECUTABLE", executable.toUtf8());
+        qputenv("ARTEMIS_TEST_USER_INPUT_RESPONSE", responsePath.toUtf8());
+        CodexClient client;
+        QSignalSpy requests(&client, &CodexClient::userInputRequested);
+        client.start();
+        QTRY_COMPARE_WITH_TIMEOUT(requests.count(), 1, 3000);
+        QCOMPARE(requests.constFirst().at(0).toString(), QStringLiteral("thread-1"));
+        QCOMPARE(requests.constFirst().at(2).toString(), QStringLiteral("input-1"));
+
+        bool responseCompleted = false;
+        client.respondToUserInput(
+            QStringLiteral("input-1"),
+            {{QStringLiteral("scope"),
+              QVariantMap{{QStringLiteral("answers"),
+                           QStringList{QStringLiteral("Focused")}}}}},
+            [&responseCompleted](const QJsonObject &, const QString &error) {
+                QVERIFY2(error.isEmpty(), qPrintable(error));
+                responseCompleted = true;
+            });
+        QVERIFY(responseCompleted);
+        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(responsePath), 2000);
+
+        QFile responseFile(responsePath);
+        QVERIFY(responseFile.open(QIODevice::ReadOnly | QIODevice::Text));
+        const auto response = QJsonDocument::fromJson(responseFile.readAll()).object();
+        QCOMPARE(response.value(QStringLiteral("id")).toInt(), 77);
+        const auto answers = response.value(QStringLiteral("result")).toObject()
+                                 .value(QStringLiteral("answers")).toObject();
+        QCOMPARE(answers.value(QStringLiteral("scope")).toObject()
+                     .value(QStringLiteral("answers")).toArray().at(0).toString(),
+                 QStringLiteral("Focused"));
+
+        qunsetenv("ARTEMIS_TEST_USER_INPUT_RESPONSE");
+        qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
+    }
+
     void delayedThreadCreationDoesNotChangeAnotherProject()
     {
         QTemporaryDir root;
@@ -447,6 +532,68 @@ private slots:
         QVERIFY(controller.selectedThreadId().isEmpty());
         QVERIFY(controller.threads().isEmpty());
         QCOMPARE(restored.count(), 1);
+    }
+
+    void planModeUserInputCollectsAnswers()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const auto projectPath = root.filePath(QStringLiteral("project"));
+        QVERIFY(QDir().mkpath(projectPath));
+
+        FakeAgentProvider provider;
+        AppController controller(&provider);
+        QVERIFY(controller.initialize());
+        controller.addProject(projectPath);
+        QVERIFY(controller.sendPrompt(
+            QStringLiteral("Plan this feature"), {}, QStringLiteral("test-model"), {},
+            QStringLiteral("full-access"), QStringLiteral("plan")));
+        provider.completeThreadStart(QStringLiteral("plan-thread"));
+
+        const QVariantList questions{
+            QVariantMap{
+                {QStringLiteral("id"), QStringLiteral("scope")},
+                {QStringLiteral("header"), QStringLiteral("Scope")},
+                {QStringLiteral("question"), QStringLiteral("Which scope?")},
+                {QStringLiteral("options"),
+                 QVariantList{
+                     QVariantMap{{QStringLiteral("label"), QStringLiteral("Focused")},
+                                 {QStringLiteral("description"),
+                                  QStringLiteral("Change only the composer.")}},
+                     QVariantMap{{QStringLiteral("label"), QStringLiteral("Broad")},
+                                 {QStringLiteral("description"),
+                                  QStringLiteral("Update the full chat flow.")}}}}},
+            QVariantMap{
+                {QStringLiteral("id"), QStringLiteral("details")},
+                {QStringLiteral("header"), QStringLiteral("Details")},
+                {QStringLiteral("question"), QStringLiteral("Any other requirements?")},
+                {QStringLiteral("options"), QVariantList{}}}};
+        emit provider.userInputRequested(
+            QStringLiteral("plan-thread"), QStringLiteral("turn-1"),
+            QStringLiteral("input-item"), questions);
+
+        QVERIFY(controller.hasPendingUserInput());
+        QCOMPARE(controller.pendingUserInputQuestionCount(), 2);
+        QCOMPARE(controller.pendingUserInputQuestionNumber(), 1);
+        QCOMPARE(controller.pendingUserInputQuestion().value(QStringLiteral("id")).toString(),
+                 QStringLiteral("scope"));
+
+        QVERIFY(controller.answerPendingUserInput(QStringLiteral("Focused")));
+        QVERIFY(controller.hasPendingUserInput());
+        QCOMPARE(controller.pendingUserInputQuestionNumber(), 2);
+        QCOMPARE(controller.pendingUserInputQuestion().value(QStringLiteral("id")).toString(),
+                 QStringLiteral("details"));
+
+        QVERIFY(controller.answerPendingUserInput(
+            QStringLiteral("Keep free-form answers available.")));
+        QVERIFY(!controller.hasPendingUserInput());
+        QCOMPARE(provider.lastUserInputItemId, QStringLiteral("input-item"));
+        QCOMPARE(provider.lastUserInputAnswers.value(QStringLiteral("scope")).toMap()
+                     .value(QStringLiteral("answers")).toStringList(),
+                 QStringList{QStringLiteral("Focused")});
+        QCOMPARE(provider.lastUserInputAnswers.value(QStringLiteral("details")).toMap()
+                     .value(QStringLiteral("answers")).toStringList(),
+                 QStringList{QStringLiteral("Keep free-form answers available.")});
     }
 
     void commitGenerationKeepsOriginalRepositoryContext()

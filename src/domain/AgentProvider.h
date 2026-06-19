@@ -60,6 +60,8 @@ public:
                            const QStringList &images, ResultHandler handler) = 0;
     virtual void interruptTurn(const QString &threadId, const QString &turnId,
                                ResultHandler handler) = 0;
+    virtual void respondToUserInput(const QString &itemId, const QVariantMap &answers,
+                                    ResultHandler handler) = 0;
     virtual void setThreadName(const QString &threadId, const QString &name,
                                ResultHandler handler) = 0;
     virtual QString itemContent(const QJsonObject &item) const = 0;
@@ -70,6 +72,8 @@ signals:
     void activeTurnStarted(const QString &threadId, const QString &turnId);
     void tokenUsageUpdated(const QString &threadId, qint64 contextTokens,
                            qint64 totalProcessedTokens, qint64 modelContextWindow);
+    void userInputRequested(const QString &threadId, const QString &turnId,
+                            const QString &itemId, const QVariantList &questions);
     void domainEvent(const QString &threadId, const QString &type,
                      const QString &title, const QString &content,
                      const QVariantMap &metadata);

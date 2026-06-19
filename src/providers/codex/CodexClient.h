@@ -35,6 +35,8 @@ public:
                    const QStringList &images, ResultHandler handler) override;
     void interruptTurn(const QString &threadId, const QString &turnId,
                        ResultHandler handler) override;
+    void respondToUserInput(const QString &itemId, const QVariantMap &answers,
+                            ResultHandler handler) override;
     void setThreadName(const QString &threadId, const QString &name,
                        ResultHandler handler) override;
     QString itemContent(const QJsonObject &item) const override;
@@ -53,13 +55,17 @@ private:
     void scheduleRestart(const QString &reason);
     void handleLine(const QByteArray &line);
     void handleNotification(const QString &method, const QJsonObject &params);
+    void handleServerRequest(const QJsonValue &id, const QString &method,
+                             const QJsonObject &params);
     void normalizeItem(const QString &lifecycle, const QJsonObject &params);
+    void writeResponse(const QJsonValue &id, const QJsonObject &result);
     void setReady(bool ready);
 
     QProcess m_process;
     QTimer m_restartTimer;
     QByteArray m_buffer;
     QHash<qint64, Pending> m_pending;
+    QHash<QString, QJsonValue> m_pendingUserInputRequests;
     qint64 m_nextId = 1;
     bool m_ready = false;
     bool m_stopping = false;

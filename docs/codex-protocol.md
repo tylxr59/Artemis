@@ -21,3 +21,8 @@ threads are ephemeral. Generated titles are applied with `thread/name/set`.
 Artemis tracks the active turn returned by `turn/start`. Messages submitted
 while that turn is running use `turn/steer` with `expectedTurnId`; cancellation
 uses `turn/interrupt` with the same id in `turnId`.
+
+Plan-mode questions arrive as the server request
+`item/tool/requestUserInput`. Artemis presents each question's options above the
+composer and replies to that request with an `answers` object after all
+questions have been answered.

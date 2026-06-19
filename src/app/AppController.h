@@ -41,6 +41,10 @@ class AppController : public QObject {
     Q_PROPERTY(QVariantList currentPlan READ currentPlan NOTIFY currentPlanChanged)
     Q_PROPERTY(QString currentPlanExplanation READ currentPlanExplanation NOTIFY currentPlanChanged)
     Q_PROPERTY(bool turnRunning READ turnRunning NOTIFY turnRunningChanged)
+    Q_PROPERTY(bool hasPendingUserInput READ hasPendingUserInput NOTIFY pendingUserInputChanged)
+    Q_PROPERTY(QVariantMap pendingUserInputQuestion READ pendingUserInputQuestion NOTIFY pendingUserInputChanged)
+    Q_PROPERTY(int pendingUserInputQuestionNumber READ pendingUserInputQuestionNumber NOTIFY pendingUserInputChanged)
+    Q_PROPERTY(int pendingUserInputQuestionCount READ pendingUserInputQuestionCount NOTIFY pendingUserInputChanged)
     Q_PROPERTY(QString turnElapsedText READ turnElapsedText NOTIFY turnElapsedChanged)
     Q_PROPERTY(bool providerReady READ providerReady NOTIFY providerReadyChanged)
     Q_PROPERTY(QString providerVersion READ providerVersion NOTIFY providerReadyChanged)
@@ -82,6 +86,10 @@ public:
     QVariantList currentPlan() const;
     QString currentPlanExplanation() const;
     bool turnRunning() const;
+    bool hasPendingUserInput() const;
+    QVariantMap pendingUserInputQuestion() const;
+    int pendingUserInputQuestionNumber() const;
+    int pendingUserInputQuestionCount() const;
     QString turnElapsedText() const;
     bool providerReady() const;
     QString providerVersion() const;
@@ -114,6 +122,7 @@ public:
     Q_INVOKABLE void copyText(const QString &text);
     Q_INVOKABLE QString pasteClipboardImage();
     Q_INVOKABLE void interruptTurn();
+    Q_INVOKABLE bool answerPendingUserInput(const QString &answer);
     Q_INVOKABLE void refreshGit();
     Q_INVOKABLE void generateCommitMessage();
     Q_INVOKABLE void commitAllAndPush(const QString &subject, const QString &body);
@@ -145,6 +154,7 @@ signals:
     void currentPlanChanged();
     void taskPanelRequested();
     void turnRunningChanged();
+    void pendingUserInputChanged();
     void turnElapsedChanged();
     void providerReadyChanged();
     void statusTextChanged();
@@ -174,6 +184,9 @@ private:
                          const QString &reasoningEffort, const QString &collaborationMode,
                          PermissionProfile permissionProfile, bool generateTitle = false);
     void setActiveTurnId(const QString &threadId, const QString &turnId);
+    void handleUserInputRequest(const QString &threadId, const QString &turnId,
+                                const QString &itemId, const QVariantList &questions);
+    void clearPendingUserInput();
     void sendPendingSteers();
     void restorePendingSteers();
     void generateThreadTitle(const QString &threadId, const QString &prompt,
@@ -215,6 +228,12 @@ private:
     QHash<QString, QString> m_assistantDraftBuffers;
     QString m_activeThreadId;
     QString m_activeTurnId;
+    QString m_pendingUserInputThreadId;
+    QString m_pendingUserInputTurnId;
+    QString m_pendingUserInputItemId;
+    QVariantList m_pendingUserInputQuestions;
+    QVariantMap m_pendingUserInputAnswers;
+    int m_pendingUserInputIndex = -1;
     struct PendingSteer {
         QString prompt;
         QStringList images;

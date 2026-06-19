@@ -307,6 +307,12 @@ void CodexClient::handleLine(const QByteArray &line)
     }
     const auto object = document.object();
     if (object.contains(QStringLiteral("id"))) {
+        const auto method = object.value(QStringLiteral("method")).toString();
+        if (!method.isEmpty()) {
+            handleServerRequest(object.value(QStringLiteral("id")), method,
+                                object.value(QStringLiteral("params")).toObject());
+            return;
+        }
         const auto id = object.value(QStringLiteral("id")).toInteger();
         auto pending = m_pending.take(id);
         if (pending.timeout)
@@ -320,6 +326,45 @@ void CodexClient::handleLine(const QByteArray &line)
     }
     handleNotification(object.value(QStringLiteral("method")).toString(),
                        object.value(QStringLiteral("params")).toObject());
+}
+
+void CodexClient::handleServerRequest(const QJsonValue &id, const QString &method,
+                                      const QJsonObject &params)
+{
+    if (method != QStringLiteral("item/tool/requestUserInput")) {
+        QJsonObject response{{QStringLiteral("id"), id},
+                             {QStringLiteral("error"),
+                              QJsonObject{{QStringLiteral("code"), -32601},
+                                          {QStringLiteral("message"),
+                                           QStringLiteral("Unsupported server request: %1")
+                                               .arg(method)}}}};
+        m_process.write(QJsonDocument(response).toJson(QJsonDocument::Compact) + '\n');
+        return;
+    }
+
+    const auto itemId = params.value(QStringLiteral("itemId")).toString();
+    if (itemId.isEmpty()) {
+        QJsonObject response{{QStringLiteral("id"), id},
+                             {QStringLiteral("error"),
+                              QJsonObject{{QStringLiteral("code"), -32602},
+                                          {QStringLiteral("message"),
+                                           QStringLiteral("Missing user-input item id")}}}};
+        m_process.write(QJsonDocument(response).toJson(QJsonDocument::Compact) + '\n');
+        return;
+    }
+
+    m_pendingUserInputRequests.insert(itemId, id);
+    emit userInputRequested(
+        params.value(QStringLiteral("threadId")).toString(),
+        params.value(QStringLiteral("turnId")).toString(), itemId,
+        params.value(QStringLiteral("questions")).toArray().toVariantList());
+}
+
+void CodexClient::writeResponse(const QJsonValue &id, const QJsonObject &result)
+{
+    QJsonObject response{{QStringLiteral("id"), id},
+                         {QStringLiteral("result"), result}};
+    m_process.write(QJsonDocument(response).toJson(QJsonDocument::Compact) + '\n');
 }
 
 void CodexClient::handleNotification(const QString &method, const QJsonObject &params)
@@ -534,6 +579,20 @@ void CodexClient::interruptTurn(const QString &threadId, const QString &turnId,
             {{QStringLiteral("threadId"), threadId},
              {QStringLiteral("turnId"), turnId}},
             std::move(handler));
+}
+
+void CodexClient::respondToUserInput(const QString &itemId, const QVariantMap &answers,
+                                     ResultHandler handler)
+{
+    const auto id = m_pendingUserInputRequests.take(itemId);
+    if (id.isUndefined()) {
+        if (handler)
+            handler({}, QStringLiteral("The user-input request is no longer active"));
+        return;
+    }
+    writeResponse(id, {{QStringLiteral("answers"), QJsonObject::fromVariantMap(answers)}});
+    if (handler)
+        handler({}, {});
 }
 
 void CodexClient::setThreadName(const QString &threadId, const QString &name,

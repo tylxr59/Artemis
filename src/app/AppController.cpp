@@ -137,6 +137,8 @@ void AppController::connectProvider()
     connect(m_provider, &AgentProvider::domainEvent, this, &AppController::handleDomainEvent);
     connect(m_provider, &AgentProvider::activeTurnStarted,
             this, &AppController::setActiveTurnId);
+    connect(m_provider, &AgentProvider::userInputRequested,
+            this, &AppController::handleUserInputRequest);
     connect(m_provider, &AgentProvider::tokenUsageUpdated, this,
             [this](const QString &threadId, qint64 contextTokens,
                    qint64 totalProcessedTokens, qint64 modelContextWindow) {
@@ -222,6 +224,27 @@ QString AppController::currentPlanExplanation() const
     return m_threadPlanExplanations.value(selectedThreadId());
 }
 bool AppController::turnRunning() const { return m_turnRunning; }
+bool AppController::hasPendingUserInput() const
+{
+    return m_pendingUserInputIndex >= 0
+        && m_pendingUserInputIndex < m_pendingUserInputQuestions.size();
+}
+QVariantMap AppController::pendingUserInputQuestion() const
+{
+    if (!hasPendingUserInput())
+        return {};
+    auto question = m_pendingUserInputQuestions.at(m_pendingUserInputIndex).toMap();
+    question.insert(QStringLiteral("threadId"), m_pendingUserInputThreadId);
+    return question;
+}
+int AppController::pendingUserInputQuestionNumber() const
+{
+    return hasPendingUserInput() ? m_pendingUserInputIndex + 1 : 0;
+}
+int AppController::pendingUserInputQuestionCount() const
+{
+    return m_pendingUserInputQuestions.size();
+}
 QString AppController::turnElapsedText() const
 {
     return elapsedText(m_turnElapsedTimer.isValid() ? m_turnElapsedTimer.elapsed() : 0);
@@ -849,6 +872,73 @@ void AppController::setActiveTurnId(const QString &threadId, const QString &turn
     sendPendingSteers();
 }
 
+void AppController::handleUserInputRequest(const QString &threadId, const QString &turnId,
+                                           const QString &itemId,
+                                           const QVariantList &questions)
+{
+    if (itemId.isEmpty() || questions.isEmpty())
+        return;
+    if (hasPendingUserInput()) {
+        setStatus(QStringLiteral("Codex requested new input before the previous question was answered."));
+        return;
+    }
+    m_pendingUserInputThreadId = threadId;
+    m_pendingUserInputTurnId = turnId;
+    m_pendingUserInputItemId = itemId;
+    m_pendingUserInputQuestions = questions;
+    m_pendingUserInputAnswers.clear();
+    m_pendingUserInputIndex = 0;
+    emit pendingUserInputChanged();
+}
+
+bool AppController::answerPendingUserInput(const QString &answer)
+{
+    const auto trimmedAnswer = answer.trimmed();
+    if (!hasPendingUserInput() || trimmedAnswer.isEmpty()
+        || selectedThreadId() != m_pendingUserInputThreadId) {
+        return false;
+    }
+
+    const auto question = m_pendingUserInputQuestions.at(m_pendingUserInputIndex).toMap();
+    const auto questionId = question.value(QStringLiteral("id")).toString();
+    if (questionId.isEmpty())
+        return false;
+    m_pendingUserInputAnswers.insert(
+        questionId, QVariantMap{{QStringLiteral("answers"),
+                                 QStringList{trimmedAnswer}}});
+
+    ++m_pendingUserInputIndex;
+    if (hasPendingUserInput()) {
+        emit pendingUserInputChanged();
+        return true;
+    }
+
+    const auto itemId = m_pendingUserInputItemId;
+    const auto answers = m_pendingUserInputAnswers;
+    m_provider->respondToUserInput(itemId, answers,
+        [this](const QJsonObject &, const QString &error) {
+            if (!error.isEmpty()) {
+                setStatus(error);
+            }
+            clearPendingUserInput();
+        });
+    return true;
+}
+
+void AppController::clearPendingUserInput()
+{
+    const bool hadPendingInput = !m_pendingUserInputItemId.isEmpty()
+        || !m_pendingUserInputQuestions.isEmpty();
+    m_pendingUserInputThreadId.clear();
+    m_pendingUserInputTurnId.clear();
+    m_pendingUserInputItemId.clear();
+    m_pendingUserInputQuestions.clear();
+    m_pendingUserInputAnswers.clear();
+    m_pendingUserInputIndex = -1;
+    if (hadPendingInput)
+        emit pendingUserInputChanged();
+}
+
 void AppController::copyText(const QString &text)
 {
     QApplication::clipboard()->setText(text);
@@ -1035,6 +1125,7 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
     }
     if (type == QStringLiteral("status")) {
         restorePendingSteers();
+        clearPendingUserInput();
         setTurnRunning(false);
         m_activeThreadId.clear();
         m_activeTurnId.clear();
