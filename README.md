@@ -5,6 +5,10 @@ Kirigami, and the Codex app-server protocol.
 
 Artemis is still in extremely early alpha. Things will break and be changing rapidly.
 
+> **Logo designer wanted:** The current icon is temporary. We're looking for a
+> designer to create a polished logo and app icon for Artemis. If you're
+> interested in contributing, please open an issue or discussion.
+
 ![Artemis screenshot](screenshot.png)
 
 ## Features
