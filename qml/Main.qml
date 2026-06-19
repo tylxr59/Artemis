@@ -131,7 +131,7 @@ Kirigami.ApplicationWindow {
                 }
             }
             Button {
-                text: "Commit & push"
+                text: "Commit & Push"
                 visible: appController.selectedProjectIsGit
                 enabled: appController.hasGitChanges
                 onClicked: {

@@ -18,6 +18,12 @@ Dialog {
     footer: DialogButtonBox {
         standardButtons: DialogButtonBox.Cancel
 
+        Label {
+            text: "Generated with the commit model configured in Settings"
+            opacity: 0.65
+            DialogButtonBox.buttonRole: DialogButtonBox.HelpRole
+        }
+
         Button {
             text: root.featureMode ? "Create, commit, and push" : "Commit and push all changes"
             enabled: subjectEdit.text.trim().length > 0 && !root.busy
@@ -72,11 +78,7 @@ Dialog {
 
         RowLayout {
             Layout.fillWidth: true
-            Label {
-                Layout.fillWidth: true
-                text: "Generated with the commit model configured in Settings"
-                opacity: 0.65
-            }
+            Item { Layout.fillWidth: true }
             Label {
                 text: "Generating..."
                 visible: root.generating
