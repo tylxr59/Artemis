@@ -10,6 +10,7 @@ Item {
 
     required property string diffText
     property bool compact: false
+    property bool embedded: false
     property int compactFileLimit: 5
     property int compactLineLimit: 10
     property bool expandedByDefault: true
@@ -163,17 +164,48 @@ Item {
     ColumnLayout {
         id: contentColumn
         width: parent.width
-        spacing: root.compact ? Kirigami.Units.smallSpacing : Kirigami.Units.largeSpacing
+        spacing: root.embedded ? 0
+                               : root.compact
+                                 ? Kirigami.Units.smallSpacing
+                                 : Kirigami.Units.largeSpacing
 
         RowLayout {
             Layout.fillWidth: true
+            Layout.preferredHeight: root.embedded ? 44 : implicitHeight
+            Layout.leftMargin: root.embedded ? Kirigami.Units.largeSpacing : 0
+            Layout.rightMargin: root.embedded ? Kirigami.Units.largeSpacing : 0
+            Layout.bottomMargin: root.embedded ? 2 : 0
             visible: root.compact && root.files.length > 0
             spacing: Kirigami.Units.smallSpacing
 
+            Item {
+                visible: root.embedded
+                Layout.preferredWidth: 14
+                Layout.preferredHeight: 14
+            }
+            Kirigami.Icon {
+                visible: root.embedded
+                Layout.preferredWidth: 17
+                Layout.preferredHeight: 17
+                source: "document-edit"
+                opacity: 0.62
+            }
             Label {
                 Layout.alignment: Qt.AlignVCenter
-                text: "Changed files (" + root.files.length + ")"
+                text: "Changed files"
                 font.bold: true
+                font.pointSize: Kirigami.Theme.smallFont.pointSize
+                opacity: root.embedded ? 0.62 : 0.72
+            }
+            Rectangle {
+                visible: root.embedded
+                Layout.preferredWidth: 1
+                Layout.preferredHeight: 14
+                color: Qt.alpha(Kirigami.Theme.textColor, 0.16)
+            }
+            Label {
+                Layout.alignment: Qt.AlignVCenter
+                text: root.files.length + (root.files.length === 1 ? " file" : " files")
                 font.pointSize: Kirigami.Theme.smallFont.pointSize
                 opacity: 0.72
             }
@@ -207,9 +239,11 @@ Item {
 
                 Layout.fillWidth: true
                 implicitHeight: fileLayout.implicitHeight
-                radius: Kirigami.Units.smallSpacing
-                color: Qt.alpha(Kirigami.Theme.alternateBackgroundColor, 0.34)
-                border.width: 1
+                radius: root.embedded ? 0 : Kirigami.Units.smallSpacing
+                color: root.embedded
+                       ? "transparent"
+                       : Qt.alpha(Kirigami.Theme.alternateBackgroundColor, 0.34)
+                border.width: root.embedded ? 0 : 1
                 border.color: Qt.alpha(Kirigami.Theme.textColor, 0.14)
                 clip: true
 
@@ -218,19 +252,34 @@ Item {
                     width: parent.width
                     spacing: 0
 
+                    Kirigami.Separator {
+                        Layout.fillWidth: true
+                        visible: root.embedded
+                    }
+
                     ItemDelegate {
                         id: fileHeader
                         Layout.fillWidth: true
-                        Layout.preferredHeight: root.compact ? 38 : 42
+                        Layout.preferredHeight: root.embedded
+                                                ? 44
+                                                : root.compact ? 38 : 42
                         leftInset: 0
                         rightInset: 0
                         topInset: 0
                         bottomInset: 0
-                        leftPadding: Kirigami.Units.smallSpacing
+                        leftPadding: root.embedded
+                                     ? Kirigami.Units.largeSpacing
+                                     : Kirigami.Units.smallSpacing
                         rightPadding: Kirigami.Units.largeSpacing
                         topPadding: 0
                         bottomPadding: 2
                         onClicked: fileCard.expanded = !fileCard.expanded
+
+                        background: Rectangle {
+                            color: fileHeader.hovered
+                                   ? Qt.alpha(Kirigami.Theme.textColor, 0.05)
+                                   : "transparent"
+                        }
 
                         contentItem: RowLayout {
                             spacing: Kirigami.Units.smallSpacing

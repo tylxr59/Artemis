@@ -36,12 +36,13 @@ Item {
                ? Kirigami.Theme.alternateBackgroundColor
                : root.eventType === "error"
                  ? Qt.alpha(Kirigami.Theme.negativeTextColor, 0.12)
-                 : root.isTool || root.isReasoning
+                 : root.isTool || root.isReasoning || root.isDiff
                    ? Qt.alpha(Kirigami.Theme.alternateBackgroundColor, 0.46)
                    : "transparent"
-        border.width: root.isTool || root.isReasoning ? 1 : 0
+        border.width: root.isTool || root.isReasoning || root.isDiff ? 1 : 0
         border.color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
         implicitHeight: contentLoader.implicitHeight
+        clip: root.isDiff
 
         Loader {
             id: contentLoader
@@ -239,6 +240,7 @@ Item {
                 Layout.fillWidth: true
                 diffText: root.content
                 compact: true
+                embedded: true
                 expandedByDefault: false
             }
         }
