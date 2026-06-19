@@ -500,6 +500,7 @@ Kirigami.ApplicationWindow {
                     bottomMargin: Kirigami.Units.largeSpacing
                     delegate: Item {
                         id: conversationRow
+                        required property int index
                         required property string eventType
                         required property string title
                         required property string content
@@ -508,6 +509,10 @@ Kirigami.ApplicationWindow {
                         readonly property real horizontalGutter: Kirigami.Units.largeSpacing
                         width: conversationList.width
                         implicitHeight: conversationDelegate.implicitHeight
+                        onImplicitHeightChanged: {
+                            if (index === conversationList.count - 1)
+                                conversationList.scrollToEndIfFollowing()
+                        }
 
                         ConversationDelegate {
                             id: conversationDelegate
@@ -521,10 +526,29 @@ Kirigami.ApplicationWindow {
                         }
                     }
                     onCountChanged: scrollToEndIfFollowing()
-                    onContentHeightChanged: scrollToEndIfFollowing()
-                    onMovementStarted: followTail = false
+                    onDraggingChanged: {
+                        if (dragging)
+                            followTail = false
+                    }
                     onMovementEnded: updateFollowTail()
                     onWidthChanged: forceLayout()
+
+                    WheelHandler {
+                        target: null
+                        onWheel: function(event) {
+                            conversationList.followTail = false
+                        }
+                    }
+
+                    Connections {
+                        target: appController
+                        function onTurnRunningChanged() {
+                            if (appController.turnRunning) {
+                                conversationList.followTail = true
+                                conversationList.scrollToEndIfFollowing()
+                            }
+                        }
+                    }
 
                     Kirigami.PlaceholderMessage {
                         anchors.centerIn: parent
