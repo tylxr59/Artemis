@@ -523,6 +523,19 @@ Kirigami.ApplicationWindow {
                     }
                 }
 
+                Label {
+                    visible: appController.turnRunning
+                    Layout.fillWidth: true
+                    Layout.maximumWidth: 840
+                    Layout.alignment: Qt.AlignHCenter
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "Working · " + appController.turnElapsedText + " elapsed"
+                    font: Kirigami.Theme.smallFont
+                    opacity: 0.45
+                    topPadding: Kirigami.Units.smallSpacing
+                    bottomPadding: Kirigami.Units.smallSpacing
+                }
+
                 Frame {
                     visible: root.hasProject && appController.providerReady
                     Layout.fillWidth: true

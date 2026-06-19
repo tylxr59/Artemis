@@ -6,8 +6,10 @@
 #include "persistence/Database.h"
 #include "providers/codex/CodexClient.h"
 
-#include <QObject>
+#include <QElapsedTimer>
 #include <QHash>
+#include <QObject>
+#include <QTimer>
 #include <QVariantList>
 
 namespace Artemis {
@@ -31,6 +33,7 @@ class AppController : public QObject {
     Q_PROPERTY(QVariantList currentPlan READ currentPlan NOTIFY currentPlanChanged)
     Q_PROPERTY(QString currentPlanExplanation READ currentPlanExplanation NOTIFY currentPlanChanged)
     Q_PROPERTY(bool turnRunning READ turnRunning NOTIFY turnRunningChanged)
+    Q_PROPERTY(QString turnElapsedText READ turnElapsedText NOTIFY turnElapsedChanged)
     Q_PROPERTY(bool providerReady READ providerReady NOTIFY providerReadyChanged)
     Q_PROPERTY(QString providerVersion READ providerVersion NOTIFY providerReadyChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
@@ -58,6 +61,7 @@ public:
     QVariantList currentPlan() const;
     QString currentPlanExplanation() const;
     bool turnRunning() const;
+    QString turnElapsedText() const;
     bool providerReady() const;
     QString providerVersion() const;
     QString statusText() const;
@@ -97,6 +101,7 @@ signals:
     void selectedThreadChanged();
     void currentPlanChanged();
     void turnRunningChanged();
+    void turnElapsedChanged();
     void providerReadyChanged();
     void statusTextChanged();
     void diffChanged();
@@ -135,6 +140,8 @@ private:
     int m_selectedProject = -1;
     int m_selectedThread = -1;
     bool m_turnRunning = false;
+    QElapsedTimer m_turnElapsedTimer;
+    QTimer m_turnElapsedUpdateTimer;
     QString m_status;
     QString m_diff;
     QString m_gitStatus;

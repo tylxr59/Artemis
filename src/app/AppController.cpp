@@ -8,7 +8,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLocale>
 #include <QProcess>
+#include <QTime>
 #include <QUrl>
 
 #include <utility>
@@ -55,11 +57,27 @@ QJsonObject commitDraftObject(const QString &text)
     return result;
 }
 
+QString elapsedText(qint64 elapsedMilliseconds)
+{
+    const qint64 totalSeconds = qMax<qint64>(0, elapsedMilliseconds / 1000);
+    const qint64 hours = totalSeconds / 3600;
+    const qint64 minutes = (totalSeconds % 3600) / 60;
+    const qint64 seconds = totalSeconds % 60;
+    if (hours > 0)
+        return QStringLiteral("%1h %2m %3s").arg(hours).arg(minutes).arg(seconds);
+    if (minutes > 0)
+        return QStringLiteral("%1m %2s").arg(minutes).arg(seconds);
+    return QStringLiteral("%1s").arg(seconds);
+}
+
 } // namespace
 
 AppController::AppController(QObject *parent)
     : QObject(parent)
 {
+    m_turnElapsedUpdateTimer.setInterval(1000);
+    connect(&m_turnElapsedUpdateTimer, &QTimer::timeout,
+            this, &AppController::turnElapsedChanged);
     connect(&m_codex, &CodexClient::readyChanged, this, [this](bool ready) {
         emit providerReadyChanged();
         if (ready) {
@@ -127,6 +145,10 @@ QString AppController::currentPlanExplanation() const
     return m_threadPlanExplanations.value(selectedThreadId());
 }
 bool AppController::turnRunning() const { return m_turnRunning; }
+QString AppController::turnElapsedText() const
+{
+    return elapsedText(m_turnElapsedTimer.isValid() ? m_turnElapsedTimer.elapsed() : 0);
+}
 bool AppController::providerReady() const { return m_codex.ready(); }
 QString AppController::providerVersion() const { return m_codex.version(); }
 QString AppController::statusText() const { return m_status; }
@@ -576,6 +598,11 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
         return;
     }
     ConversationEvent event{threadId, type, title, content, metadata};
+    if (type == QStringLiteral("status") && content == QStringLiteral("completed")) {
+        event.content = QStringLiteral("Complete · %1 · %2 total")
+                            .arg(QLocale().toString(QTime::currentTime(), QLocale::ShortFormat),
+                                 turnElapsedText());
+    }
     if (type == QStringLiteral("plan")) {
         m_threadPlans.insert(threadId, metadata.value(QStringLiteral("plan")).toList());
         m_threadPlanExplanations.insert(
@@ -863,7 +890,14 @@ void AppController::setTurnRunning(bool running)
     if (m_turnRunning == running)
         return;
     m_turnRunning = running;
+    if (running) {
+        m_turnElapsedTimer.restart();
+        m_turnElapsedUpdateTimer.start();
+    } else {
+        m_turnElapsedUpdateTimer.stop();
+    }
     emit turnRunningChanged();
+    emit turnElapsedChanged();
 }
 
 } // namespace Artemis
