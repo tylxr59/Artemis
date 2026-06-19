@@ -14,7 +14,8 @@ Kirigami.ApplicationWindow {
     title: appController.selectedThreadTitle.length > 0
            ? appController.selectedThreadTitle + " — Artemis" : "Artemis"
 
-    property bool reviewVisible: width >= 1100
+    property bool sidePanelVisible: false
+    property string sidePanelMode: "thread"
     property bool navigationVisible: width >= 780
     readonly property bool hasProject: appController.selectedProjectPath.length > 0
     readonly property bool hasThread: appController.selectedThreadId.length > 0
@@ -100,9 +101,33 @@ Kirigami.ApplicationWindow {
                 onClicked: appController.openProjectFolder()
             }
             ToolButton {
-                text: root.reviewVisible ? "Hide changes" : "Changes"
+                text: "Thread"
+                visible: root.hasThread
+                checkable: true
+                checked: root.sidePanelVisible && root.sidePanelMode === "thread"
+                onClicked: {
+                    if (checked) {
+                        root.sidePanelMode = "thread"
+                        root.sidePanelVisible = true
+                    } else {
+                        root.sidePanelVisible = false
+                    }
+                }
+            }
+            ToolButton {
+                text: "Diff"
                 visible: appController.selectedProjectIsGit
-                onClicked: root.reviewVisible = !root.reviewVisible
+                checkable: true
+                checked: root.sidePanelVisible && root.sidePanelMode === "diff"
+                onClicked: {
+                    if (checked) {
+                        root.sidePanelMode = "diff"
+                        root.sidePanelVisible = true
+                        appController.refreshGit()
+                    } else {
+                        root.sidePanelVisible = false
+                    }
+                }
             }
             Button {
                 text: "Commit & push"
@@ -135,7 +160,8 @@ Kirigami.ApplicationWindow {
                     MenuItem {
                         text: "Review and select changes"
                         onTriggered: {
-                            root.reviewVisible = true
+                            root.sidePanelMode = "diff"
+                            root.sidePanelVisible = true
                             commitDialog.featureMode = false
                             commitDialog.open()
                         }
@@ -239,6 +265,7 @@ Kirigami.ApplicationWindow {
                                  || name.toLowerCase().includes(projectSearch.text.toLowerCase())
 
                         ItemDelegate {
+                            id: projectItem
                             Layout.fillWidth: true
                             Layout.maximumWidth: projectList.width
                             highlighted: projectDelegate.selected
@@ -281,6 +308,19 @@ Kirigami.ApplicationWindow {
                             ToolTip.text: projectDelegate.path
                             ToolTip.visible: hovered
                             onClicked: appController.selectProject(projectDelegate.index)
+
+                            TapHandler {
+                                acceptedButtons: Qt.RightButton
+                                onTapped: projectContextMenu.popup()
+                            }
+                            Menu {
+                                id: projectContextMenu
+                                MenuItem {
+                                    text: "Remove project from Artemis"
+                                    icon.name: "edit-delete"
+                                    onTriggered: appController.removeProject(projectDelegate.index)
+                                }
+                            }
                         }
 
                         ColumnLayout {
@@ -291,6 +331,7 @@ Kirigami.ApplicationWindow {
                             Repeater {
                                 model: projectDelegate.selected ? appController.threads : []
                                 delegate: ItemDelegate {
+                                    id: threadItem
                                     required property int index
                                     required property var modelData
                                     Layout.fillWidth: true
@@ -326,6 +367,19 @@ Kirigami.ApplicationWindow {
                                         appController.selectThread(index)
                                         if (!root.navigationVisible)
                                             navigationDrawer.close()
+                                    }
+
+                                    TapHandler {
+                                        acceptedButtons: Qt.RightButton
+                                        onTapped: threadContextMenu.popup()
+                                    }
+                                    Menu {
+                                        id: threadContextMenu
+                                        MenuItem {
+                                            text: "Remove thread from Artemis"
+                                            icon.name: "edit-delete"
+                                            onTriggered: appController.removeThread(index)
+                                        }
                                     }
                                 }
                             }
@@ -466,7 +520,7 @@ Kirigami.ApplicationWindow {
                                      : !appController.providerReady
                                        ? "Open Diagnostics to inspect the Codex connection."
                                        : appController.selectedProjectIsGit
-                                         ? "Describe a task below. File changes will appear in the Changes pane."
+                                         ? "Describe a task below. Use Diff to review file changes."
                                          : "Describe a task below. Git review is unavailable for this folder."
                     }
 
@@ -574,17 +628,14 @@ Kirigami.ApplicationWindow {
             }
         }
 
-        ReviewPane {
-            visible: root.reviewVisible && appController.selectedProjectIsGit
+        ThreadPane {
+            visible: root.sidePanelVisible
             SplitView.preferredWidth: Math.min(620, Math.max(390, root.width * 0.32))
             SplitView.minimumWidth: visible ? 300 : 0
             SplitView.maximumWidth: visible ? 700 : 0
             controller: appController
-            onCommitRequested: {
-                commitDialog.featureMode = false
-                commitDialog.open()
-                appController.generateCommitMessage()
-            }
+            mode: root.sidePanelMode
+            onCloseRequested: root.sidePanelVisible = false
         }
     }
 

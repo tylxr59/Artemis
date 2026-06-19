@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QSqlDatabase>
+#include <QSet>
 #include <QVariantMap>
 #include <QVector>
 
@@ -20,6 +21,8 @@ public:
     bool bindThread(qint64 projectId, const QString &threadId, const QString &workspacePath,
                     const QString &location, bool external, QString *error = nullptr);
     QVector<QVariantMap> threadBindings(qint64 projectId) const;
+    QSet<QString> hiddenThreadIds(qint64 projectId) const;
+    bool hideThread(qint64 projectId, const QString &threadId, QString *error = nullptr);
     bool saveWorktree(qint64 projectId, const QString &threadId, const QString &path,
                       const QString &baseCommit, QString *error = nullptr);
     QString setting(const QString &key, const QString &fallback = {}) const;

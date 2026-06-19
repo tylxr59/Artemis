@@ -114,6 +114,19 @@ QString AppController::selectedThreadTitle() const {
     return m_selectedThread >= 0 && m_selectedThread < m_threads.size()
         ? m_threads.at(m_selectedThread).toMap().value(QStringLiteral("title")).toString() : QString();
 }
+QVariantMap AppController::selectedThreadInfo() const
+{
+    return m_selectedThread >= 0 && m_selectedThread < m_threads.size()
+        ? m_threads.at(m_selectedThread).toMap() : QVariantMap{};
+}
+QVariantList AppController::currentPlan() const
+{
+    return m_threadPlans.value(selectedThreadId());
+}
+QString AppController::currentPlanExplanation() const
+{
+    return m_threadPlanExplanations.value(selectedThreadId());
+}
 bool AppController::turnRunning() const { return m_turnRunning; }
 bool AppController::providerReady() const { return m_codex.ready(); }
 QString AppController::providerVersion() const { return m_codex.version(); }
@@ -174,22 +187,69 @@ void AppController::addProject(const QString &input)
 
 void AppController::removeSelectedProject()
 {
-    const auto row = m_projects.row(m_selectedProject);
+    removeProject(m_selectedProject);
+}
+
+void AppController::removeProject(int index)
+{
+    const auto row = m_projects.row(index);
     if (row.id < 0)
         return;
+    const auto selectedId = m_projects.row(m_selectedProject).id;
+    const bool removedSelected = index == m_selectedProject;
     QString error;
     if (!m_database.removeProject(row.id, &error)) {
         setStatus(error);
         return;
     }
-    m_selectedProject = -1;
-    m_selectedThread = -1;
-    m_threads.clear();
-    m_conversation.clear();
+    if (removedSelected) {
+        m_selectedProject = -1;
+        m_selectedThread = -1;
+        m_threads.clear();
+        m_conversation.clear();
+    }
     loadProjects();
-    emit selectedProjectChanged();
-    emit selectedThreadChanged();
+    if (removedSelected) {
+        if (m_projects.rowCount() == 0) {
+            emit selectedProjectChanged();
+            emit selectedThreadChanged();
+            emit currentPlanChanged();
+            emit threadsChanged();
+        }
+    } else {
+        m_selectedProject = m_projects.indexOfId(selectedId);
+        emit selectedProjectChanged();
+    }
+}
+
+void AppController::removeThread(int index)
+{
+    if (index < 0 || index >= m_threads.size())
+        return;
+    const auto project = m_projects.row(m_selectedProject);
+    const auto threadId = m_threads.at(index).toMap().value(QStringLiteral("id")).toString();
+    QString error;
+    if (!m_database.hideThread(project.id, threadId, &error)) {
+        setStatus(error);
+        return;
+    }
+
+    const bool removedSelected = index == m_selectedThread;
+    m_threads.removeAt(index);
+    m_threadPlans.remove(threadId);
+    m_threadPlanExplanations.remove(threadId);
+    if (removedSelected) {
+        m_selectedThread = -1;
+        m_conversation.setThread({});
+    } else if (index < m_selectedThread) {
+        --m_selectedThread;
+    }
     emit threadsChanged();
+    emit selectedThreadChanged();
+    emit currentPlanChanged();
+
+    if (removedSelected && !m_threads.isEmpty())
+        selectThread(qMin(index, m_threads.size() - 1));
 }
 
 void AppController::selectProject(int index)
@@ -201,6 +261,7 @@ void AppController::selectProject(int index)
     m_conversation.setThread({});
     emit selectedProjectChanged();
     emit selectedThreadChanged();
+    emit currentPlanChanged();
     loadThreads();
     refreshGit();
 }
@@ -213,6 +274,7 @@ void AppController::loadThreads(const QString &threadToSelect)
     if (project.id < 0 || !m_codex.ready())
         return;
     const auto bindings = m_database.threadBindings(project.id);
+    const auto hiddenThreadIds = m_database.hiddenThreadIds(project.id);
     QJsonArray workspaces;
     workspaces.append(project.path);
     QHash<QString, QVariantMap> bindingById;
@@ -230,7 +292,8 @@ void AppController::loadThreads(const QString &threadToSelect)
          {QStringLiteral("limit"), 100},
          {QStringLiteral("sortKey"), QStringLiteral("updated_at")},
          {QStringLiteral("sortDirection"), QStringLiteral("desc")}},
-        [this, project, bindingById, threadToSelect](const QJsonObject &result, const QString &error) {
+        [this, project, bindingById, hiddenThreadIds, threadToSelect](
+            const QJsonObject &result, const QString &error) {
         if (!error.isEmpty()) {
             setStatus(error);
             return;
@@ -239,6 +302,8 @@ void AppController::loadThreads(const QString &threadToSelect)
         for (const auto &entry : result.value(QStringLiteral("data")).toArray()) {
             const auto thread = entry.toObject();
             const auto id = thread.value(QStringLiteral("id")).toString();
+            if (hiddenThreadIds.contains(id))
+                continue;
             const auto name = thread.value(QStringLiteral("name")).toString();
             const auto title = name.isEmpty()
                 ? thread.value(QStringLiteral("title")).toString(QStringLiteral("Untitled thread"))
@@ -272,6 +337,7 @@ void AppController::loadThreads(const QString &threadToSelect)
                 if (threadToSelect == m_activeThreadId) {
                     m_selectedThread = i;
                     emit selectedThreadChanged();
+                    emit currentPlanChanged();
                 } else {
                     selectThread(i);
                 }
@@ -321,6 +387,7 @@ void AppController::selectThread(int index)
     m_selectedThread = index;
     m_conversation.setThread(selectedThreadId());
     emit selectedThreadChanged();
+    emit currentPlanChanged();
     m_codex.resumeThread(selectedThreadId(), [this](const QJsonObject &result, const QString &error) {
         if (!error.isEmpty()) {
             setStatus(error);
@@ -443,6 +510,7 @@ void AppController::beginThread(const QString &workspace, const QString &locatio
         m_conversation.setThread(id);
         emit threadsChanged();
         emit selectedThreadChanged();
+        emit currentPlanChanged();
         if (!m_pendingPrompt.isEmpty()) {
             const QString prompt = std::exchange(m_pendingPrompt, {});
             m_pendingModelId.clear();
@@ -556,7 +624,13 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
         return;
     }
     ConversationEvent event{threadId, type, title, content, metadata};
-    if (type == QStringLiteral("assistant"))
+    if (type == QStringLiteral("plan")) {
+        m_threadPlans.insert(threadId, metadata.value(QStringLiteral("plan")).toList());
+        m_threadPlanExplanations.insert(
+            threadId, metadata.value(QStringLiteral("explanation")).toString());
+        if (threadId == selectedThreadId())
+            emit currentPlanChanged();
+    } else if (type == QStringLiteral("assistant"))
         m_conversation.appendOrMergeDelta(event);
     else
         m_conversation.append(event);

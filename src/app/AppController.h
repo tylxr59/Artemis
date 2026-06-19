@@ -27,6 +27,9 @@ class AppController : public QObject {
     Q_PROPERTY(bool selectedProjectIsGit READ selectedProjectIsGit NOTIFY selectedProjectChanged)
     Q_PROPERTY(QString selectedThreadId READ selectedThreadId NOTIFY selectedThreadChanged)
     Q_PROPERTY(QString selectedThreadTitle READ selectedThreadTitle NOTIFY selectedThreadChanged)
+    Q_PROPERTY(QVariantMap selectedThreadInfo READ selectedThreadInfo NOTIFY selectedThreadChanged)
+    Q_PROPERTY(QVariantList currentPlan READ currentPlan NOTIFY currentPlanChanged)
+    Q_PROPERTY(QString currentPlanExplanation READ currentPlanExplanation NOTIFY currentPlanChanged)
     Q_PROPERTY(bool turnRunning READ turnRunning NOTIFY turnRunningChanged)
     Q_PROPERTY(bool providerReady READ providerReady NOTIFY providerReadyChanged)
     Q_PROPERTY(QString providerVersion READ providerVersion NOTIFY providerReadyChanged)
@@ -52,6 +55,9 @@ public:
     bool selectedProjectIsGit() const;
     QString selectedThreadId() const;
     QString selectedThreadTitle() const;
+    QVariantMap selectedThreadInfo() const;
+    QVariantList currentPlan() const;
+    QString currentPlanExplanation() const;
     bool turnRunning() const;
     bool providerReady() const;
     QString providerVersion() const;
@@ -64,6 +70,8 @@ public:
     Q_INVOKABLE void chooseProjectFolder();
     Q_INVOKABLE void addProject(const QString &path);
     Q_INVOKABLE void removeSelectedProject();
+    Q_INVOKABLE void removeProject(int index);
+    Q_INVOKABLE void removeThread(int index);
     Q_INVOKABLE void selectProject(int index);
     Q_INVOKABLE void selectThread(int index);
     Q_INVOKABLE void createThread(bool worktree, const QString &modelId,
@@ -90,6 +98,7 @@ signals:
     void settingsChanged();
     void selectedProjectChanged();
     void selectedThreadChanged();
+    void currentPlanChanged();
     void turnRunningChanged();
     void providerReadyChanged();
     void statusTextChanged();
@@ -139,6 +148,8 @@ private:
     QHash<QString, QString> m_titleTargets;
     QHash<QString, QString> m_titleDraftBuffers;
     QString m_activeThreadId;
+    QHash<QString, QVariantList> m_threadPlans;
+    QHash<QString, QString> m_threadPlanExplanations;
     QString m_pendingPrompt;
     QString m_pendingModelId;
     PermissionProfile m_pendingPermissionProfile = PermissionProfile::FullAccess;

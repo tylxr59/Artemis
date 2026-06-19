@@ -44,6 +44,11 @@ private slots:
                                             QStringLiteral("Test"), &error);
         QVERIFY2(id > 0, qPrintable(error));
         QVERIFY(!database.projects().isEmpty());
+        QVERIFY(database.bindThread(id, QStringLiteral("thread-to-hide"),
+                                    QDir::tempPath(), QStringLiteral("local"), false, &error));
+        QVERIFY(database.hideThread(id, QStringLiteral("thread-to-hide"), &error));
+        QVERIFY(database.hiddenThreadIds(id).contains(QStringLiteral("thread-to-hide")));
+        QVERIFY(database.threadBindings(id).isEmpty());
         QVERIFY(database.setSetting(QStringLiteral("test"), QStringLiteral("value"), &error));
         QCOMPARE(database.setting(QStringLiteral("test")), QStringLiteral("value"));
     }

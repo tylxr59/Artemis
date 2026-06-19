@@ -285,9 +285,13 @@ void CodexClient::handleNotification(const QString &method, const QJsonObject &p
                          QStringLiteral("diff"), QStringLiteral("Changes"),
                          params.value(QStringLiteral("diff")).toString(), {});
     } else if (method == QStringLiteral("turn/plan/updated")) {
+        const auto explanation = params.value(QStringLiteral("explanation")).toString();
         emit domainEvent(params.value(QStringLiteral("threadId")).toString(),
                          QStringLiteral("plan"), QStringLiteral("Plan"),
-                         QString::fromUtf8(QJsonDocument(params).toJson(QJsonDocument::Indented)), {});
+                         explanation,
+                         {{QStringLiteral("explanation"), explanation},
+                          {QStringLiteral("plan"),
+                           params.value(QStringLiteral("plan")).toArray().toVariantList()}});
     } else if (method == QStringLiteral("turn/completed")) {
         const auto turn = params.value(QStringLiteral("turn")).toObject();
         emit domainEvent(params.value(QStringLiteral("threadId")).toString(),

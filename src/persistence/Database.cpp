@@ -47,6 +47,7 @@ bool Database::migrate(QString *error)
         QStringLiteral("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS thread_bindings (provider_thread_id TEXT PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, workspace_path TEXT NOT NULL, location TEXT NOT NULL DEFAULT 'local', external INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+        QStringLiteral("CREATE TABLE IF NOT EXISTS hidden_threads (provider_thread_id TEXT NOT NULL, project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, hidden_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(provider_thread_id, project_id))"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS managed_worktrees (provider_thread_id TEXT PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, path TEXT NOT NULL UNIQUE, base_commit TEXT NOT NULL, stale INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS project_preferences (project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(project_id, key))"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS application_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"),
@@ -152,6 +153,52 @@ QVector<QVariantMap> Database::threadBindings(qint64 projectId) const
                           {QStringLiteral("location"), query.value(2)},
                           {QStringLiteral("external"), query.value(3)}});
     return result;
+}
+
+QSet<QString> Database::hiddenThreadIds(qint64 projectId) const
+{
+    QSet<QString> result;
+    QSqlQuery query(m_db);
+    query.prepare(QStringLiteral("SELECT provider_thread_id FROM hidden_threads WHERE project_id=?"));
+    query.addBindValue(projectId);
+    query.exec();
+    while (query.next())
+        result.insert(query.value(0).toString());
+    return result;
+}
+
+bool Database::hideThread(qint64 projectId, const QString &threadId, QString *error)
+{
+    if (!m_db.transaction()) {
+        if (error)
+            *error = m_db.lastError().text();
+        return false;
+    }
+
+    QSqlQuery hideQuery(m_db);
+    hideQuery.prepare(QStringLiteral(
+        "INSERT OR REPLACE INTO hidden_threads(provider_thread_id, project_id) VALUES (?, ?)"));
+    hideQuery.addBindValue(threadId);
+    hideQuery.addBindValue(projectId);
+    if (!hideQuery.exec()) {
+        if (error)
+            *error = hideQuery.lastError().text();
+        m_db.rollback();
+        return false;
+    }
+
+    QSqlQuery bindingQuery(m_db);
+    bindingQuery.prepare(QStringLiteral(
+        "DELETE FROM thread_bindings WHERE provider_thread_id=? AND project_id=?"));
+    bindingQuery.addBindValue(threadId);
+    bindingQuery.addBindValue(projectId);
+    if (!bindingQuery.exec()) {
+        if (error)
+            *error = bindingQuery.lastError().text();
+        m_db.rollback();
+        return false;
+    }
+    return m_db.commit();
 }
 
 bool Database::saveWorktree(qint64 projectId, const QString &threadId, const QString &path,
