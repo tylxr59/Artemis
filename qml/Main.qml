@@ -572,7 +572,8 @@ Kirigami.ApplicationWindow {
                                     bottomPadding: Kirigami.Units.smallSpacing
                                     background: Rectangle {
                                         radius: navigationPane.rowRadius
-                                        color: appController.selectedThreadId === modelData.id
+                                        color: appController.selectedThreadId
+                                               === threadItem.modelData.id
                                                ? Qt.alpha(Kirigami.Theme.highlightColor, 0.16)
                                                : threadItem.hovered
                                                  ? Qt.alpha(Kirigami.Theme.textColor, 0.06)
@@ -590,12 +591,12 @@ Kirigami.ApplicationWindow {
                                             Layout.fillWidth: true
                                             spacing: 0
                                             Label {
-                                                text: modelData.title
+                                                text: threadItem.modelData.title
                                                 Layout.fillWidth: true
                                                 elide: Text.ElideRight
                                             }
                                             Label {
-                                                visible: modelData.external
+                                                visible: threadItem.modelData.external
                                                 text: "External"
                                                 font: Kirigami.Theme.smallFont
                                                 opacity: 0.55
@@ -604,7 +605,8 @@ Kirigami.ApplicationWindow {
                                     }
                                     onClicked: {
                                         appController.selectProjectThread(
-                                            projectDelegate.index, modelData.id)
+                                            projectDelegate.index,
+                                            threadItem.modelData.id)
                                         if (!root.navigationVisible)
                                             navigationDrawer.close()
                                     }
@@ -619,7 +621,8 @@ Kirigami.ApplicationWindow {
                                             text: "Remove thread from Artemis"
                                             icon.name: "edit-delete"
                                             onTriggered: appController.removeProjectThread(
-                                                projectDelegate.index, modelData.id)
+                                                projectDelegate.index,
+                                                threadItem.modelData.id)
                                         }
                                     }
                                 }
