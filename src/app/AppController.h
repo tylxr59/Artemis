@@ -34,6 +34,7 @@ class AppController : public QObject {
     Q_PROPERTY(QString selectedProjectPath READ selectedProjectPath NOTIFY selectedProjectChanged)
     Q_PROPERTY(QString selectedProjectName READ selectedProjectName NOTIFY selectedProjectChanged)
     Q_PROPERTY(bool selectedProjectIsGit READ selectedProjectIsGit NOTIFY selectedProjectChanged)
+    Q_PROPERTY(QString selectedWorkspacePath READ selectedWorkspacePath NOTIFY selectedWorkspaceChanged)
     Q_PROPERTY(QString selectedThreadId READ selectedThreadId NOTIFY selectedThreadChanged)
     Q_PROPERTY(QString selectedThreadTitle READ selectedThreadTitle NOTIFY selectedThreadChanged)
     Q_PROPERTY(QVariantMap selectedThreadInfo READ selectedThreadInfo NOTIFY selectedThreadChanged)
@@ -84,6 +85,7 @@ public:
     QString selectedProjectPath() const;
     QString selectedProjectName() const;
     bool selectedProjectIsGit() const;
+    QString selectedWorkspacePath() const;
     QString selectedThreadId() const;
     QString selectedThreadTitle() const;
     QVariantMap selectedThreadInfo() const;
@@ -160,6 +162,7 @@ signals:
     void settingsChanged();
     void selectedProjectChanged();
     void selectedThreadChanged();
+    void selectedWorkspaceChanged();
     void currentTasksChanged();
     void currentPlanChanged();
     void taskPanelRequested();
@@ -210,7 +213,6 @@ private:
     void applyThreadTitle(const QString &threadId, const QString &title);
     void setModelSetting(const QString &key, QString &storage, const QString &modelId);
     PermissionProfile permissionProfile(const QString &mode) const;
-    QString selectedWorkspacePath() const;
     QString commitPrompt(const QByteArray &snapshot, const QString &projectName,
                          const QString &branch) const;
     QString cleanCommitDraft(const QString &raw) const;

@@ -119,6 +119,10 @@ AppController::AppController(AgentProvider *provider, QObject *parent)
 
 void AppController::connectProvider()
 {
+    connect(this, &AppController::selectedProjectChanged,
+            this, &AppController::selectedWorkspaceChanged);
+    connect(this, &AppController::selectedThreadChanged,
+            this, &AppController::selectedWorkspaceChanged);
     m_turnElapsedUpdateTimer.setInterval(1000);
     connect(&m_turnElapsedUpdateTimer, &QTimer::timeout,
             this, &AppController::turnElapsedChanged);

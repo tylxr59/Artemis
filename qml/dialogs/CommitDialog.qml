@@ -100,6 +100,15 @@ Dialog {
             }
         }
 
+        Label { text: "Repository"; font.bold: true }
+        TextField {
+            Layout.fillWidth: true
+            text: root.controller.selectedWorkspacePath
+            readOnly: true
+            selectByMouse: true
+            Accessible.name: "Git repository"
+        }
+
         Label { text: "Subject"; font.bold: true }
         TextField {
             id: subjectEdit
