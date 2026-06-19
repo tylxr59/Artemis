@@ -583,7 +583,7 @@ Kirigami.ApplicationWindow {
                             wrapMode: TextEdit.Wrap
                             enabled: root.hasProject && appController.providerReady
                             Keys.onPressed: event => {
-                                if ((event.modifiers & Qt.ControlModifier)
+                                if (!(event.modifiers & Qt.ShiftModifier)
                                         && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)) {
                                     sendButton.clicked()
                                     event.accepted = true
@@ -637,7 +637,7 @@ Kirigami.ApplicationWindow {
                                 id: sendButton
                                 text: appController.turnRunning ? "↪" : "↑"
                                 ToolTip.text: appController.turnRunning
-                                              ? "Send guidance" : "Send (Ctrl+Enter)"
+                                              ? "Send guidance" : "Send (Enter)"
                                 ToolTip.visible: hovered
                                 enabled: composer.text.trim().length > 0
                                          && root.hasProject
