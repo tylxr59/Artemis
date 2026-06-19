@@ -146,6 +146,7 @@ Item {
                 Layout.fillWidth: true
                 diffText: root.content
                 compact: true
+                expandedByDefault: false
             }
         }
     }

@@ -12,6 +12,7 @@ Item {
     property bool compact: false
     property int compactFileLimit: 5
     property int compactLineLimit: 10
+    property bool expandedByDefault: true
 
     readonly property var files: parseDiff(diffText)
     readonly property var visibleFiles: compact ? files.slice(0, compactFileLimit) : files
@@ -196,7 +197,7 @@ Item {
             delegate: Rectangle {
                 id: fileCard
                 required property var modelData
-                property bool expanded: true
+                property bool expanded: root.expandedByDefault
                 readonly property var visibleLines: root.compact
                                                     ? modelData.lines.slice(0, root.compactLineLimit)
                                                     : modelData.lines
