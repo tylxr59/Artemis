@@ -13,10 +13,11 @@ Kirigami.ApplicationWindow {
     readonly property real conversationMinimumWidth: 760
     readonly property real navigationMinimumWidth: 220
     readonly property real threadPanelMinimumWidth: 300
+    property real threadPanelWidth: 350
     readonly property real splitHandleWidth: 5
     minimumWidth: conversationMinimumWidth
                   + (sidePanelVisible
-                     ? threadPanelMinimumWidth + splitHandleWidth : 0)
+                     ? threadPanelWidth + splitHandleWidth : 0)
     minimumHeight: 560
     visible: true
     title: appController.selectedThreadTitle.length > 0
@@ -28,7 +29,7 @@ Kirigami.ApplicationWindow {
                                      + navigationMinimumWidth
                                      + splitHandleWidth
                                      + (sidePanelVisible
-                                        ? threadPanelMinimumWidth
+                                        ? threadPanelWidth
                                           + splitHandleWidth : 0)
     readonly property bool hasProject: appController.selectedProjectPath.length > 0
     readonly property bool hasThread: appController.selectedThreadId.length > 0
@@ -360,29 +361,34 @@ Kirigami.ApplicationWindow {
         contentItem: navigationPane
     }
 
-    SplitView {
-        id: workspaceSplit
+    RowLayout {
         anchors.fill: parent
-        orientation: Qt.Horizontal
+        spacing: 0
 
-        handle: Rectangle {
-            implicitWidth: root.splitHandleWidth
-            color: SplitHandle.pressed
-                   ? Kirigami.Theme.highlightColor
-                   : SplitHandle.hovered
-                     ? Qt.alpha(Kirigami.Theme.highlightColor, 0.55)
-                     : Qt.alpha(Kirigami.Theme.textColor, 0.18)
+        SplitView {
+            id: workspaceSplit
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            orientation: Qt.Horizontal
 
-            Rectangle {
-                anchors.centerIn: parent
-                width: 1
-                height: parent.height
-                color: Kirigami.Theme.textColor
-                opacity: 0.28
+            handle: Rectangle {
+                implicitWidth: root.splitHandleWidth
+                color: SplitHandle.pressed
+                       ? Kirigami.Theme.highlightColor
+                       : SplitHandle.hovered
+                         ? Qt.alpha(Kirigami.Theme.highlightColor, 0.55)
+                         : Qt.alpha(Kirigami.Theme.textColor, 0.18)
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 1
+                    height: parent.height
+                    color: Kirigami.Theme.textColor
+                    opacity: 0.28
+                }
             }
-        }
 
-        Pane {
+            Pane {
             id: navigationPane
             readonly property real projectRowHeight: 36
             readonly property real threadRowHeight: 34
@@ -735,7 +741,7 @@ Kirigami.ApplicationWindow {
             }
         }
 
-        Pane {
+            Pane {
             id: conversationPane
             SplitView.fillWidth: true
             SplitView.minimumWidth: root.conversationMinimumWidth
@@ -1255,11 +1261,57 @@ Kirigami.ApplicationWindow {
             }
         }
 
+        }
+
+        Rectangle {
+            id: threadPanelHandle
+            visible: root.sidePanelVisible
+            Layout.fillHeight: true
+            Layout.preferredWidth: visible ? root.splitHandleWidth : 0
+            color: threadPanelDrag.pressed
+                   ? Kirigami.Theme.highlightColor
+                   : threadPanelDrag.containsMouse
+                     ? Qt.alpha(Kirigami.Theme.highlightColor, 0.55)
+                     : Qt.alpha(Kirigami.Theme.textColor, 0.18)
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: 1
+                height: parent.height
+                color: Kirigami.Theme.textColor
+                opacity: 0.28
+            }
+
+            MouseArea {
+                id: threadPanelDrag
+                property real pressGlobalX: 0
+                property real pressWidth: 0
+                anchors.fill: parent
+                anchors.leftMargin: -3
+                anchors.rightMargin: -3
+                hoverEnabled: true
+                cursorShape: Qt.SplitHCursor
+                onPressed: mouse => {
+                    pressGlobalX = mapToGlobal(mouse.x, mouse.y).x
+                    pressWidth = root.threadPanelWidth
+                }
+                onPositionChanged: mouse => {
+                    if (!pressed)
+                        return
+                    const globalX = mapToGlobal(mouse.x, mouse.y).x
+                    root.threadPanelWidth = Math.max(
+                        root.threadPanelMinimumWidth,
+                        Math.min(700, pressWidth + pressGlobalX - globalX))
+                }
+            }
+        }
+
         ThreadPane {
             visible: root.sidePanelVisible
-            SplitView.preferredWidth: 480
-            SplitView.minimumWidth: visible ? root.threadPanelMinimumWidth : 0
-            SplitView.maximumWidth: visible ? 700 : 0
+            Layout.fillHeight: true
+            Layout.minimumWidth: visible ? root.threadPanelWidth : 0
+            Layout.preferredWidth: visible ? root.threadPanelWidth : 0
+            Layout.maximumWidth: visible ? root.threadPanelWidth : 0
             controller: appController
             mode: root.sidePanelMode
             onCloseRequested: root.sidePanelVisible = false
