@@ -693,17 +693,22 @@ Kirigami.ApplicationWindow {
                 RowLayout {
                     Layout.fillWidth: true
                     Rectangle {
+                        id: connectionBadge
                         Layout.preferredWidth: connectionRow.implicitWidth
                                                + Kirigami.Units.largeSpacing
-                        Layout.preferredHeight: connectionRow.implicitHeight
-                                                + Kirigami.Units.smallSpacing
+                        Layout.preferredHeight: Math.max(
+                            28, connectionLabel.implicitHeight
+                                + Kirigami.Units.smallSpacing * 2)
                         radius: height / 2
                         color: Qt.alpha(appController.providerReady
                                         ? Kirigami.Theme.positiveTextColor
                                         : Kirigami.Theme.negativeTextColor, 0.12)
                         RowLayout {
                             id: connectionRow
-                            anchors.centerIn: parent
+                            anchors.fill: parent
+                            anchors.leftMargin: Kirigami.Units.largeSpacing / 2
+                            anchors.rightMargin: Kirigami.Units.largeSpacing / 2
+                            anchors.bottomMargin: 2
                             spacing: Kirigami.Units.smallSpacing
                             Rectangle {
                                 Layout.preferredWidth: 7
@@ -714,6 +719,8 @@ Kirigami.ApplicationWindow {
                                        : Kirigami.Theme.negativeTextColor
                             }
                             Label {
+                                id: connectionLabel
+                                Layout.alignment: Qt.AlignVCenter
                                 text: appController.providerReady
                                       ? "Codex connected" : "Codex offline"
                                 color: appController.providerReady

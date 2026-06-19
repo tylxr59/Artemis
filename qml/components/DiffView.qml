@@ -171,6 +171,7 @@ Item {
             spacing: Kirigami.Units.smallSpacing
 
             Label {
+                Layout.alignment: Qt.AlignVCenter
                 text: "Changed files (" + root.files.length + ")"
                 font.bold: true
                 font.pointSize: Kirigami.Theme.smallFont.pointSize
@@ -178,12 +179,14 @@ Item {
             }
             Item { Layout.fillWidth: true }
             Label {
+                Layout.alignment: Qt.AlignVCenter
                 text: "+" + root.additions
                 color: Kirigami.Theme.positiveTextColor
                 font.family: "monospace"
                 font.bold: true
             }
             Label {
+                Layout.alignment: Qt.AlignVCenter
                 text: "−" + root.deletions
                 color: Kirigami.Theme.negativeTextColor
                 font.family: "monospace"
@@ -221,6 +224,8 @@ Item {
                         Layout.preferredHeight: root.compact ? 38 : 42
                         leftPadding: Kirigami.Units.smallSpacing
                         rightPadding: Kirigami.Units.largeSpacing
+                        topPadding: 0
+                        bottomPadding: 2
                         onClicked: fileCard.expanded = !fileCard.expanded
 
                         contentItem: RowLayout {
@@ -243,6 +248,7 @@ Item {
                                 text: fileCard.modelData.path
                                 textFormat: Text.PlainText
                                 Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
                                 elide: Text.ElideMiddle
                                 font.bold: true
                                 font.pointSize: Kirigami.Theme.smallFont.pointSize
@@ -250,12 +256,14 @@ Item {
                                 ToolTip.visible: fileHeader.hovered && filePathLabel.truncated
                             }
                             Label {
+                                Layout.alignment: Qt.AlignVCenter
                                 text: "+" + fileCard.modelData.additions
                                 color: Kirigami.Theme.positiveTextColor
                                 font.family: "monospace"
                                 font.bold: true
                             }
                             Label {
+                                Layout.alignment: Qt.AlignVCenter
                                 text: "−" + fileCard.modelData.deletions
                                 color: Kirigami.Theme.negativeTextColor
                                 font.family: "monospace"

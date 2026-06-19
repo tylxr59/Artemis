@@ -66,8 +66,8 @@ Item {
                                              + topPadding + bottomPadding)
                 leftPadding: Kirigami.Units.largeSpacing
                 rightPadding: Kirigami.Units.largeSpacing
-                topPadding: Kirigami.Units.smallSpacing
-                bottomPadding: Kirigami.Units.smallSpacing
+                topPadding: Math.max(0, Kirigami.Units.smallSpacing - 1)
+                bottomPadding: Kirigami.Units.smallSpacing + 1
                 checkable: root.eventType === "command"
                 hoverEnabled: checkable
                 Accessible.name: root.eventType === "command"
@@ -100,6 +100,7 @@ Item {
                         opacity: root.isRunning ? 0.9 : 0.62
                     }
                     Label {
+                        Layout.alignment: Qt.AlignVCenter
                         text: root.isRunning
                               ? "Running"
                               : (root.eventType === "file"
@@ -116,6 +117,7 @@ Item {
                     }
                     Label {
                         Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
                         text: root.compactContent
                         textFormat: Text.PlainText
                         font.family: root.eventType === "command"
