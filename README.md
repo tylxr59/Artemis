@@ -3,6 +3,10 @@
 Artemis is a native KDE/Linux AI coding client built with C++20, Qt Quick,
 Kirigami, and the Codex app-server protocol.
 
+Artemis is still in extremely alpha. Things will break and be changing rapidly.
+
+![Artemis screenshot](screenshot.png)
+
 ## Features
 
 - Project and persistent Codex thread navigation
