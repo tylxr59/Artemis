@@ -19,6 +19,8 @@ public:
 
     ProviderCapabilities capabilities() const override;
     bool ready() const override;
+    bool setupRequired() const override;
+    QString setupInstructions() const override;
     QString version() const override;
     void start() override;
     void listModels(ResultHandler handler) override;
@@ -52,6 +54,7 @@ private:
     void startVersionProbe();
     void startProcess();
     void initializeProcess();
+    void refreshAccountState();
     void scheduleRestart(const QString &reason);
     void handleLine(const QByteArray &line);
     void handleNotification(const QString &method, const QJsonObject &params);
@@ -60,6 +63,7 @@ private:
     void normalizeItem(const QString &lifecycle, const QJsonObject &params);
     void writeResponse(const QJsonValue &id, const QJsonObject &result);
     void setReady(bool ready);
+    void setSetupRequired(bool required, const QString &instructions = {});
 
     QProcess m_process;
     QTimer m_restartTimer;
@@ -68,10 +72,12 @@ private:
     QHash<QString, QJsonValue> m_pendingUserInputRequests;
     qint64 m_nextId = 1;
     bool m_ready = false;
+    bool m_setupRequired = false;
     bool m_stopping = false;
     bool m_restartScheduled = false;
     int m_restartAttempt = 0;
     QString m_version;
+    QString m_setupInstructions;
 };
 
 } // namespace Artemis

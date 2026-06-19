@@ -682,7 +682,9 @@ Kirigami.ApplicationWindow {
                                          && projectDelegate.selected
                                 text: appController.providerReady
                                       ? "No chats yet. Send a message to start one."
-                                      : "Codex is offline."
+                                      : appController.providerSetupRequired
+                                        ? "Codex setup is required."
+                                        : "Codex is unavailable."
                                 wrapMode: Text.Wrap
                                 opacity: 0.55
                                 font: Kirigami.Theme.smallFont
@@ -713,15 +715,14 @@ Kirigami.ApplicationWindow {
                     Layout.fillWidth: true
                     Rectangle {
                         id: connectionBadge
+                        visible: !appController.providerReady
                         Layout.preferredWidth: connectionRow.implicitWidth
                                                + Kirigami.Units.largeSpacing
                         Layout.preferredHeight: Math.max(
                             28, connectionLabel.implicitHeight
                                 + Kirigami.Units.smallSpacing * 2)
                         radius: height / 2
-                        color: Qt.alpha(appController.providerReady
-                                        ? Kirigami.Theme.positiveTextColor
-                                        : Kirigami.Theme.negativeTextColor, 0.12)
+                        color: Qt.alpha(Kirigami.Theme.negativeTextColor, 0.12)
                         RowLayout {
                             id: connectionRow
                             anchors.fill: parent
@@ -733,20 +734,22 @@ Kirigami.ApplicationWindow {
                                 Layout.preferredWidth: 7
                                 Layout.preferredHeight: 7
                                 radius: 4
-                                color: appController.providerReady
-                                       ? Kirigami.Theme.positiveTextColor
-                                       : Kirigami.Theme.negativeTextColor
+                                color: Kirigami.Theme.negativeTextColor
                             }
                             Label {
                                 id: connectionLabel
                                 Layout.alignment: Qt.AlignVCenter
-                                text: appController.providerReady
-                                      ? "Codex connected" : "Codex offline"
-                                color: appController.providerReady
-                                       ? Kirigami.Theme.positiveTextColor
-                                       : Kirigami.Theme.negativeTextColor
+                                text: appController.providerSetupRequired
+                                      ? "Codex setup required"
+                                      : "Codex unavailable"
+                                color: Kirigami.Theme.negativeTextColor
                             }
                         }
+                        ToolTip.text: appController.providerSetupRequired
+                                      ? appController.providerSetupInstructions
+                                      : appController.providerIssueText
+                        ToolTip.visible: badgeHover.hovered
+                        HoverHandler { id: badgeHover }
                     }
                     Item { Layout.fillWidth: true }
                     ToolButton {
@@ -928,12 +931,17 @@ Kirigami.ApplicationWindow {
                             width: Math.min(parent.width - 40, 480)
                             visible: conversationList.count === 0
                             text: !root.hasProject ? "Start with a project"
-                                  : !appController.providerReady ? "Codex is offline"
+                                  : appController.providerSetupRequired
+                                    ? "Set up Codex"
+                                  : !appController.providerReady ? "Codex is unavailable"
                                   : "What would you like to build?"
                             explanation: !root.hasProject
                                          ? "Add a project folder to give Artemis a workspace."
+                                         : appController.providerSetupRequired
+                                           ? appController.providerSetupInstructions
                                          : !appController.providerReady
-                                           ? "Open Diagnostics to inspect the Codex connection."
+                                           ? (appController.providerIssueText
+                                              || "Open Diagnostics to inspect the Codex connection.")
                                            : appController.selectedProjectIsGit
                                              ? "Describe a task below. Use Diff to review file changes."
                                              : "Describe a task below. Git review is unavailable for this folder."

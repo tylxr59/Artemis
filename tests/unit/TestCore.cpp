@@ -373,6 +373,9 @@ private slots:
             "id=$(printf '%s' \"$request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
             "printf '{\"id\":%s,\"result\":{}}\\n' \"$id\"\n"
             "IFS= read -r initialized\n"
+            "IFS= read -r account_request\n"
+            "id=$(printf '%s' \"$account_request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
+            "printf '{\"id\":%s,\"result\":{\"requiresOpenaiAuth\":false}}\\n' \"$id\"\n"
             "sleep 0.1\n"
             "exit 1\n");
         script.close();
@@ -391,6 +394,45 @@ private slots:
                 ++readyCount;
         }
         QVERIFY2(readyCount >= 2, "Codex did not become ready after restarting");
+        qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
+    }
+
+    void codexReportsSetupRequiredWhenNotAuthenticated()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto executable = directory.filePath(QStringLiteral("fake-codex"));
+        QFile script(executable);
+        QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Text));
+        script.write(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = \"--version\" ]; then\n"
+            "  echo 'codex-cli 0.141.0'\n"
+            "  exit 0\n"
+            "fi\n"
+            "IFS= read -r request\n"
+            "id=$(printf '%s' \"$request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
+            "printf '{\"id\":%s,\"result\":{}}\\n' \"$id\"\n"
+            "IFS= read -r initialized\n"
+            "IFS= read -r account_request\n"
+            "id=$(printf '%s' \"$account_request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
+            "printf '{\"id\":%s,\"result\":{\"account\":null,\"requiresOpenaiAuth\":true}}\\n' \"$id\"\n"
+            "sleep 5\n");
+        script.close();
+        QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                      | QFileDevice::ExeOwner));
+
+        qputenv("ARTEMIS_CODEX_EXECUTABLE", executable.toUtf8());
+        CodexClient client;
+        QSignalSpy setupChanges(&client, &CodexClient::setupChanged);
+        QSignalSpy errors(&client, &CodexClient::providerError);
+        client.start();
+
+        QTRY_VERIFY_WITH_TIMEOUT(!setupChanges.isEmpty(), 3000);
+        QVERIFY(client.setupRequired());
+        QVERIFY(!client.ready());
+        QVERIFY(client.setupInstructions().contains(QStringLiteral("codex login")));
+        QVERIFY(!errors.isEmpty());
         qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
     }
 
@@ -440,6 +482,9 @@ private slots:
             "id=$(printf '%s' \"$request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
             "printf '{\"id\":%s,\"result\":{}}\\n' \"$id\"\n"
             "IFS= read -r initialized\n"
+            "IFS= read -r account_request\n"
+            "id=$(printf '%s' \"$account_request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
+            "printf '{\"id\":%s,\"result\":{\"requiresOpenaiAuth\":false}}\\n' \"$id\"\n"
             "printf '%s\\n' '{\"id\":77,\"method\":\"item/tool/requestUserInput\","
             "\"params\":{\"threadId\":\"thread-1\",\"turnId\":\"turn-1\","
             "\"itemId\":\"input-1\",\"questions\":[{\"id\":\"scope\","
@@ -683,7 +728,11 @@ private slots:
             "  printf '%s\\n' \"$request\" >> \"$ARTEMIS_TEST_CODEX_REQUESTS\"\n"
             "  id=$(printf '%s' \"$request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
             "  if [ -n \"$id\" ]; then\n"
-            "    printf '{\"id\":%s,\"result\":{}}\\n' \"$id\"\n"
+            "    if printf '%s' \"$request\" | grep -q '\"method\":\"account/read\"'; then\n"
+            "      printf '{\"id\":%s,\"result\":{\"requiresOpenaiAuth\":false}}\\n' \"$id\"\n"
+            "    else\n"
+            "      printf '{\"id\":%s,\"result\":{}}\\n' \"$id\"\n"
+            "    fi\n"
             "  fi\n"
             "done\n");
         script.close();

@@ -244,6 +244,34 @@ void CodexClient::initializeProcess()
                                 {QStringLiteral("params"), QJsonObject{}}};
         m_process.write(QJsonDocument(initialized).toJson(QJsonDocument::Compact) + '\n');
         m_restartAttempt = 0;
+        refreshAccountState();
+    });
+}
+
+void CodexClient::refreshAccountState()
+{
+    request(QStringLiteral("account/read"),
+            {{QStringLiteral("refreshToken"), false}},
+            [this](const QJsonObject &result, const QString &error) {
+        if (!error.isEmpty()) {
+            scheduleRestart(error);
+            return;
+        }
+
+        const bool requiresOpenAiAuth =
+            result.value(QStringLiteral("requiresOpenaiAuth")).toBool(true);
+        const bool hasAccount = result.value(QStringLiteral("account")).isObject();
+        if (requiresOpenAiAuth && !hasAccount) {
+            setReady(false);
+            const auto instructions = QStringLiteral(
+                "Codex is installed but is not signed in. Run `codex login` in a terminal, "
+                "complete sign-in, then restart Artemis.");
+            setSetupRequired(true, instructions);
+            emit providerError(instructions);
+            return;
+        }
+
+        setSetupRequired(false);
         setReady(true);
     });
 }
@@ -370,7 +398,9 @@ void CodexClient::writeResponse(const QJsonValue &id, const QJsonObject &result)
 void CodexClient::handleNotification(const QString &method, const QJsonObject &params)
 {
     const auto turnId = params.value(QStringLiteral("turnId")).toString();
-    if (method == QStringLiteral("turn/started")) {
+    if (method == QStringLiteral("account/updated")) {
+        refreshAccountState();
+    } else if (method == QStringLiteral("turn/started")) {
         const auto turn = params.value(QStringLiteral("turn")).toObject();
         emit activeTurnStarted(params.value(QStringLiteral("threadId")).toString(),
                                turn.value(QStringLiteral("id")).toString());
@@ -605,6 +635,8 @@ void CodexClient::setThreadName(const QString &threadId, const QString &name,
 }
 
 bool CodexClient::ready() const { return m_ready; }
+bool CodexClient::setupRequired() const { return m_setupRequired; }
+QString CodexClient::setupInstructions() const { return m_setupInstructions; }
 QString CodexClient::version() const { return m_version; }
 
 void CodexClient::setReady(bool ready)
@@ -613,6 +645,15 @@ void CodexClient::setReady(bool ready)
         return;
     m_ready = ready;
     emit readyChanged(ready);
+}
+
+void CodexClient::setSetupRequired(bool required, const QString &instructions)
+{
+    if (m_setupRequired == required && m_setupInstructions == instructions)
+        return;
+    m_setupRequired = required;
+    m_setupInstructions = instructions;
+    emit setupChanged();
 }
 
 } // namespace Artemis

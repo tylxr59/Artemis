@@ -44,6 +44,8 @@ public:
 
     virtual ProviderCapabilities capabilities() const = 0;
     virtual bool ready() const = 0;
+    virtual bool setupRequired() const { return false; }
+    virtual QString setupInstructions() const { return {}; }
     virtual QString version() const = 0;
     virtual void start() = 0;
     virtual void listModels(ResultHandler handler) = 0;
@@ -68,6 +70,7 @@ public:
 
 signals:
     void readyChanged(bool ready);
+    void setupChanged();
     void versionChanged();
     void activeTurnStarted(const QString &threadId, const QString &turnId);
     void tokenUsageUpdated(const QString &threadId, qint64 contextTokens,

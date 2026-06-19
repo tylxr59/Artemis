@@ -47,6 +47,9 @@ class AppController : public QObject {
     Q_PROPERTY(int pendingUserInputQuestionCount READ pendingUserInputQuestionCount NOTIFY pendingUserInputChanged)
     Q_PROPERTY(QString turnElapsedText READ turnElapsedText NOTIFY turnElapsedChanged)
     Q_PROPERTY(bool providerReady READ providerReady NOTIFY providerReadyChanged)
+    Q_PROPERTY(bool providerSetupRequired READ providerSetupRequired NOTIFY providerSetupChanged)
+    Q_PROPERTY(QString providerSetupInstructions READ providerSetupInstructions NOTIFY providerSetupChanged)
+    Q_PROPERTY(QString providerIssueText READ providerIssueText NOTIFY providerIssueChanged)
     Q_PROPERTY(QString providerVersion READ providerVersion NOTIFY providerReadyChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
     Q_PROPERTY(qint64 contextTokens READ contextTokens NOTIFY tokenUsageChanged)
@@ -92,6 +95,9 @@ public:
     int pendingUserInputQuestionCount() const;
     QString turnElapsedText() const;
     bool providerReady() const;
+    bool providerSetupRequired() const;
+    QString providerSetupInstructions() const;
+    QString providerIssueText() const;
     QString providerVersion() const;
     QString statusText() const;
     qint64 contextTokens() const;
@@ -157,6 +163,8 @@ signals:
     void pendingUserInputChanged();
     void turnElapsedChanged();
     void providerReadyChanged();
+    void providerSetupChanged();
+    void providerIssueChanged();
     void statusTextChanged();
     void statusMessage(const QString &text);
     void tokenUsageChanged();
@@ -217,6 +225,7 @@ private:
     QElapsedTimer m_turnElapsedTimer;
     QTimer m_turnElapsedUpdateTimer;
     QString m_status;
+    QString m_providerIssue;
     QHash<QString, QVariantMap> m_threadTokenUsage;
     QString m_diff;
     QString m_gitStatus;

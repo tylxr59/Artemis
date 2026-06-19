@@ -18,6 +18,13 @@ ScrollView {
             Label { text: root.controller.providerVersion || "Not detected" }
             Label { text: "Connection" }
             Label { text: root.controller.providerReady ? "Connected" : "Disconnected" }
+            Label { text: "Setup" }
+            Label {
+                text: root.controller.providerSetupRequired
+                      ? root.controller.providerSetupInstructions : "Complete"
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
             Label { text: "Database" }
             Label { text: root.controller.databasePath; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
             Label { text: "Project" }

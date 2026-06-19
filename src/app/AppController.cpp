@@ -124,14 +124,25 @@ void AppController::connectProvider()
     connect(m_provider, &AgentProvider::readyChanged, this, [this](bool ready) {
         emit providerReadyChanged();
         if (ready) {
+            if (!m_providerIssue.isEmpty()) {
+                m_providerIssue.clear();
+                emit providerIssueChanged();
+            }
             setStatus(QStringLiteral("Codex connected"));
             loadModels();
             loadThreads();
         }
     });
+    connect(m_provider, &AgentProvider::setupChanged, this, [this] {
+        emit providerSetupChanged();
+    });
     connect(m_provider, &AgentProvider::versionChanged,
             this, &AppController::providerReadyChanged);
     connect(m_provider, &AgentProvider::providerError, this, [this](const QString &message) {
+        if (m_providerIssue != message) {
+            m_providerIssue = message;
+            emit providerIssueChanged();
+        }
         setStatus(message);
     });
     connect(m_provider, &AgentProvider::domainEvent, this, &AppController::handleDomainEvent);
@@ -250,6 +261,12 @@ QString AppController::turnElapsedText() const
     return elapsedText(m_turnElapsedTimer.isValid() ? m_turnElapsedTimer.elapsed() : 0);
 }
 bool AppController::providerReady() const { return m_provider->ready(); }
+bool AppController::providerSetupRequired() const { return m_provider->setupRequired(); }
+QString AppController::providerSetupInstructions() const
+{
+    return m_provider->setupInstructions();
+}
+QString AppController::providerIssueText() const { return m_providerIssue; }
 QString AppController::providerVersion() const { return m_provider->version(); }
 QString AppController::statusText() const { return m_status; }
 qint64 AppController::contextTokens() const
