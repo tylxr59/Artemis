@@ -4,6 +4,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QDebug>
+#include <QIcon>
 #include <QQuickStyle>
 
 int main(int argc, char *argv[])
@@ -14,6 +15,7 @@ int main(int argc, char *argv[])
     QGuiApplication::setApplicationVersion(QStringLiteral(ARTEMIS_VERSION));
 
     QApplication app(argc, argv);
+    QApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/artemis-bow-256.png")));
     QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
 
     Artemis::AppController controller;

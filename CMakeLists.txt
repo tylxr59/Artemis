@@ -48,6 +48,13 @@ qt_add_executable(artemis
     ${ARTEMIS_SOURCES}
 )
 
+qt_add_resources(artemis "artemis_icons"
+    PREFIX "/icons"
+    BASE "resources/icons"
+    FILES
+        resources/icons/artemis-bow-256.png
+)
+
 qt_add_qml_module(artemis
     URI org.artemis
     VERSION 1.0
@@ -81,6 +88,12 @@ target_link_libraries(artemis PRIVATE
 install(TARGETS artemis RUNTIME DESTINATION bin)
 install(FILES resources/org.artemis.Artemis.desktop
     DESTINATION share/applications)
+install(FILES resources/icons/artemis-bow-256.png
+    DESTINATION share/icons/hicolor/256x256/apps
+    RENAME artemis.png)
+install(FILES resources/icons/artemis-bow.svg
+    DESTINATION share/icons/hicolor/scalable/apps
+    RENAME artemis.svg)
 
 if(BUILD_TESTING)
     add_subdirectory(tests)
