@@ -465,6 +465,9 @@ Kirigami.ApplicationWindow {
                     Layout.fillHeight: true
                     model: appController.conversation
                     clip: true
+                    ScrollBar.vertical: ScrollBar {
+                        policy: ScrollBar.AsNeeded
+                    }
                     spacing: Kirigami.Units.largeSpacing
                     topMargin: Kirigami.Units.largeSpacing
                     bottomMargin: Kirigami.Units.largeSpacing
