@@ -1038,6 +1038,7 @@ Kirigami.ApplicationWindow {
 
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 52
+                                        leftPadding: Kirigami.Units.largeSpacing
                                         flat: true
                                         Accessible.name: modelData.label
                                         Accessible.description: modelData.description || ""
