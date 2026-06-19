@@ -56,32 +56,119 @@ Item {
 
     Component {
         id: toolComponent
-        RowLayout {
-            spacing: Kirigami.Units.smallSpacing
-            implicitHeight: Math.max(38, toolText.implicitHeight + Kirigami.Units.largeSpacing)
+        ColumnLayout {
+            spacing: 0
 
-            Kirigami.Icon {
-                Layout.leftMargin: Kirigami.Units.largeSpacing
-                Layout.preferredWidth: 16
-                Layout.preferredHeight: 16
-                source: root.eventType === "file" ? "document-edit" : "utilities-terminal"
-                opacity: 0.62
-            }
-            Label {
-                text: root.isRunning ? "Running" : (root.eventType === "file" ? "Changed files" : "Ran command")
-                font: Kirigami.Theme.smallFont
-                opacity: 0.58
-            }
-            Label {
-                id: toolText
+            AbstractButton {
+                id: toolToggle
                 Layout.fillWidth: true
+                implicitHeight: Math.max(44, contentItem.implicitHeight
+                                             + topPadding + bottomPadding)
+                leftPadding: Kirigami.Units.largeSpacing
+                rightPadding: Kirigami.Units.largeSpacing
+                topPadding: Kirigami.Units.smallSpacing
+                bottomPadding: Kirigami.Units.smallSpacing
+                checkable: root.eventType === "command"
+                hoverEnabled: checkable
+                Accessible.name: root.eventType === "command"
+                                 ? (checked ? "Hide full command" : "Show full command")
+                                 : root.title
+                ToolTip.text: Accessible.name
+                ToolTip.visible: hovered && checkable
+
+                contentItem: RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Item {
+                        Layout.preferredWidth: 14
+                        Layout.preferredHeight: 14
+
+                        Kirigami.Icon {
+                            anchors.fill: parent
+                            visible: root.eventType === "command"
+                            source: toolToggle.checked ? "arrow-down" : "arrow-right"
+                            opacity: 0.5
+                        }
+                    }
+                    Kirigami.Icon {
+                        Layout.preferredWidth: 17
+                        Layout.preferredHeight: 17
+                        source: root.eventType === "file"
+                                ? "document-edit" : "utilities-terminal"
+                        color: root.isRunning ? Kirigami.Theme.highlightColor
+                                              : Kirigami.Theme.textColor
+                        opacity: root.isRunning ? 0.9 : 0.62
+                    }
+                    Label {
+                        text: root.isRunning
+                              ? "Running"
+                              : (root.eventType === "file"
+                                 ? "Changed files" : "Ran command")
+                        font.family: Kirigami.Theme.smallFont.family
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        font.bold: true
+                        opacity: root.isRunning ? 0.8 : 0.62
+                    }
+                    Rectangle {
+                        Layout.preferredWidth: 1
+                        Layout.preferredHeight: 14
+                        color: Qt.alpha(Kirigami.Theme.textColor, 0.16)
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: root.compactContent
+                        textFormat: Text.PlainText
+                        font.family: root.eventType === "command"
+                                     ? "monospace"
+                                     : Kirigami.Theme.defaultFont.family
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        elide: Text.ElideRight
+                        opacity: root.isRunning ? 0.55 : 0.72
+                    }
+                }
+
+                background: Rectangle {
+                    radius: card.radius
+                    color: toolToggle.hovered
+                           ? Qt.alpha(Kirigami.Theme.textColor, 0.05)
+                           : "transparent"
+                }
+
+                HoverHandler {
+                    enabled: toolToggle.checkable
+                    cursorShape: Qt.PointingHandCursor
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.leftMargin: Kirigami.Units.largeSpacing
                 Layout.rightMargin: Kirigami.Units.largeSpacing
-                text: "—  " + root.compactContent
-                textFormat: Text.PlainText
-                font.family: root.eventType === "command" ? "monospace" : Kirigami.Theme.defaultFont.family
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                elide: Text.ElideRight
-                opacity: root.isRunning ? 0.55 : 0.72
+                Layout.bottomMargin: Kirigami.Units.largeSpacing
+                implicitHeight: fullCommandText.implicitHeight
+                                + Kirigami.Units.largeSpacing * 2
+                visible: toolToggle.checked
+                radius: Kirigami.Units.smallSpacing
+                color: Qt.alpha(Kirigami.Theme.backgroundColor, 0.64)
+                border.width: 1
+                border.color: Qt.alpha(Kirigami.Theme.textColor, 0.1)
+
+                TextEdit {
+                    id: fullCommandText
+                    anchors.fill: parent
+                    anchors.margins: Kirigami.Units.largeSpacing
+                    text: root.content
+                    textFormat: TextEdit.PlainText
+                    readOnly: true
+                    wrapMode: TextEdit.Wrap
+                    selectByMouse: true
+                    color: Kirigami.Theme.textColor
+                    selectionColor: Kirigami.Theme.highlightColor
+                    selectedTextColor: Kirigami.Theme.highlightedTextColor
+                    font.family: "monospace"
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    opacity: 0.86
+                }
             }
         }
     }
