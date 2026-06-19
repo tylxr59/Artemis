@@ -1257,7 +1257,7 @@ Kirigami.ApplicationWindow {
 
         ThreadPane {
             visible: root.sidePanelVisible
-            SplitView.preferredWidth: Math.min(620, Math.max(390, root.width * 0.32))
+            SplitView.preferredWidth: 480
             SplitView.minimumWidth: visible ? root.threadPanelMinimumWidth : 0
             SplitView.maximumWidth: visible ? 700 : 0
             controller: appController
