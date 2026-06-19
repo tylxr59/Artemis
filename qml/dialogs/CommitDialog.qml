@@ -81,7 +81,7 @@ Dialog {
             Item { Layout.fillWidth: true }
             Label {
                 text: "Generating..."
-                visible: root.generating
+                opacity: root.generating ? 1 : 0
             }
         }
 
