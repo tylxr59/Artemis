@@ -24,6 +24,8 @@ class AppController : public QObject {
     Q_PROPERTY(QString codingReasoningEffort READ codingReasoningEffort WRITE setCodingReasoningEffort NOTIFY settingsChanged)
     Q_PROPERTY(QString commitModelId READ commitModelId WRITE setCommitModelId NOTIFY settingsChanged)
     Q_PROPERTY(QString titleModelId READ titleModelId WRITE setTitleModelId NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantList editorOptions READ editorOptions CONSTANT)
+    Q_PROPERTY(QString selectedEditorId READ selectedEditorId WRITE setSelectedEditorId NOTIFY settingsChanged)
     Q_PROPERTY(int selectedProjectIndex READ selectedProjectIndex WRITE selectProject NOTIFY selectedProjectChanged)
     Q_PROPERTY(QString selectedProjectPath READ selectedProjectPath NOTIFY selectedProjectChanged)
     Q_PROPERTY(QString selectedProjectName READ selectedProjectName NOTIFY selectedProjectChanged)
@@ -59,6 +61,8 @@ public:
     QString codingReasoningEffort() const;
     QString commitModelId() const;
     QString titleModelId() const;
+    QVariantList editorOptions() const;
+    QString selectedEditorId() const;
     int selectedProjectIndex() const;
     QString selectedProjectPath() const;
     QString selectedProjectName() const;
@@ -106,11 +110,13 @@ public:
     Q_INVOKABLE QString suggestBranch(const QString &message) const;
     Q_INVOKABLE QString validateBranch(const QString &branch) const;
     Q_INVOKABLE void openProjectFolder();
+    Q_INVOKABLE void openProjectEditor();
     Q_INVOKABLE void openTerminal();
     void setCodingModelId(const QString &modelId);
     void setCodingReasoningEffort(const QString &reasoningEffort);
     void setCommitModelId(const QString &modelId);
     void setTitleModelId(const QString &modelId);
+    void setSelectedEditorId(const QString &desktopId);
 
 signals:
     void threadsChanged();
@@ -187,6 +193,8 @@ private:
     QString m_codingReasoningEffort;
     QString m_commitModelId;
     QString m_titleModelId;
+    QVariantList m_editorOptions;
+    QString m_selectedEditorId;
 };
 
 } // namespace Artemis

@@ -215,6 +215,11 @@ Kirigami.ApplicationWindow {
                 onClicked: appController.openProjectFolder()
             }
             ToolButton {
+                text: "Open editor"
+                visible: root.hasProject
+                onClicked: appController.openProjectEditor()
+            }
+            ToolButton {
                 text: "Thread"
                 visible: root.hasThread
                 checkable: true

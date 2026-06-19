@@ -27,6 +27,8 @@ Dialog {
         codingModel.currentIndex = modelIndex(controller.codingModelId)
         commitModel.currentIndex = modelIndex(controller.commitModelId)
         titleModel.currentIndex = modelIndex(controller.titleModelId)
+        const editorIndex = editorPicker.indexOfValue(controller.selectedEditorId)
+        editorPicker.currentIndex = editorIndex >= 0 ? editorIndex : 0
     }
 
     onOpened: loadValues()
@@ -34,6 +36,7 @@ Dialog {
         controller.codingModelId = codingModel.currentValue || ""
         controller.commitModelId = commitModel.currentValue || ""
         controller.titleModelId = titleModel.currentValue || ""
+        controller.selectedEditorId = editorPicker.currentValue || ""
     }
 
     ColumnLayout {
@@ -83,6 +86,34 @@ Dialog {
         Label {
             Layout.fillWidth: true
             text: "Commit messages and thread titles run in separate, read-only ephemeral threads."
+            wrapMode: Text.Wrap
+            opacity: 0.65
+        }
+
+        Label {
+            text: "Editor"
+            font.bold: true
+            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
+        }
+
+        GridLayout {
+            Layout.fillWidth: true
+            columns: 2
+            columnSpacing: Kirigami.Units.largeSpacing
+
+            Label { text: "Open repositories with" }
+            ComboBox {
+                id: editorPicker
+                Layout.fillWidth: true
+                model: root.controller.editorOptions
+                textRole: "name"
+                valueRole: "id"
+            }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            text: "Editors and IDEs are detected from installed desktop applications."
             wrapMode: Text.Wrap
             opacity: 0.65
         }

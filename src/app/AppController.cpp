@@ -5,6 +5,7 @@
 #include <QClipboard>
 #include <QDesktopServices>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -16,6 +17,9 @@
 #include <QLocale>
 #include <QMimeData>
 #include <QProcess>
+#include <QProcessEnvironment>
+#include <QSettings>
+#include <QStandardPaths>
 #include <QTextStream>
 #include <QTime>
 #include <QUrl>
@@ -78,6 +82,97 @@ QString elapsedText(qint64 elapsedMilliseconds)
     return QStringLiteral("%1s").arg(seconds);
 }
 
+QString defaultEditorDesktopId()
+{
+    const auto xdgMime = QStandardPaths::findExecutable(QStringLiteral("xdg-mime"));
+    if (xdgMime.isEmpty())
+        return {};
+
+    QProcess query;
+    query.start(xdgMime, {QStringLiteral("query"), QStringLiteral("default"),
+                          QStringLiteral("text/plain")});
+    if (!query.waitForFinished(1000) || query.exitCode() != 0)
+        return {};
+    return QString::fromUtf8(query.readAllStandardOutput()).trimmed();
+}
+
+QString desktopFilePath(const QString &desktopId)
+{
+    if (desktopId.isEmpty())
+        return {};
+    return QStandardPaths::locate(
+        QStandardPaths::GenericDataLocation,
+        QStringLiteral("applications/%1").arg(desktopId));
+}
+
+QVariantMap desktopEditor(const QString &path)
+{
+    QSettings desktopFile(path, QSettings::IniFormat);
+    desktopFile.beginGroup(QStringLiteral("Desktop Entry"));
+    if (desktopFile.value(QStringLiteral("Type")).toString() != QStringLiteral("Application")
+        || desktopFile.value(QStringLiteral("Hidden")).toBool()
+        || desktopFile.value(QStringLiteral("NoDisplay")).toBool()
+        || desktopFile.value(QStringLiteral("Terminal")).toBool()) {
+        return {};
+    }
+
+    const auto categories = desktopFile.value(QStringLiteral("Categories")).toString()
+                                .split(QChar(u';'), Qt::SkipEmptyParts);
+    if (!categories.contains(QStringLiteral("TextEditor"))
+        && !categories.contains(QStringLiteral("IDE"))) {
+        return {};
+    }
+
+    const auto name = desktopFile.value(QStringLiteral("Name")).toString().trimmed();
+    const auto desktopId = QFileInfo(path).fileName();
+    if (name.isEmpty() || desktopId.isEmpty())
+        return {};
+    return {{QStringLiteral("name"), name},
+            {QStringLiteral("id"), desktopId}};
+}
+
+QVariantList availableEditors()
+{
+    QVariantList editors;
+    QSet<QString> seenIds;
+    for (const auto &dataPath :
+         QStandardPaths::standardLocations(QStandardPaths::GenericDataLocation)) {
+        const auto applicationsPath = QDir(dataPath).filePath(QStringLiteral("applications"));
+        QDirIterator iterator(applicationsPath, {QStringLiteral("*.desktop")},
+                              QDir::Files, QDirIterator::Subdirectories);
+        while (iterator.hasNext()) {
+            const auto editor = desktopEditor(iterator.next());
+            const auto desktopId = editor.value(QStringLiteral("id")).toString();
+            if (desktopId.isEmpty() || seenIds.contains(desktopId))
+                continue;
+            seenIds.insert(desktopId);
+            editors.append(editor);
+        }
+    }
+    std::sort(editors.begin(), editors.end(), [](const QVariant &left, const QVariant &right) {
+        return left.toMap().value(QStringLiteral("name")).toString().localeAwareCompare(
+                   right.toMap().value(QStringLiteral("name")).toString()) < 0;
+    });
+
+    QString defaultLabel = QStringLiteral("System default");
+    const auto defaultEditor = desktopEditor(desktopFilePath(defaultEditorDesktopId()));
+    const auto defaultName = defaultEditor.value(QStringLiteral("name")).toString();
+    if (!defaultName.isEmpty())
+        defaultLabel += QStringLiteral(" (%1)").arg(defaultName);
+    editors.prepend(QVariantMap{{QStringLiteral("name"), defaultLabel},
+                                {QStringLiteral("id"), QString()}});
+    return editors;
+}
+
+bool launchDesktopApplication(const QString &desktopId, const QString &path)
+{
+    const auto desktopFile = desktopFilePath(desktopId);
+    const auto gio = QStandardPaths::findExecutable(QStringLiteral("gio"));
+    return !desktopFile.isEmpty() && !gio.isEmpty()
+        && QProcess::startDetached(
+            gio, {QStringLiteral("launch"), desktopFile, path}, path);
+}
+
 } // namespace
 
 AppController::AppController(QObject *parent)
@@ -137,6 +232,8 @@ bool AppController::initialize()
     m_codingReasoningEffort = m_database.setting(QStringLiteral("coding_reasoning_effort"));
     m_commitModelId = m_database.setting(QStringLiteral("commit_model"));
     m_titleModelId = m_database.setting(QStringLiteral("title_model"));
+    m_editorOptions = availableEditors();
+    m_selectedEditorId = m_database.setting(QStringLiteral("editor_desktop_id"));
     loadProjects();
     m_codex.start();
     return true;
@@ -150,6 +247,8 @@ QString AppController::codingModelId() const { return m_codingModelId; }
 QString AppController::codingReasoningEffort() const { return m_codingReasoningEffort; }
 QString AppController::commitModelId() const { return m_commitModelId; }
 QString AppController::titleModelId() const { return m_titleModelId; }
+QVariantList AppController::editorOptions() const { return m_editorOptions; }
+QString AppController::selectedEditorId() const { return m_selectedEditorId; }
 int AppController::selectedProjectIndex() const { return m_selectedProject; }
 QString AppController::selectedProjectPath() const { return m_projects.row(m_selectedProject).path; }
 QString AppController::selectedProjectName() const { return m_projects.row(m_selectedProject).name; }
@@ -1030,6 +1129,11 @@ void AppController::setTitleModelId(const QString &modelId)
     setModelSetting(QStringLiteral("title_model"), m_titleModelId, modelId);
 }
 
+void AppController::setSelectedEditorId(const QString &desktopId)
+{
+    setModelSetting(QStringLiteral("editor_desktop_id"), m_selectedEditorId, desktopId);
+}
+
 void AppController::commitAllAndPush(const QString &subject, const QString &body)
 {
     m_git.commitAllAndPush(selectedWorkspacePath(), subject, body, [this](const GitResult &result) {
@@ -1084,6 +1188,58 @@ QString AppController::selectedWorkspacePath() const
 void AppController::openProjectFolder()
 {
     QDesktopServices::openUrl(QUrl::fromLocalFile(selectedProjectPath()));
+}
+
+void AppController::openProjectEditor()
+{
+    const auto path = selectedProjectPath();
+    if (path.isEmpty())
+        return;
+
+    if (!m_selectedEditorId.isEmpty()) {
+        if (launchDesktopApplication(m_selectedEditorId, path))
+            return;
+        setStatus(QStringLiteral(
+            "The selected editor is unavailable. Choose another editor in Settings."));
+        return;
+    }
+
+    const auto defaultDesktopId = defaultEditorDesktopId();
+    if (launchDesktopApplication(defaultDesktopId, path))
+        return;
+
+    const auto environment = QProcessEnvironment::systemEnvironment();
+    QString editor = environment.value(QStringLiteral("VISUAL")).trimmed();
+    if (editor.isEmpty())
+        editor = environment.value(QStringLiteral("EDITOR")).trimmed();
+
+    if (!editor.isEmpty()) {
+        auto command = QProcess::splitCommand(editor);
+        if (!command.isEmpty()) {
+            const auto program = command.takeFirst();
+            command.append(path);
+            if (QProcess::startDetached(program, command, path))
+                return;
+        }
+    }
+
+    const QStringList fallbackEditors = {
+        QStringLiteral("code"),
+        QStringLiteral("codium"),
+        QStringLiteral("kate"),
+        QStringLiteral("gnome-text-editor"),
+        QStringLiteral("gedit")
+    };
+    for (const auto &fallback : fallbackEditors) {
+        const auto executable = QStandardPaths::findExecutable(fallback);
+        if (!executable.isEmpty()
+            && QProcess::startDetached(executable, {path}, path)) {
+            return;
+        }
+    }
+
+    setStatus(QStringLiteral(
+        "Could not find an editor. Set the VISUAL or EDITOR environment variable."));
 }
 
 void AppController::openTerminal()
