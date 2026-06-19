@@ -14,9 +14,11 @@ Item {
     property int compactFileLimit: 5
     property int compactLineLimit: 10
     property bool expandedByDefault: true
+    property bool showAllFiles: false
 
     readonly property var files: parseDiff(diffText)
-    readonly property var visibleFiles: compact ? files.slice(0, compactFileLimit) : files
+    readonly property var visibleFiles: compact && !showAllFiles
+                                        ? files.slice(0, compactFileLimit) : files
     readonly property int additions: totalFor("additions")
     readonly property int deletions: totalFor("deletions")
 
@@ -449,15 +451,24 @@ Item {
             }
         }
 
-        Label {
+        ToolButton {
+            id: fileLimitToggle
             Layout.fillWidth: true
-            visible: root.compact && root.files.length > root.visibleFiles.length
-            text: "… " + (root.files.length - root.visibleFiles.length) + " more changed files"
-            horizontalAlignment: Text.AlignHCenter
-            topPadding: Kirigami.Units.smallSpacing
-            bottomPadding: Kirigami.Units.smallSpacing
+            visible: root.compact && root.files.length > root.compactFileLimit
+            text: root.showAllFiles
+                  ? "Show fewer files"
+                  : "… " + (root.files.length - root.visibleFiles.length)
+                    + " more changed files"
             font: Kirigami.Theme.smallFont
-            opacity: 0.55
+            onClicked: root.showAllFiles = !root.showAllFiles
+
+            contentItem: Label {
+                text: fileLimitToggle.text
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                font: fileLimitToggle.font
+                opacity: 0.62
+            }
         }
     }
 }
