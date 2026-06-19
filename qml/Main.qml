@@ -384,6 +384,12 @@ Kirigami.ApplicationWindow {
 
         Pane {
             id: navigationPane
+            readonly property real projectRowHeight: 36
+            readonly property real threadRowHeight: 34
+            readonly property real threadMetadataRowHeight: 44
+            readonly property real horizontalInset: Kirigami.Units.smallSpacing
+            readonly property real threadIndent: Kirigami.Units.gridUnit * 2
+            readonly property real rowRadius: 5
             visible: root.navigationVisible || navigationDrawer.visible
             SplitView.preferredWidth: 310
             SplitView.minimumWidth: root.navigationVisible
@@ -394,10 +400,12 @@ Kirigami.ApplicationWindow {
 
             ColumnLayout {
                 anchors.fill: parent
-                spacing: Kirigami.Units.largeSpacing
+                spacing: Kirigami.Units.smallSpacing
 
                 RowLayout {
                     Layout.fillWidth: true
+                    Layout.preferredHeight: navigationPane.projectRowHeight
+                    spacing: Kirigami.Units.smallSpacing
                     Label {
                         text: "Projects"
                         font.bold: true
@@ -405,7 +413,10 @@ Kirigami.ApplicationWindow {
                         Layout.fillWidth: true
                     }
                     ToolButton {
+                        flat: true
                         icon.name: "folder-new"
+                        Layout.preferredWidth: 32
+                        Layout.preferredHeight: 32
                         onClicked: appController.chooseProjectFolder()
                         Accessible.name: "Add project folder"
                         ToolTip.text: Accessible.name
@@ -436,7 +447,7 @@ Kirigami.ApplicationWindow {
                         property bool showAllThreads: false
                         readonly property var projectThreads: root.cachedProjectThreads(path)
                         width: projectList.width
-                        spacing: 2
+                        spacing: Kirigami.Units.smallSpacing
                         visible: projectSearch.text.length === 0
                                  || name.toLowerCase().includes(projectSearch.text.toLowerCase())
 
@@ -449,12 +460,24 @@ Kirigami.ApplicationWindow {
                             id: projectItem
                             Layout.fillWidth: true
                             Layout.maximumWidth: projectList.width
-                            highlighted: projectDelegate.selected
-                            leftPadding: Kirigami.Units.smallSpacing
-                            rightPadding: Kirigami.Units.smallSpacing
+                            Layout.preferredHeight: navigationPane.projectRowHeight
+                            leftPadding: navigationPane.horizontalInset
+                            rightPadding: navigationPane.horizontalInset
+                            topPadding: 0
+                            bottomPadding: 0
+                            background: Rectangle {
+                                radius: navigationPane.rowRadius
+                                color: projectDelegate.selected
+                                       ? Qt.alpha(Kirigami.Theme.highlightColor, 0.22)
+                                       : projectItem.hovered
+                                         ? Qt.alpha(Kirigami.Theme.textColor, 0.07)
+                                         : "transparent"
+                            }
                             contentItem: RowLayout {
                                 spacing: Kirigami.Units.smallSpacing
                                 ToolButton {
+                                    flat: true
+                                    padding: 0
                                     icon.name: projectDelegate.expanded
                                                ? "arrow-down" : "arrow-right"
                                     Layout.preferredWidth: 24
@@ -482,9 +505,13 @@ Kirigami.ApplicationWindow {
                                     font.bold: projectDelegate.selected
                                 }
                                 ToolButton {
+                                    flat: true
+                                    padding: 0
                                     text: "+"
                                     visible: projectDelegate.expanded
                                     enabled: appController.providerReady
+                                    Layout.preferredWidth: 24
+                                    Layout.preferredHeight: 24
                                     Accessible.name: "New thread in " + projectDelegate.name
                                     ToolTip.text: Accessible.name
                                     ToolTip.visible: hovered
@@ -522,7 +549,7 @@ Kirigami.ApplicationWindow {
                         ColumnLayout {
                             Layout.fillWidth: true
                             visible: projectDelegate.expanded
-                            spacing: 2
+                            spacing: 0
 
                             Repeater {
                                 model: projectDelegate.showAllThreads
@@ -534,8 +561,21 @@ Kirigami.ApplicationWindow {
                                     required property var modelData
                                     Layout.fillWidth: true
                                     Layout.maximumWidth: projectList.width
-                                    leftPadding: Kirigami.Units.gridUnit * 2
-                                    highlighted: appController.selectedThreadId === modelData.id
+                                    Layout.preferredHeight: modelData.external
+                                                            ? navigationPane.threadMetadataRowHeight
+                                                            : navigationPane.threadRowHeight
+                                    leftPadding: navigationPane.threadIndent
+                                    rightPadding: navigationPane.horizontalInset
+                                    topPadding: Kirigami.Units.smallSpacing
+                                    bottomPadding: Kirigami.Units.smallSpacing
+                                    background: Rectangle {
+                                        radius: navigationPane.rowRadius
+                                        color: appController.selectedThreadId === modelData.id
+                                               ? Qt.alpha(Kirigami.Theme.highlightColor, 0.16)
+                                               : threadItem.hovered
+                                                 ? Qt.alpha(Kirigami.Theme.textColor, 0.06)
+                                                 : "transparent"
+                                    }
                                     contentItem: RowLayout {
                                         spacing: Kirigami.Units.smallSpacing
                                         Kirigami.Icon {
@@ -546,7 +586,7 @@ Kirigami.ApplicationWindow {
                                         }
                                         ColumnLayout {
                                             Layout.fillWidth: true
-                                            spacing: 1
+                                            spacing: 0
                                             Label {
                                                 text: modelData.title
                                                 Layout.fillWidth: true
@@ -584,24 +624,30 @@ Kirigami.ApplicationWindow {
                             }
 
                             ToolButton {
-                                Layout.leftMargin: Kirigami.Units.gridUnit * 2
+                                Layout.leftMargin: navigationPane.threadIndent
+                                                   + 16
+                                                   + Kirigami.Units.smallSpacing
+                                Layout.preferredHeight: 28
                                 visible: projectDelegate.projectThreads.length > 5
                                 flat: true
+                                padding: 0
                                 text: projectDelegate.showAllThreads
                                       ? "Show less"
                                       : "Show "
                                         + (projectDelegate.projectThreads.length - 5)
                                         + " more"
                                 font: Kirigami.Theme.smallFont
-                                opacity: hovered ? 0.9 : 0.6
+                                opacity: hovered ? 0.9 : 0.55
                                 onClicked: projectDelegate.showAllThreads =
                                            !projectDelegate.showAllThreads
                             }
 
                             Label {
                                 Layout.fillWidth: true
-                                Layout.leftMargin: Kirigami.Units.gridUnit * 2
-                                Layout.rightMargin: Kirigami.Units.smallSpacing
+                                Layout.leftMargin: navigationPane.threadIndent
+                                                   + 16
+                                                   + Kirigami.Units.smallSpacing
+                                Layout.rightMargin: navigationPane.horizontalInset
                                 Layout.topMargin: Kirigami.Units.smallSpacing
                                 Layout.bottomMargin: Kirigami.Units.smallSpacing
                                 visible: projectDelegate.projectThreads.length === 0
