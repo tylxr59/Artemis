@@ -116,8 +116,8 @@ Kirigami.ApplicationWindow {
             dismissTimer.restart()
         }
 
-        x: Kirigami.Units.largeSpacing
-        y: Kirigami.Units.largeSpacing
+        x: Overlay.overlay.width - width - Kirigami.Units.largeSpacing
+        y: appHeader.height + Kirigami.Units.largeSpacing
         width: Math.min(360, Overlay.overlay.width
                              - Kirigami.Units.largeSpacing * 2)
         padding: Kirigami.Units.smallSpacing
@@ -163,6 +163,7 @@ Kirigami.ApplicationWindow {
     }
 
     header: ToolBar {
+        id: appHeader
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: Kirigami.Units.smallSpacing
