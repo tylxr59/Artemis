@@ -38,6 +38,11 @@ class AppController : public QObject {
     Q_PROPERTY(bool providerReady READ providerReady NOTIFY providerReadyChanged)
     Q_PROPERTY(QString providerVersion READ providerVersion NOTIFY providerReadyChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
+    Q_PROPERTY(qint64 contextTokens READ contextTokens NOTIFY tokenUsageChanged)
+    Q_PROPERTY(qint64 totalProcessedTokens READ totalProcessedTokens NOTIFY tokenUsageChanged)
+    Q_PROPERTY(qint64 modelContextWindow READ modelContextWindow NOTIFY tokenUsageChanged)
+    Q_PROPERTY(int contextUsagePercent READ contextUsagePercent NOTIFY tokenUsageChanged)
+    Q_PROPERTY(bool hasTokenUsage READ hasTokenUsage NOTIFY tokenUsageChanged)
     Q_PROPERTY(QString diffText READ diffText NOTIFY diffChanged)
     Q_PROPERTY(QString gitStatusText READ gitStatusText NOTIFY diffChanged)
     Q_PROPERTY(bool hasGitChanges READ hasGitChanges NOTIFY diffChanged)
@@ -68,6 +73,11 @@ public:
     bool providerReady() const;
     QString providerVersion() const;
     QString statusText() const;
+    qint64 contextTokens() const;
+    qint64 totalProcessedTokens() const;
+    qint64 modelContextWindow() const;
+    int contextUsagePercent() const;
+    bool hasTokenUsage() const;
     QString diffText() const;
     QString gitStatusText() const;
     bool hasGitChanges() const;
@@ -112,6 +122,7 @@ signals:
     void turnElapsedChanged();
     void providerReadyChanged();
     void statusTextChanged();
+    void tokenUsageChanged();
     void diffChanged();
     void commitDraftReady(const QString &message);
     void commitFinished(bool success, const QString &message);
@@ -153,6 +164,7 @@ private:
     QElapsedTimer m_turnElapsedTimer;
     QTimer m_turnElapsedUpdateTimer;
     QString m_status;
+    QHash<QString, QVariantMap> m_threadTokenUsage;
     QString m_diff;
     QString m_gitStatus;
     bool m_hasGitChanges = false;

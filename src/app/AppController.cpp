@@ -98,6 +98,27 @@ AppController::AppController(QObject *parent)
         setStatus(message);
     });
     connect(&m_codex, &CodexClient::domainEvent, this, &AppController::handleDomainEvent);
+    connect(&m_codex, &CodexClient::rawNotification, this,
+            [this](const QString &method, const QJsonObject &params) {
+        if (method != QStringLiteral("thread/tokenUsage/updated"))
+            return;
+        const auto threadId = params.value(QStringLiteral("threadId")).toString();
+        if (threadId.isEmpty())
+            return;
+        const auto usage = params.value(QStringLiteral("tokenUsage")).toObject();
+        const auto total = usage.value(QStringLiteral("total")).toObject();
+        const auto last = usage.value(QStringLiteral("last")).toObject();
+        m_threadTokenUsage.insert(threadId, {
+            {QStringLiteral("contextTokens"),
+             last.value(QStringLiteral("totalTokens")).toInteger()},
+            {QStringLiteral("totalProcessedTokens"),
+             total.value(QStringLiteral("totalTokens")).toInteger()},
+            {QStringLiteral("modelContextWindow"),
+             usage.value(QStringLiteral("modelContextWindow")).toInteger()}
+        });
+        if (threadId == selectedThreadId())
+            emit tokenUsageChanged();
+    });
 }
 
 bool AppController::initialize()
@@ -161,6 +182,32 @@ QString AppController::turnElapsedText() const
 bool AppController::providerReady() const { return m_codex.ready(); }
 QString AppController::providerVersion() const { return m_codex.version(); }
 QString AppController::statusText() const { return m_status; }
+qint64 AppController::contextTokens() const
+{
+    return m_threadTokenUsage.value(selectedThreadId())
+        .value(QStringLiteral("contextTokens")).toLongLong();
+}
+qint64 AppController::totalProcessedTokens() const
+{
+    return m_threadTokenUsage.value(selectedThreadId())
+        .value(QStringLiteral("totalProcessedTokens")).toLongLong();
+}
+qint64 AppController::modelContextWindow() const
+{
+    return m_threadTokenUsage.value(selectedThreadId())
+        .value(QStringLiteral("modelContextWindow")).toLongLong();
+}
+int AppController::contextUsagePercent() const
+{
+    const auto window = modelContextWindow();
+    if (window <= 0)
+        return 0;
+    return qBound(0, qRound(100.0 * contextTokens() / window), 100);
+}
+bool AppController::hasTokenUsage() const
+{
+    return modelContextWindow() > 0;
+}
 QString AppController::diffText() const { return m_diff; }
 QString AppController::gitStatusText() const { return m_gitStatus; }
 bool AppController::hasGitChanges() const { return m_hasGitChanges; }
@@ -237,6 +284,7 @@ void AppController::removeProject(int index)
         m_selectedThread = -1;
         m_threads.clear();
         m_conversation.clear();
+        emit tokenUsageChanged();
     }
     loadProjects();
     if (removedSelected) {
@@ -291,6 +339,7 @@ void AppController::selectProject(int index)
     m_conversation.setThread({});
     emit selectedProjectChanged();
     emit selectedThreadChanged();
+    emit tokenUsageChanged();
     emit currentPlanChanged();
     loadThreads();
     refreshGit();
@@ -403,6 +452,7 @@ void AppController::selectThread(int index)
     m_selectedThread = index;
     m_conversation.setThread(selectedThreadId());
     emit selectedThreadChanged();
+    emit tokenUsageChanged();
     emit currentPlanChanged();
     const auto threadId = selectedThreadId();
     m_codex.resumeThread(threadId, [this, threadId](const QJsonObject &result, const QString &error) {
@@ -533,6 +583,7 @@ void AppController::beginThread(const QString &modelId, const QString &reasoning
         m_conversation.setThread(id);
         emit threadsChanged();
         emit selectedThreadChanged();
+        emit tokenUsageChanged();
         emit currentPlanChanged();
         if (!m_pendingPrompt.isEmpty() || !m_pendingImages.isEmpty()) {
             const QString prompt = std::exchange(m_pendingPrompt, {});

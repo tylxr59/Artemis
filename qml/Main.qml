@@ -66,6 +66,17 @@ Kirigami.ApplicationWindow {
         return path.length > 0 ? "file://" + encodeURI(path) : ""
     }
 
+    function compactTokenCount(value) {
+        if (value >= 1000000) {
+            const millions = value / 1000000
+            return (millions >= 10 ? millions.toFixed(0) : millions.toFixed(1))
+                    .replace(/\.0$/, "") + "m"
+        }
+        if (value >= 1000)
+            return Math.round(value / 1000) + "k"
+        return value.toString()
+    }
+
     CommitDialog {
         id: commitDialog
         controller: appController
@@ -791,22 +802,116 @@ Kirigami.ApplicationWindow {
                                 elide: Text.ElideRight
                                 opacity: 0.7
                             }
-                            Button {
-                                visible: appController.turnRunning
-                                text: "Stop"
-                                onClicked: appController.interruptTurn()
+                            Item {
+                                id: contextUsageIndicator
+                                Layout.preferredWidth: 36
+                                Layout.preferredHeight: 36
+                                visible: appController.hasTokenUsage
+
+                                Canvas {
+                                    id: contextUsageRing
+                                    anchors.fill: parent
+                                    anchors.margins: 3
+                                    onPaint: {
+                                        const context = getContext("2d")
+                                        const center = width / 2
+                                        const radius = Math.min(width, height) / 2 - 2
+                                        const start = -Math.PI / 2
+                                        const progress = Math.min(
+                                            1, appController.contextUsagePercent / 100)
+                                        context.clearRect(0, 0, width, height)
+                                        context.lineWidth = 3
+                                        context.lineCap = "round"
+                                        context.strokeStyle = Qt.alpha(
+                                            Kirigami.Theme.textColor, 0.18)
+                                        context.beginPath()
+                                        context.arc(center, center, radius, 0, Math.PI * 2)
+                                        context.stroke()
+                                        context.strokeStyle =
+                                            appController.contextUsagePercent >= 90
+                                            ? Kirigami.Theme.negativeTextColor
+                                            : appController.contextUsagePercent >= 75
+                                              ? Kirigami.Theme.neutralTextColor
+                                              : Kirigami.Theme.highlightColor
+                                        context.beginPath()
+                                        context.arc(center, center, radius, start,
+                                                    start + Math.PI * 2 * progress)
+                                        context.stroke()
+                                    }
+
+                                    Connections {
+                                        target: appController
+                                        function onTokenUsageChanged() {
+                                            contextUsageRing.requestPaint()
+                                        }
+                                    }
+                                }
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: appController.contextUsagePercent
+                                    font.pixelSize: 9
+                                    font.bold: true
+                                }
+                                HoverHandler {
+                                    id: contextUsageHover
+                                }
+                                ToolTip {
+                                    id: contextUsagePopup
+                                    visible: contextUsageHover.hovered
+                                    delay: 300
+                                    timeout: -1
+                                    x: contextUsageIndicator.width - width
+                                    y: -height - Kirigami.Units.smallSpacing
+                                    padding: Kirigami.Units.largeSpacing
+
+                                    contentItem: ColumnLayout {
+                                        spacing: Kirigami.Units.smallSpacing
+                                        Label {
+                                            text: "CONTEXT WINDOW"
+                                            opacity: 0.65
+                                            font.pixelSize: 10
+                                            font.letterSpacing: 1
+                                        }
+                                        Label {
+                                            text: appController.contextUsagePercent + "% · "
+                                                  + root.compactTokenCount(
+                                                      appController.contextTokens)
+                                                  + "/"
+                                                  + root.compactTokenCount(
+                                                      appController.modelContextWindow)
+                                                  + " context used"
+                                            font.bold: true
+                                        }
+                                        Label {
+                                            text: "Total processed: "
+                                                  + root.compactTokenCount(
+                                                      appController.totalProcessedTokens)
+                                                  + " tokens"
+                                            opacity: 0.65
+                                        }
+                                        Label {
+                                            text: "Automatically compacts its context when needed."
+                                            opacity: 0.65
+                                        }
+                                    }
+                                }
                             }
                             RoundButton {
                                 id: sendButton
-                                text: appController.turnRunning ? "↪" : "↑"
+                                text: appController.turnRunning ? "■" : "↑"
                                 ToolTip.text: appController.turnRunning
-                                              ? "Send guidance" : "Send (Enter)"
+                                              ? "Stop" : "Send (Enter)"
                                 ToolTip.visible: hovered
-                                enabled: (composer.text.trim().length > 0
-                                          || root.composerImages.length > 0)
-                                         && root.hasProject
-                                         && appController.providerReady
+                                enabled: appController.turnRunning
+                                         || ((composer.text.trim().length > 0
+                                              || root.composerImages.length > 0)
+                                             && root.hasProject
+                                             && appController.providerReady)
                                 onClicked: {
+                                    if (appController.turnRunning) {
+                                        appController.interruptTurn()
+                                        return
+                                    }
                                     if (appController.sendPrompt(
                                                 composer.text,
                                                 root.composerImages,
