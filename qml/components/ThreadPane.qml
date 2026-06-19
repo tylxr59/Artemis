@@ -132,22 +132,44 @@ Pane {
                             font.bold: true
                             font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
                         }
-                        Label {
+                        TextArea {
+                            id: planExplanationText
                             visible: root.controller.currentPlanExplanation.length > 0
                             text: root.controller.currentPlanExplanation
+                            textFormat: TextEdit.MarkdownText
                             Layout.fillWidth: true
-                            wrapMode: Text.Wrap
-                            opacity: 0.7
-                        }
-                        TextArea {
-                            Layout.fillWidth: true
-                            visible: root.controller.currentTasks.length > 0
-                            text: root.controller.currentTasks
-                            textFormat: TextEdit.PlainText
                             readOnly: true
                             wrapMode: TextEdit.Wrap
                             selectByMouse: true
                             background: null
+                            opacity: 0.7
+                            onLinkActivated: function(link) {
+                                Qt.openUrlExternally(link)
+                            }
+
+                            HoverHandler {
+                                cursorShape: planExplanationText.hoveredLink.length > 0
+                                             ? Qt.PointingHandCursor : Qt.IBeamCursor
+                            }
+                        }
+                        TextArea {
+                            id: tasksText
+                            Layout.fillWidth: true
+                            visible: root.controller.currentTasks.length > 0
+                            text: root.controller.currentTasks
+                            textFormat: TextEdit.MarkdownText
+                            readOnly: true
+                            wrapMode: TextEdit.Wrap
+                            selectByMouse: true
+                            background: null
+                            onLinkActivated: function(link) {
+                                Qt.openUrlExternally(link)
+                            }
+
+                            HoverHandler {
+                                cursorShape: tasksText.hoveredLink.length > 0
+                                             ? Qt.PointingHandCursor : Qt.IBeamCursor
+                            }
                         }
                         Repeater {
                             model: root.controller.currentPlan
@@ -198,12 +220,29 @@ Pane {
 
                                         opacity: planStep.modelData.status === "pending" ? 0.45 : 1
                                     }
-                                    Label {
+                                    TextArea {
+                                        id: planStepText
                                         text: planStep.modelData.step || ""
+                                        textFormat: TextEdit.MarkdownText
                                         Layout.fillWidth: true
-                                        wrapMode: Text.Wrap
+                                        readOnly: true
+                                        wrapMode: TextEdit.Wrap
+                                        selectByMouse: true
+                                        background: null
+                                        leftPadding: 0
+                                        rightPadding: 0
+                                        topPadding: 0
+                                        bottomPadding: 0
                                         font.strikeout: planStep.modelData.status === "completed"
                                         opacity: planStep.modelData.status === "pending" ? 0.62 : 1
+                                        onLinkActivated: function(link) {
+                                            Qt.openUrlExternally(link)
+                                        }
+
+                                        HoverHandler {
+                                            cursorShape: planStepText.hoveredLink.length > 0
+                                                         ? Qt.PointingHandCursor : Qt.IBeamCursor
+                                        }
                                     }
                                 }
                             }
