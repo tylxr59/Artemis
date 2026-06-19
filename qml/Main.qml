@@ -508,6 +508,24 @@ Kirigami.ApplicationWindow {
                     spacing: Kirigami.Units.largeSpacing
                     topMargin: Kirigami.Units.largeSpacing
                     bottomMargin: Kirigami.Units.largeSpacing
+                    footer: Item {
+                        width: conversationList.width
+                        implicitHeight: workingStatus.visible
+                                        ? workingStatus.implicitHeight : 0
+
+                        Label {
+                            id: workingStatus
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: Math.min(840, parent.width)
+                            visible: appController.turnRunning
+                            horizontalAlignment: Text.AlignHCenter
+                            text: "Working · " + appController.turnElapsedText + " elapsed"
+                            font: Kirigami.Theme.smallFont
+                            opacity: 0.45
+                            topPadding: Kirigami.Units.smallSpacing
+                            bottomPadding: Kirigami.Units.smallSpacing
+                        }
+                    }
                     delegate: Item {
                         id: conversationRow
                         required property int index
@@ -586,19 +604,6 @@ Kirigami.ApplicationWindow {
                         icon.name: "folder-new"
                         onClicked: appController.chooseProjectFolder()
                     }
-                }
-
-                Label {
-                    visible: appController.turnRunning
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 840
-                    Layout.alignment: Qt.AlignHCenter
-                    horizontalAlignment: Text.AlignHCenter
-                    text: "Working · " + appController.turnElapsedText + " elapsed"
-                    font: Kirigami.Theme.smallFont
-                    opacity: 0.45
-                    topPadding: Kirigami.Units.smallSpacing
-                    bottomPadding: Kirigami.Units.smallSpacing
                 }
 
                 Kirigami.Separator {
