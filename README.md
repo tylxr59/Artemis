@@ -13,15 +13,18 @@ Artemis is still in extremely early alpha. Things will break and be changing rap
 
 ## Features
 
-- Project and persistent Codex thread navigation
-- Local project threads
-- Streamed agent activity
-- Git status and diff review
-- AI-generated commit messages
+- Project navigation with persistent Codex thread history and status
+- Streamed agent activity, plans, command output, and file changes
+- Build and plan modes with per-turn model, reasoning, and permission controls
+- Mid-turn guidance, interruption, and Codex user-input prompts
+- Clipboard image attachments and an integrated image viewer
+- Git status and compact or expanded diff review
+- AI-generated commit messages with current-branch and new-feature-branch workflows
 - Separate persisted model settings for coding, commit messages, and thread titles
 - AI-generated thread names after the first message
-- Commit-and-push workflows for the current or a new feature branch
-- SQLite persistence and diagnostics
+- Configurable editor and terminal launchers
+- Desktop notifications and completion sounds for finished background threads
+- SQLite persistence and Codex connection diagnostics
 
 ## Requirements
 
@@ -29,7 +32,7 @@ Artemis is still in extremely early alpha. Things will break and be changing rap
 - CMake 3.24 or newer
 - Ninja
 - Qt 6.8 or newer, including Qt Quick, Qt Quick Controls, SQL, and Test
-- KDE Frameworks 6 Kirigami and Syntax Highlighting
+- KDE Frameworks 6 Kirigami, Notifications, and Syntax Highlighting
 - Git
 - Codex CLI 0.141.0 or newer, installed and authenticated
 
@@ -37,7 +40,8 @@ Artemis is still in extremely early alpha. Things will break and be changing rap
 
 ```bash
 sudo pacman -S --needed base-devel cmake ninja extra-cmake-modules git \
-  qt6-base qt6-declarative kirigami syntax-highlighting plasma-integration
+  qt6-base qt6-declarative kirigami knotifications syntax-highlighting \
+  plasma-integration
 ```
 
 ### Debian and Ubuntu
@@ -52,7 +56,7 @@ On a compatible Debian or Ubuntu release:
 ```bash
 sudo apt update
 sudo apt install build-essential cmake ninja-build extra-cmake-modules git \
-  qt6-base-dev qt6-declarative-dev libkirigami-dev \
+  qt6-base-dev qt6-declarative-dev libkirigami-dev libkf6notifications-dev \
   libkf6syntaxhighlighting-dev libqt6sql6-sqlite \
   qml6-module-org-kde-desktop
 ```
@@ -62,7 +66,8 @@ sudo apt install build-essential cmake ninja-build extra-cmake-modules git \
 ```bash
 sudo dnf install gcc-c++ cmake ninja-build extra-cmake-modules git \
   qt6-qtbase-devel qt6-qtdeclarative-devel \
-  kf6-kirigami-devel kf6-syntax-highlighting-devel \
+  kf6-kirigami-devel kf6-knotifications-devel \
+  kf6-syntax-highlighting-devel \
   kf6-qqc2-desktop-style
 ```
 
@@ -80,8 +85,8 @@ cmake --build build
 Run the test suite:
 
 ```bash
-ctest --test-dir build --output-on-failure
 cmake --build build --target artemis_qmllint
+ctest --test-dir build --output-on-failure
 ```
 
 Run Artemis directly from the build directory:
@@ -135,7 +140,8 @@ codex --version
 ```
 
 Artemis launches Codex through its app-server protocol. The composer offers
-supervised, auto-accept edits, and full-access execution modes.
+build and plan collaboration modes, model and reasoning controls, and three
+execution profiles: supervised, auto-accept edits, and full access.
 
 ## Development
 
