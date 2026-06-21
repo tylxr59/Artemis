@@ -1167,38 +1167,49 @@ Kirigami.ApplicationWindow {
                                 }
                             }
                         }
-                        TextArea {
-                            id: composer
+                        ScrollView {
+                            id: composerScrollView
                             Layout.fillWidth: true
                             Layout.preferredHeight: root.pendingQuestionVisible
                                                     ? 72
-                                                    : Math.max(90, implicitHeight)
+                                                    : Math.min(
+                                                          260,
+                                                          Math.max(
+                                                              90,
+                                                              composer.implicitHeight))
                             Layout.maximumHeight: 260
-                            placeholderText: root.pendingQuestionVisible
-                                             ? "Type your own answer, or leave this blank to use the selected option"
-                                             : appController.turnRunning
-                                             ? "Add guidance while Artemis is working…"
-                                             : "Describe a task, ask a question, or paste an error…"
-                            wrapMode: TextEdit.Wrap
-                            enabled: root.hasProject && appController.providerReady
-                            Keys.onPressed: event => {
-                                if (!root.pendingQuestionVisible
-                                        && event.matches(StandardKey.Paste)) {
-                                    const imagePath = appController.pasteClipboardImage()
-                                    if (imagePath.length > 0) {
-                                        root.composerImages =
-                                                root.composerImages.concat([imagePath])
-                                        event.accepted = true
-                                        return
+                            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
+                            TextArea {
+                                id: composer
+                                width: composerScrollView.availableWidth
+                                placeholderText: root.pendingQuestionVisible
+                                                 ? "Type your own answer, or leave this blank to use the selected option"
+                                                 : appController.turnRunning
+                                                 ? "Add guidance while Artemis is working…"
+                                                 : "Describe a task, ask a question, or paste an error…"
+                                wrapMode: TextEdit.Wrap
+                                enabled: root.hasProject && appController.providerReady
+                                Keys.onPressed: event => {
+                                    if (!root.pendingQuestionVisible
+                                            && event.matches(StandardKey.Paste)) {
+                                        const imagePath = appController.pasteClipboardImage()
+                                        if (imagePath.length > 0) {
+                                            root.composerImages =
+                                                    root.composerImages.concat([imagePath])
+                                            event.accepted = true
+                                            return
+                                        }
                                     }
-                                }
-                                if (!(event.modifiers & Qt.ShiftModifier)
-                                        && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)) {
-                                    if (root.pendingQuestionVisible)
-                                        sendButton.clicked()
-                                    else
-                                        sendPromptButton.clicked()
-                                    event.accepted = true
+                                    if (!(event.modifiers & Qt.ShiftModifier)
+                                            && (event.key === Qt.Key_Return
+                                                || event.key === Qt.Key_Enter)) {
+                                        if (root.pendingQuestionVisible)
+                                            sendButton.clicked()
+                                        else
+                                            sendPromptButton.clicked()
+                                        event.accepted = true
+                                    }
                                 }
                             }
                         }
