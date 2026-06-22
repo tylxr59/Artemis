@@ -586,6 +586,55 @@ private slots:
         qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
     }
 
+    void codexDetectsExpiredAuthenticationAfterStartup()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto executable = directory.filePath(QStringLiteral("fake-codex"));
+        QFile script(executable);
+        QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Text));
+        script.write(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = \"--version\" ]; then\n"
+            "  echo 'codex-cli 0.141.0'\n"
+            "  exit 0\n"
+            "fi\n"
+            "IFS= read -r request\n"
+            "id=$(printf '%s' \"$request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
+            "printf '{\"id\":%s,\"result\":{}}\\n' \"$id\"\n"
+            "IFS= read -r initialized\n"
+            "IFS= read -r account_request\n"
+            "id=$(printf '%s' \"$account_request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
+            "printf '{\"id\":%s,\"result\":{\"account\":{\"type\":\"chatgpt\"},"
+            "\"requiresOpenaiAuth\":true}}\\n' \"$id\"\n"
+            "sleep 0.1\n"
+            "printf '%s\\n' 'ERROR Failed to refresh token: 401 Unauthorized: "
+            "{\"error\":{\"code\":\"refresh_token_reused\"}}' >&2\n"
+            "printf '%s\\n' 'ERROR Your access token could not be refreshed because "
+            "your refresh token was already used. Please log out and sign in again.' >&2\n"
+            "sleep 5\n");
+        script.close();
+        QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                      | QFileDevice::ExeOwner));
+
+        qputenv("ARTEMIS_CODEX_EXECUTABLE", executable.toUtf8());
+        CodexClient client;
+        QSignalSpy readyChanges(&client, &CodexClient::readyChanged);
+        QSignalSpy setupChanges(&client, &CodexClient::setupChanged);
+        QSignalSpy errors(&client, &CodexClient::providerError);
+        client.start();
+
+        QTRY_VERIFY_WITH_TIMEOUT(client.ready(), 3000);
+        QTRY_VERIFY_WITH_TIMEOUT(client.setupRequired(), 3000);
+        QVERIFY(!client.ready());
+        QVERIFY(client.setupInstructions().contains(QStringLiteral("Codex is signed out")));
+        QCOMPARE(errors.count(), 1);
+        QCOMPARE(errors.constFirst().constFirst().toString(), client.setupInstructions());
+        QVERIFY(readyChanges.count() >= 2);
+        QVERIFY(!setupChanges.isEmpty());
+        qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
+    }
+
     void codexDisconnectCallbacksAreNotReentrant()
     {
         QTemporaryDir directory;

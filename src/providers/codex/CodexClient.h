@@ -55,7 +55,9 @@ private:
     void startProcess();
     void initializeProcess();
     void refreshAccountState();
+    void requireAuthentication();
     void scheduleRestart(const QString &reason);
+    bool isAuthenticationError(const QString &message) const;
     void handleLine(const QByteArray &line);
     void handleNotification(const QString &method, const QJsonObject &params);
     void handleServerRequest(const QJsonValue &id, const QString &method,

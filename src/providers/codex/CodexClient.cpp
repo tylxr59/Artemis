@@ -109,7 +109,9 @@ CodexClient::CodexClient(QObject *parent)
     connect(&m_process, &QProcess::started, this, &CodexClient::initializeProcess);
     connect(&m_process, &QProcess::readyReadStandardError, this, [this] {
         const auto text = QString::fromUtf8(m_process.readAllStandardError()).trimmed();
-        if (!text.isEmpty())
+        if (isAuthenticationError(text))
+            requireAuthentication();
+        else if (!text.isEmpty())
             emit providerError(QStringLiteral("Codex: %1").arg(text));
     });
     connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError) {
@@ -254,6 +256,10 @@ void CodexClient::refreshAccountState()
             {{QStringLiteral("refreshToken"), false}},
             [this](const QJsonObject &result, const QString &error) {
         if (!error.isEmpty()) {
+            if (m_setupRequired || isAuthenticationError(error)) {
+                requireAuthentication();
+                return;
+            }
             scheduleRestart(error);
             return;
         }
@@ -262,12 +268,7 @@ void CodexClient::refreshAccountState()
             result.value(QStringLiteral("requiresOpenaiAuth")).toBool(true);
         const bool hasAccount = result.value(QStringLiteral("account")).isObject();
         if (requiresOpenAiAuth && !hasAccount) {
-            setReady(false);
-            const auto instructions = QStringLiteral(
-                "Codex is installed but is not signed in. Run `codex login` in a terminal, "
-                "complete sign-in, then restart Artemis.");
-            setSetupRequired(true, instructions);
-            emit providerError(instructions);
+            requireAuthentication();
             return;
         }
 
@@ -276,9 +277,50 @@ void CodexClient::refreshAccountState()
     });
 }
 
+void CodexClient::requireAuthentication()
+{
+    const auto instructions = QStringLiteral(
+        "Codex is signed out. Run `codex login` in a terminal, complete sign-in, "
+        "then restart Artemis.");
+    const bool alreadyRequired =
+        m_setupRequired && m_setupInstructions == instructions;
+    m_restartTimer.stop();
+    m_restartScheduled = false;
+    setReady(false);
+    setSetupRequired(true, instructions);
+    if (!alreadyRequired)
+        emit providerError(instructions);
+}
+
+bool CodexClient::isAuthenticationError(const QString &message) const
+{
+    if (message.isEmpty())
+        return false;
+
+    const auto lower = message.toLower();
+    return lower.contains(QStringLiteral("refresh_token_reused"))
+        || lower.contains(QStringLiteral("token_expired"))
+        || lower.contains(QStringLiteral("refresh token was already used"))
+        || lower.contains(QStringLiteral("refresh token has already been used"))
+        || lower.contains(QStringLiteral("authentication token is expired"))
+        || lower.contains(QStringLiteral("access token could not be refreshed"))
+        || lower.contains(QStringLiteral("please log out and sign in again"))
+        || lower.contains(QStringLiteral("please try signing in again"));
+}
+
 void CodexClient::scheduleRestart(const QString &reason)
 {
     setReady(false);
+    if (m_setupRequired) {
+        auto pendingRequests = std::exchange(m_pending, {});
+        for (auto &pending : pendingRequests) {
+            if (pending.timeout)
+                pending.timeout->deleteLater();
+            if (pending.handler)
+                pending.handler({}, m_setupInstructions);
+        }
+        return;
+    }
     if (m_restartScheduled)
         return;
     m_restartScheduled = true;
@@ -347,8 +389,15 @@ void CodexClient::handleLine(const QByteArray &line)
             pending.timeout->deleteLater();
         if (pending.handler) {
             const auto error = object.value(QStringLiteral("error")).toObject();
-            pending.handler(object.value(QStringLiteral("result")).toObject(),
-                            error.value(QStringLiteral("message")).toString());
+            const auto errorMessage = error.value(QStringLiteral("message")).toString();
+            const auto errorCode = error.value(QStringLiteral("code")).toString();
+            if (isAuthenticationError(errorMessage + QLatin1Char(' ') + errorCode)) {
+                requireAuthentication();
+                pending.handler({}, m_setupInstructions);
+            } else {
+                pending.handler(object.value(QStringLiteral("result")).toObject(),
+                                errorMessage);
+            }
         }
         return;
     }
@@ -452,9 +501,14 @@ void CodexClient::handleNotification(const QString &method, const QJsonObject &p
                          QStringLiteral("approval"), QStringLiteral("Approval required"),
                          QString::fromUtf8(QJsonDocument(params).toJson(QJsonDocument::Indented)), {});
     } else if (method == QStringLiteral("error")) {
-        emit domainEvent(params.value(QStringLiteral("threadId")).toString(),
-                         QStringLiteral("error"), QStringLiteral("Provider error"),
-                         params.value(QStringLiteral("message")).toString(), {});
+        const auto message = params.value(QStringLiteral("message")).toString();
+        if (isAuthenticationError(message)) {
+            requireAuthentication();
+        } else {
+            emit domainEvent(params.value(QStringLiteral("threadId")).toString(),
+                             QStringLiteral("error"), QStringLiteral("Provider error"),
+                             message, {});
+        }
     }
 }
 
