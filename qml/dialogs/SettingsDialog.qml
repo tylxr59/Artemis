@@ -10,8 +10,8 @@ Dialog {
     title: "Settings"
     modal: true
     anchors.centerIn: parent
-    width: Math.min(parent ? parent.width - 40 : 760, 760)
-    height: Math.min(parent ? parent.height - 40 : 620, 620)
+    width: Math.min(parent ? parent.width - 40 : 920, 920)
+    height: Math.min(parent ? parent.height - 40 : 680, 680)
 
     function modelIndex(modelId) {
         const exact = codingModel.indexOfValue(modelId)
@@ -24,8 +24,91 @@ Dialog {
         return controller.models.length > 0 ? 0 : -1
     }
 
+    function pageTitle(index) {
+        if (index === 0)
+            return "Models"
+        if (index === 1)
+            return "MCP Servers"
+        return "Applications"
+    }
+
+    function pageDescription(index) {
+        if (index === 0)
+            return "Model defaults for new work, commits, and generated titles."
+        if (index === 1)
+            return "External context servers available to Codex."
+        return "Desktop applications used for project actions."
+    }
+
+    function pageIcon(index) {
+        if (index === 0)
+            return "applications-development"
+        if (index === 1)
+            return "network-connect"
+        return "applications-utilities"
+    }
+
+    function selectedCodingModel() {
+        if (codingModel.currentIndex < 0
+                || codingModel.currentIndex >= controller.models.length)
+            return null
+        return controller.models[codingModel.currentIndex]
+    }
+
+    function reasoningOptions() {
+        const selected = selectedCodingModel()
+        if (!selected)
+            return []
+        const defaultLabel = selected.defaultEffort
+                ? "Default (" + selected.defaultEffort + ")" : "Model default"
+        const options = [{ value: "", label: defaultLabel }]
+        const efforts = Array.from(selected.efforts || [])
+        for (let i = 0; i < efforts.length; ++i) {
+            options.push({
+                             value: efforts[i],
+                             label: efforts[i].charAt(0).toUpperCase()
+                                    + efforts[i].slice(1)
+                         })
+        }
+        return options
+    }
+
+    function reasoningIndex(reasoningEffort) {
+        const options = reasoningOptions()
+        for (let i = 0; i < options.length; ++i) {
+            if (options[i].value === reasoningEffort)
+                return i
+        }
+        return 0
+    }
+
+    function reasoningSupported(reasoningEffort) {
+        const options = reasoningOptions()
+        for (let i = 0; i < options.length; ++i) {
+            if (options[i].value === reasoningEffort)
+                return true
+        }
+        return false
+    }
+
+    function authText(status) {
+        const value = status || ""
+        if (value === "notLoggedIn")
+            return "Not logged in"
+        if (value.length === 0)
+            return "Unknown"
+        return value.charAt(0).toUpperCase() + value.slice(1)
+    }
+
+    function authColor(status) {
+        return status === "notLoggedIn"
+                ? Kirigami.Theme.neutralTextColor
+                : Kirigami.Theme.positiveTextColor
+    }
+
     function loadValues() {
         codingModel.currentIndex = modelIndex(controller.codingModelId)
+        reasoningPicker.currentIndex = reasoningIndex(controller.codingReasoningEffort)
         commitModel.currentIndex = modelIndex(controller.commitModelId)
         titleModel.currentIndex = modelIndex(controller.titleModelId)
         const editorIndex = editorPicker.indexOfValue(controller.selectedEditorId)
@@ -44,18 +127,21 @@ Dialog {
 
     function applyValues() {
         const codingModelId = codingModel.currentValue || ""
+        const codingReasoningEffort = reasoningPicker.currentValue || ""
         const commitModelId = commitModel.currentValue || ""
         const titleModelId = titleModel.currentValue || ""
         const editorId = editorPicker.currentValue || ""
         const terminalId = terminalPicker.currentValue || ""
 
         controller.codingModelId = codingModelId
+        controller.codingReasoningEffort = codingReasoningEffort
         controller.commitModelId = commitModelId
         controller.titleModelId = titleModelId
         controller.selectedEditorId = editorId
         controller.selectedTerminalId = terminalId
 
         settingsApplied = controller.codingModelId === codingModelId
+                && controller.codingReasoningEffort === codingReasoningEffort
                 && controller.commitModelId === commitModelId
                 && controller.titleModelId === titleModelId
                 && controller.selectedEditorId === editorId
@@ -105,7 +191,7 @@ Dialog {
 
         Pane {
             Layout.fillHeight: true
-            Layout.preferredWidth: 154
+            Layout.preferredWidth: 210
             padding: Kirigami.Units.smallSpacing
 
             ColumnLayout {
@@ -116,10 +202,26 @@ Dialog {
                     Layout.fillWidth: true
                     Layout.leftMargin: Kirigami.Units.smallSpacing
                     Layout.rightMargin: Kirigami.Units.smallSpacing
-                    text: "Categories"
+                    Layout.topMargin: Kirigami.Units.smallSpacing
+                    text: "Settings"
+                    font.bold: true
+                    font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
+                    elide: Text.ElideRight
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Kirigami.Units.smallSpacing
+                    Layout.rightMargin: Kirigami.Units.smallSpacing
+                    text: "Configure Artemis"
                     opacity: 0.62
                     font.pointSize: Kirigami.Theme.smallFont.pointSize
-                    font.capitalization: Font.AllUppercase
+                    elide: Text.ElideRight
+                }
+
+                Kirigami.Separator {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Kirigami.Units.smallSpacing
                 }
 
                 ListView {
@@ -128,15 +230,16 @@ Dialog {
                     Layout.fillHeight: true
                     clip: true
                     currentIndex: 0
+                    spacing: 2
                     model: ListModel {
                         ListElement {
                             title: "Models"
-                            subtitle: "Defaults"
+                            subtitle: "Default choices"
                             iconName: "applications-development"
                         }
                         ListElement {
-                            title: "MCP"
-                            subtitle: "Servers"
+                            title: "MCP Servers"
+                            subtitle: "Tools and resources"
                             iconName: "network-connect"
                         }
                         ListElement {
@@ -153,15 +256,32 @@ Dialog {
                         required property string subtitle
                         required property string iconName
                         width: ListView.view.width
-                        height: 48
+                        height: 54
                         highlighted: ListView.isCurrentItem
+                        leftPadding: Kirigami.Units.smallSpacing
+                        rightPadding: Kirigami.Units.smallSpacing
+                        topPadding: 0
+                        bottomPadding: 0
                         onClicked: settingsNavigation.currentIndex = index
+
+                        background: Rectangle {
+                            radius: Kirigami.Units.smallSpacing
+                            color: navigationDelegate.highlighted
+                                   ? Qt.alpha(Kirigami.Theme.highlightColor, 0.17)
+                                   : navigationDelegate.hovered
+                                     ? Qt.alpha(Kirigami.Theme.textColor, 0.05)
+                                     : "transparent"
+                        }
 
                         contentItem: RowLayout {
                             spacing: Kirigami.Units.smallSpacing
 
                             Kirigami.Icon {
                                 source: navigationDelegate.iconName
+                                color: navigationDelegate.highlighted
+                                       ? Kirigami.Theme.highlightColor
+                                       : Kirigami.Theme.textColor
+                                opacity: navigationDelegate.highlighted ? 1 : 0.72
                                 Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                                 Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
                             }
@@ -180,7 +300,7 @@ Dialog {
                                 Label {
                                     Layout.fillWidth: true
                                     text: navigationDelegate.subtitle
-                                    opacity: 0.58
+                                    opacity: 0.62
                                     elide: Text.ElideRight
                                     font.pointSize: Kirigami.Theme.smallFont.pointSize
                                 }
@@ -191,11 +311,9 @@ Dialog {
             }
         }
 
-        Rectangle {
+        Kirigami.Separator {
             Layout.preferredWidth: 1
             Layout.fillHeight: true
-            color: Kirigami.Theme.disabledTextColor
-            opacity: 0.28
         }
 
         ColumnLayout {
@@ -203,43 +321,54 @@ Dialog {
             Layout.fillHeight: true
             spacing: 0
 
-            RowLayout {
+            ToolBar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 58
-                Layout.leftMargin: Kirigami.Units.largeSpacing
-                Layout.rightMargin: Kirigami.Units.largeSpacing
-                spacing: Kirigami.Units.smallSpacing
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: settingsNavigation.currentIndex === 0 ? "Models"
-                              : settingsNavigation.currentIndex === 1 ? "MCP Servers"
-                              : "Applications"
-                        font.pointSize: Kirigami.Theme.defaultFont.pointSize + 4
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: settingsNavigation.currentIndex === 0
-                              ? "Model defaults for interactive and background tasks."
-                              : settingsNavigation.currentIndex === 1
-                                ? "External context servers available to Codex."
-                                : "Desktop applications used for project actions."
-                        opacity: 0.62
-                        elide: Text.ElideRight
-                        font.pointSize: Kirigami.Theme.smallFont.pointSize
-                    }
-                }
+                Layout.preferredHeight: 64
 
                 RowLayout {
-                    visible: settingsNavigation.currentIndex === 1
+                    anchors.fill: parent
+                    anchors.leftMargin: Kirigami.Units.largeSpacing
+                    anchors.rightMargin: Kirigami.Units.smallSpacing
                     spacing: Kirigami.Units.smallSpacing
 
+                    Kirigami.Icon {
+                        source: root.pageIcon(settingsNavigation.currentIndex)
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                        color: Kirigami.Theme.highlightColor
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: root.pageTitle(settingsNavigation.currentIndex)
+                            font.bold: true
+                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
+                            elide: Text.ElideRight
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: root.pageDescription(settingsNavigation.currentIndex)
+                            opacity: 0.64
+                            elide: Text.ElideRight
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        }
+                    }
+
+                    BusyIndicator {
+                        visible: settingsNavigation.currentIndex === 1
+                                 && root.controller.mcpBusy
+                        running: visible
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                    }
+
                     ToolButton {
+                        visible: settingsNavigation.currentIndex === 1
                         icon.name: "view-refresh"
                         enabled: !root.controller.mcpBusy
                         Accessible.name: "Refresh MCP servers"
@@ -249,6 +378,7 @@ Dialog {
                     }
 
                     ToolButton {
+                        visible: settingsNavigation.currentIndex === 1
                         icon.name: "system-reboot"
                         enabled: !root.controller.mcpBusy
                         Accessible.name: "Reload MCP configuration"
@@ -259,329 +389,389 @@ Dialog {
                 }
             }
 
-            Separator {}
-
             StackLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 currentIndex: settingsNavigation.currentIndex
 
                 ScrollView {
+                    id: modelsPage
                     contentWidth: availableWidth
 
                     ColumnLayout {
-                        width: parent.availableWidth
+                        width: modelsPage.availableWidth
                         spacing: Kirigami.Units.largeSpacing
 
-                        SettingsSectionHeader {
-                            title: "Default Models"
-                        }
+                        Item { Layout.preferredHeight: Kirigami.Units.smallSpacing }
 
-                        GridLayout {
-                            Layout.fillWidth: true
+                        SectionFrame {
                             Layout.leftMargin: Kirigami.Units.largeSpacing
                             Layout.rightMargin: Kirigami.Units.largeSpacing
-                            columns: 2
-                            columnSpacing: Kirigami.Units.largeSpacing
-                            rowSpacing: Kirigami.Units.smallSpacing
+                            title: "Default models"
+                            subtitle: "These choices are used when Artemis starts a new Codex task."
 
-                            Label { text: "New threads" }
-                            ComboBox {
-                                id: codingModel
+                            Kirigami.FormLayout {
                                 Layout.fillWidth: true
-                                model: root.controller.models
-                                textRole: "name"
-                                valueRole: "id"
-                                onActivated: root.clearConfirmation()
-                                Accessible.name: "Model for new threads"
+
+                                ComboBox {
+                                    id: codingModel
+                                    Kirigami.FormData.label: "New threads:"
+                                    Layout.fillWidth: true
+                                    model: root.controller.models
+                                    textRole: "name"
+                                    valueRole: "id"
+                                    onActivated: {
+                                        root.clearConfirmation()
+                                        if (!root.reasoningSupported(reasoningPicker.currentValue || ""))
+                                            reasoningPicker.currentIndex = 0
+                                    }
+                                    Accessible.name: "Model for new threads"
+                                }
+
+                                ComboBox {
+                                    id: reasoningPicker
+                                    Kirigami.FormData.label: "Reasoning effort:"
+                                    Layout.fillWidth: true
+                                    model: root.reasoningOptions()
+                                    textRole: "label"
+                                    valueRole: "value"
+                                    enabled: count > 1
+                                    currentIndex: root.reasoningIndex(
+                                                      root.controller.codingReasoningEffort)
+                                    onActivated: root.clearConfirmation()
+                                    Accessible.name: "Reasoning effort for new threads"
+                                }
+
+                                ComboBox {
+                                    id: commitModel
+                                    Kirigami.FormData.label: "Commit messages:"
+                                    Layout.fillWidth: true
+                                    model: root.controller.models
+                                    textRole: "name"
+                                    valueRole: "id"
+                                    onActivated: root.clearConfirmation()
+                                    Accessible.name: "Model for commit messages"
+                                }
+
+                                ComboBox {
+                                    id: titleModel
+                                    Kirigami.FormData.label: "Thread titles:"
+                                    Layout.fillWidth: true
+                                    model: root.controller.models
+                                    textRole: "name"
+                                    valueRole: "id"
+                                    onActivated: root.clearConfirmation()
+                                    Accessible.name: "Model for thread titles"
+                                }
                             }
 
-                            Label { text: "Commit messages" }
-                            ComboBox {
-                                id: commitModel
-                                Layout.fillWidth: true
-                                model: root.controller.models
-                                textRole: "name"
-                                valueRole: "id"
-                                onActivated: root.clearConfirmation()
-                                Accessible.name: "Model for commit messages"
-                            }
-
-                            Label { text: "Thread titles" }
-                            ComboBox {
-                                id: titleModel
-                                Layout.fillWidth: true
-                                model: root.controller.models
-                                textRole: "name"
-                                valueRole: "id"
-                                onActivated: root.clearConfirmation()
-                                Accessible.name: "Model for thread titles"
+                            MessageStrip {
+                                iconName: "dialog-information"
+                                text: "Commit messages and thread titles run in separate, read-only ephemeral threads."
+                                accentColor: Kirigami.Theme.highlightColor
                             }
                         }
 
-                        Label {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Kirigami.Units.largeSpacing
-                            Layout.rightMargin: Kirigami.Units.largeSpacing
-                            text: "Commit messages and thread titles run in separate, read-only ephemeral threads."
-                            wrapMode: Text.Wrap
-                            opacity: 0.65
-                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        Item {
+                            Layout.fillHeight: true
+                            Layout.minimumHeight: Kirigami.Units.largeSpacing
                         }
                     }
                 }
 
                 ScrollView {
+                    id: mcpPage
                     contentWidth: availableWidth
 
                     ColumnLayout {
-                        width: parent.availableWidth
+                        width: mcpPage.availableWidth
                         spacing: Kirigami.Units.largeSpacing
 
-                        Label {
-                            Layout.fillWidth: true
-                            Layout.topMargin: Kirigami.Units.largeSpacing
+                        Item { Layout.preferredHeight: Kirigami.Units.smallSpacing }
+
+                        MessageStrip {
                             Layout.leftMargin: Kirigami.Units.largeSpacing
                             Layout.rightMargin: Kirigami.Units.largeSpacing
                             visible: root.controller.mcpIssueText.length > 0
+                            iconName: "dialog-error"
                             text: root.controller.mcpIssueText
-                            color: Kirigami.Theme.negativeTextColor
-                            wrapMode: Text.Wrap
-                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                            accentColor: Kirigami.Theme.negativeTextColor
                         }
 
-                        RowLayout {
-                            Layout.fillWidth: true
+                        SectionFrame {
                             Layout.leftMargin: Kirigami.Units.largeSpacing
                             Layout.rightMargin: Kirigami.Units.largeSpacing
                             visible: root.controller.mcpLoginUrl.length > 0
-                            spacing: Kirigami.Units.smallSpacing
+                            title: "Login requested"
+                            subtitle: "Continue authentication in the browser."
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Kirigami.Units.smallSpacing
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: root.controller.mcpLoginUrl
+                                    elide: Text.ElideMiddle
+                                    textFormat: Text.PlainText
+                                }
+
+                                Button {
+                                    text: "Open login"
+                                    icon.name: "internet-web-browser"
+                                    onClicked: Qt.openUrlExternally(root.controller.mcpLoginUrl)
+                                }
+                            }
+                        }
+
+                        SectionFrame {
+                            Layout.leftMargin: Kirigami.Units.largeSpacing
+                            Layout.rightMargin: Kirigami.Units.largeSpacing
+                            title: "Configured servers"
+                            subtitle: root.controller.mcpBusy
+                                      ? "Refreshing server status"
+                                      : root.controller.mcpServers.length + " configured"
 
                             Label {
                                 Layout.fillWidth: true
-                                text: root.controller.mcpLoginUrl
-                                elide: Text.ElideMiddle
+                                visible: root.controller.mcpServers.length === 0
+                                text: "No MCP servers configured."
+                                opacity: 0.62
                             }
-                            Button {
-                                text: "Open login"
-                                icon.name: "internet-web-browser"
-                                onClicked: Qt.openUrlExternally(root.controller.mcpLoginUrl)
-                            }
-                        }
 
-                        SettingsSectionHeader {
-                            title: "Configured Servers"
-                        }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                visible: root.controller.mcpServers.length > 0
+                                spacing: 0
 
-                        Label {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Kirigami.Units.largeSpacing
-                            Layout.rightMargin: Kirigami.Units.largeSpacing
-                            visible: root.controller.mcpServers.length === 0
-                            text: "No MCP servers configured."
-                            opacity: 0.62
-                        }
+                                Repeater {
+                                    model: root.controller.mcpServers
 
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Kirigami.Units.largeSpacing
-                            Layout.rightMargin: Kirigami.Units.largeSpacing
-                            spacing: 0
-
-                            Repeater {
-                                model: root.controller.mcpServers
-
-                                delegate: ColumnLayout {
-                                    id: mcpServerRow
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    spacing: Kirigami.Units.smallSpacing
-
-                                    RowLayout {
+                                    delegate: ColumnLayout {
+                                        id: mcpServerRow
+                                        required property var modelData
                                         Layout.fillWidth: true
-                                        Layout.topMargin: Kirigami.Units.smallSpacing
-                                        Layout.bottomMargin: Kirigami.Units.smallSpacing
-                                        spacing: Kirigami.Units.smallSpacing
+                                        spacing: 0
 
-                                        Kirigami.Icon {
-                                            source: mcpServerRow.modelData.authStatus === "notLoggedIn"
-                                                    ? "emblem-warning" : "network-server"
-                                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                                            Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                                            color: mcpServerRow.modelData.authStatus === "notLoggedIn"
-                                                   ? Kirigami.Theme.neutralTextColor
-                                                   : Kirigami.Theme.textColor
-                                            opacity: 0.85
-                                        }
-
-                                        ColumnLayout {
+                                        ItemDelegate {
+                                            id: mcpServerDelegate
                                             Layout.fillWidth: true
-                                            spacing: 0
+                                            leftPadding: 0
+                                            rightPadding: 0
+                                            topPadding: Kirigami.Units.smallSpacing
+                                            bottomPadding: Kirigami.Units.smallSpacing
 
-                                            Label {
-                                                Layout.fillWidth: true
-                                                text: mcpServerRow.modelData.title
-                                                      || mcpServerRow.modelData.name
-                                                textFormat: Text.PlainText
-                                                font.bold: true
-                                                elide: Text.ElideRight
+                                            background: Rectangle {
+                                                color: mcpServerDelegate.hovered
+                                                       ? Qt.alpha(Kirigami.Theme.textColor, 0.05)
+                                                       : "transparent"
                                             }
-                                            Label {
-                                                Layout.fillWidth: true
-                                                text: mcpServerRow.modelData.name
-                                                      + " · "
-                                                      + mcpServerRow.modelData.toolCount
-                                                      + " tools · "
-                                                      + mcpServerRow.modelData.resourceCount
-                                                      + " resources · "
-                                                      + mcpServerRow.modelData.authStatus
-                                                textFormat: Text.PlainText
-                                                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                                                opacity: 0.62
-                                                elide: Text.ElideRight
+
+                                            contentItem: RowLayout {
+                                                spacing: Kirigami.Units.smallSpacing
+
+                                                Kirigami.Icon {
+                                                    source: mcpServerRow.modelData.authStatus === "notLoggedIn"
+                                                            ? "emblem-warning" : "network-server"
+                                                    color: root.authColor(mcpServerRow.modelData.authStatus)
+                                                    Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                                                    Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                                                }
+
+                                                ColumnLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 1
+
+                                                    Label {
+                                                        Layout.fillWidth: true
+                                                        text: mcpServerRow.modelData.title
+                                                              || mcpServerRow.modelData.name
+                                                        textFormat: Text.PlainText
+                                                        font.bold: true
+                                                        elide: Text.ElideRight
+                                                    }
+
+                                                    Label {
+                                                        Layout.fillWidth: true
+                                                        text: mcpServerRow.modelData.name
+                                                              + " - "
+                                                              + mcpServerRow.modelData.toolCount
+                                                              + " tools - "
+                                                              + mcpServerRow.modelData.resourceCount
+                                                              + " resources"
+                                                        textFormat: Text.PlainText
+                                                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                                        opacity: 0.62
+                                                        elide: Text.ElideRight
+                                                    }
+                                                }
+
+                                                Kirigami.Icon {
+                                                    source: mcpServerRow.modelData.authStatus === "notLoggedIn"
+                                                            ? "dialog-warning" : "dialog-ok-apply"
+                                                    color: root.authColor(mcpServerRow.modelData.authStatus)
+                                                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                                    Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                                                }
+
+                                                Label {
+                                                    text: root.authText(mcpServerRow.modelData.authStatus)
+                                                    color: root.authColor(mcpServerRow.modelData.authStatus)
+                                                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                ToolButton {
+                                                    icon.name: "dialog-password"
+                                                    enabled: !root.controller.mcpBusy
+                                                    Accessible.name: "Log in to MCP server"
+                                                    ToolTip.text: Accessible.name
+                                                    ToolTip.visible: hovered
+                                                    onClicked: root.controller.loginMcpServer(
+                                                                   mcpServerRow.modelData.name)
+                                                }
+
+                                                ToolButton {
+                                                    icon.name: "edit-delete-remove"
+                                                    enabled: !root.controller.mcpBusy
+                                                    Accessible.name: "Remove MCP server"
+                                                    ToolTip.text: Accessible.name
+                                                    ToolTip.visible: hovered
+                                                    onClicked: root.controller.removeMcpServer(
+                                                                   mcpServerRow.modelData.name)
+                                                }
                                             }
                                         }
 
-                                        ToolButton {
-                                            icon.name: "dialog-password"
-                                            enabled: !root.controller.mcpBusy
-                                            Accessible.name: "Log in to MCP server"
-                                            ToolTip.text: Accessible.name
-                                            ToolTip.visible: hovered
-                                            onClicked: root.controller.loginMcpServer(
-                                                           mcpServerRow.modelData.name)
-                                        }
-                                        ToolButton {
-                                            icon.name: "edit-delete-remove"
-                                            enabled: !root.controller.mcpBusy
-                                            Accessible.name: "Remove MCP server"
-                                            ToolTip.text: Accessible.name
-                                            ToolTip.visible: hovered
-                                            onClicked: root.controller.removeMcpServer(
-                                                           mcpServerRow.modelData.name)
-                                        }
+                                        Kirigami.Separator { Layout.fillWidth: true }
                                     }
-
-                                    Separator {}
                                 }
                             }
                         }
 
-                        SettingsSectionHeader {
-                            title: "Add Server"
-                        }
-
-                        GridLayout {
-                            Layout.fillWidth: true
+                        SectionFrame {
                             Layout.leftMargin: Kirigami.Units.largeSpacing
                             Layout.rightMargin: Kirigami.Units.largeSpacing
-                            columns: 2
-                            columnSpacing: Kirigami.Units.largeSpacing
-                            rowSpacing: Kirigami.Units.smallSpacing
+                            title: "Add server"
+                            subtitle: "Register an HTTP endpoint or stdio command."
 
-                            Label { text: "Name" }
-                            TextField {
-                                id: mcpName
+                            Kirigami.FormLayout {
                                 Layout.fillWidth: true
-                                placeholderText: "context7"
-                            }
 
-                            Label { text: "Transport" }
-                            ComboBox {
-                                id: mcpTransport
-                                Layout.fillWidth: true
-                                model: [
-                                    { value: "http", label: "HTTP URL" },
-                                    { value: "stdio", label: "Stdio command" }
-                                ]
-                                textRole: "label"
-                                valueRole: "value"
-                            }
+                                TextField {
+                                    id: mcpName
+                                    Kirigami.FormData.label: "Name:"
+                                    Layout.fillWidth: true
+                                    placeholderText: "context7"
+                                    Accessible.name: "MCP server name"
+                                }
 
-                            Label { text: "Target" }
-                            TextField {
-                                id: mcpTarget
-                                Layout.fillWidth: true
-                                placeholderText: mcpTransport.currentValue === "http"
-                                                 ? "https://example.com/mcp"
-                                                 : "npx -y @upstash/context7-mcp"
-                            }
-                        }
+                                ComboBox {
+                                    id: mcpTransport
+                                    Kirigami.FormData.label: "Transport:"
+                                    Layout.fillWidth: true
+                                    model: [
+                                        { value: "http", label: "HTTP URL" },
+                                        { value: "stdio", label: "Stdio command" }
+                                    ]
+                                    textRole: "label"
+                                    valueRole: "value"
+                                    Accessible.name: "MCP server transport"
+                                }
 
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Kirigami.Units.largeSpacing
-                            Layout.rightMargin: Kirigami.Units.largeSpacing
-                            Item { Layout.fillWidth: true }
-                            Button {
-                                text: "Add server"
-                                icon.name: "list-add"
-                                enabled: !root.controller.mcpBusy
-                                         && mcpName.text.trim().length > 0
-                                         && mcpTarget.text.trim().length > 0
-                                onClicked: {
-                                    root.controller.addMcpServer(
-                                                mcpName.text,
-                                                mcpTransport.currentValue,
-                                                mcpTarget.text)
-                                    mcpName.clear()
-                                    mcpTarget.clear()
+                                TextField {
+                                    id: mcpTarget
+                                    Kirigami.FormData.label: "Target:"
+                                    Layout.fillWidth: true
+                                    placeholderText: mcpTransport.currentValue === "http"
+                                                     ? "https://example.com/mcp"
+                                                     : "npx -y @upstash/context7-mcp"
+                                    Accessible.name: "MCP server target"
                                 }
                             }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+
+                                Item { Layout.fillWidth: true }
+
+                                Button {
+                                    text: "Add server"
+                                    icon.name: "list-add"
+                                    enabled: !root.controller.mcpBusy
+                                             && mcpName.text.trim().length > 0
+                                             && mcpTarget.text.trim().length > 0
+                                    onClicked: {
+                                        root.controller.addMcpServer(
+                                                    mcpName.text,
+                                                    mcpTransport.currentValue,
+                                                    mcpTarget.text)
+                                        mcpName.clear()
+                                        mcpTarget.clear()
+                                    }
+                                }
+                            }
+                        }
+
+                        Item {
+                            Layout.fillHeight: true
+                            Layout.minimumHeight: Kirigami.Units.largeSpacing
                         }
                     }
                 }
 
                 ScrollView {
+                    id: applicationsPage
                     contentWidth: availableWidth
 
                     ColumnLayout {
-                        width: parent.availableWidth
+                        width: applicationsPage.availableWidth
                         spacing: Kirigami.Units.largeSpacing
 
-                        SettingsSectionHeader {
-                            title: "Open Project Resources"
-                        }
+                        Item { Layout.preferredHeight: Kirigami.Units.smallSpacing }
 
-                        GridLayout {
-                            Layout.fillWidth: true
+                        SectionFrame {
                             Layout.leftMargin: Kirigami.Units.largeSpacing
                             Layout.rightMargin: Kirigami.Units.largeSpacing
-                            columns: 2
-                            columnSpacing: Kirigami.Units.largeSpacing
-                            rowSpacing: Kirigami.Units.smallSpacing
+                            title: "Open project resources"
+                            subtitle: "Detected editors, IDEs, and terminal emulators."
 
-                            Label { text: "Repositories" }
-                            ComboBox {
-                                id: editorPicker
+                            Kirigami.FormLayout {
                                 Layout.fillWidth: true
-                                model: root.controller.editorOptions
-                                textRole: "name"
-                                valueRole: "id"
-                                onActivated: root.clearConfirmation()
-                                Accessible.name: "Application for repositories"
+
+                                ComboBox {
+                                    id: editorPicker
+                                    Kirigami.FormData.label: "Repositories:"
+                                    Layout.fillWidth: true
+                                    model: root.controller.editorOptions
+                                    textRole: "name"
+                                    valueRole: "id"
+                                    onActivated: root.clearConfirmation()
+                                    Accessible.name: "Application for repositories"
+                                }
+
+                                ComboBox {
+                                    id: terminalPicker
+                                    Kirigami.FormData.label: "Terminals:"
+                                    Layout.fillWidth: true
+                                    model: root.controller.terminalOptions
+                                    textRole: "name"
+                                    valueRole: "id"
+                                    onActivated: root.clearConfirmation()
+                                    Accessible.name: "Application for terminals"
+                                }
                             }
 
-                            Label { text: "Terminals" }
-                            ComboBox {
-                                id: terminalPicker
-                                Layout.fillWidth: true
-                                model: root.controller.terminalOptions
-                                textRole: "name"
-                                valueRole: "id"
-                                onActivated: root.clearConfirmation()
-                                Accessible.name: "Application for terminals"
+                            MessageStrip {
+                                iconName: "dialog-information"
+                                text: "Available editors, IDEs, and terminal emulators are detected from installed desktop applications."
+                                accentColor: Kirigami.Theme.highlightColor
                             }
                         }
 
-                        Label {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Kirigami.Units.largeSpacing
-                            Layout.rightMargin: Kirigami.Units.largeSpacing
-                            text: "Available editors, IDEs, and terminal emulators are detected from installed desktop applications."
-                            wrapMode: Text.Wrap
-                            opacity: 0.65
-                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        Item {
+                            Layout.fillHeight: true
+                            Layout.minimumHeight: Kirigami.Units.largeSpacing
                         }
                     }
                 }
@@ -589,27 +779,91 @@ Dialog {
         }
     }
 
-    component SettingsSectionHeader: ColumnLayout {
+    component SectionFrame: Frame {
+        id: sectionFrame
         property string title
+        property string subtitle: ""
+        default property alias content: contentArea.data
         Layout.fillWidth: true
-        Layout.topMargin: Kirigami.Units.largeSpacing
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        spacing: Kirigami.Units.smallSpacing
+        padding: 0
 
-        Label {
-            Layout.fillWidth: true
-            text: title
-            font.bold: true
+        background: Rectangle {
+            color: Kirigami.Theme.backgroundColor
+            border.color: Qt.alpha(Kirigami.Theme.textColor, 0.16)
+            radius: Kirigami.Units.smallSpacing
         }
 
-        Separator {}
+        contentItem: ColumnLayout {
+            spacing: 0
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.margins: Kirigami.Units.largeSpacing
+                spacing: 2
+
+                Label {
+                    Layout.fillWidth: true
+                    text: sectionFrame.title
+                    textFormat: Text.PlainText
+                    font.bold: true
+                    font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
+                    elide: Text.ElideRight
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    visible: sectionFrame.subtitle.length > 0
+                    text: sectionFrame.subtitle
+                    textFormat: Text.PlainText
+                    opacity: 0.64
+                    wrapMode: Text.Wrap
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                }
+            }
+
+            Kirigami.Separator { Layout.fillWidth: true }
+
+            ColumnLayout {
+                id: contentArea
+                Layout.fillWidth: true
+                Layout.margins: Kirigami.Units.largeSpacing
+                spacing: Kirigami.Units.largeSpacing
+            }
+        }
     }
 
-    component Separator: Rectangle {
+    component MessageStrip: Frame {
+        id: messageStrip
+        property string iconName: "dialog-information"
+        property string text: ""
+        property color accentColor: Kirigami.Theme.textColor
         Layout.fillWidth: true
-        Layout.preferredHeight: 1
-        color: Kirigami.Theme.disabledTextColor
-        opacity: 0.25
+        padding: Kirigami.Units.smallSpacing
+
+        background: Rectangle {
+            color: Qt.alpha(messageStrip.accentColor, 0.08)
+            border.color: Qt.alpha(messageStrip.accentColor, 0.22)
+            radius: Kirigami.Units.smallSpacing
+        }
+
+        contentItem: RowLayout {
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Icon {
+                source: messageStrip.iconName
+                color: messageStrip.accentColor
+                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+            }
+
+            Label {
+                Layout.fillWidth: true
+                text: messageStrip.text
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                color: messageStrip.accentColor
+                font.pointSize: Kirigami.Theme.smallFont.pointSize
+            }
+        }
     }
 }
