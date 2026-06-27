@@ -3,6 +3,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRegularExpression>
+#include <QSet>
+#include <QUuid>
 
 #include <memory>
 #include <utility>
@@ -78,6 +80,90 @@ void appendText(const QJsonValue &value, QStringList &parts)
         if (object.contains(key))
             appendText(object.value(key), parts);
     }
+}
+
+QString compactJsonText(const QJsonValue &value)
+{
+    if (value.isUndefined() || value.isNull())
+        return {};
+    if (value.isString())
+        return value.toString();
+    if (value.isObject())
+        return QString::fromUtf8(QJsonDocument(value.toObject()).toJson(QJsonDocument::Compact));
+    if (value.isArray())
+        return QString::fromUtf8(QJsonDocument(value.toArray()).toJson(QJsonDocument::Compact));
+    return value.toVariant().toString();
+}
+
+QString mcpResultText(const QJsonObject &result)
+{
+    if (result.isEmpty())
+        return {};
+    QStringList parts;
+    appendText(result.value(QStringLiteral("structuredContent")), parts);
+    appendText(result.value(QStringLiteral("content")), parts);
+    parts.removeDuplicates();
+    if (!parts.isEmpty())
+        return parts.join(QLatin1Char('\n'));
+    return compactJsonText(result);
+}
+
+QVariantList mcpElicitationQuestions(const QJsonObject &params)
+{
+    QVariantList questions;
+    const auto schema = params.value(QStringLiteral("requestedSchema")).toObject();
+    const auto properties = schema.value(QStringLiteral("properties")).toObject();
+    const auto requiredValues = schema.value(QStringLiteral("required")).toArray();
+    QSet<QString> required;
+    for (const auto &value : requiredValues)
+        required.insert(value.toString());
+
+    for (auto it = properties.begin(); it != properties.end(); ++it) {
+        const auto property = it.value().toObject();
+        const auto id = it.key();
+        const auto title = property.value(QStringLiteral("title")).toString(id);
+        const auto description = property.value(QStringLiteral("description")).toString();
+        QVariantList options;
+        const auto enumValues = property.value(QStringLiteral("enum")).toArray();
+        for (const auto &entry : enumValues) {
+            const auto label = entry.toVariant().toString();
+            if (!label.isEmpty())
+                options.push_back(QVariantMap{{QStringLiteral("label"), label},
+                                              {QStringLiteral("description"), description}});
+        }
+        questions.push_back(QVariantMap{
+            {QStringLiteral("id"), id},
+            {QStringLiteral("header"), params.value(QStringLiteral("serverName")).toString()},
+            {QStringLiteral("question"),
+             QStringLiteral("%1%2")
+                 .arg(title, required.contains(id) ? QStringLiteral(" *") : QString())},
+            {QStringLiteral("description"), description},
+            {QStringLiteral("type"), property.value(QStringLiteral("type")).toString()},
+            {QStringLiteral("options"), options}});
+    }
+    if (questions.isEmpty()) {
+        questions.push_back(QVariantMap{
+            {QStringLiteral("id"), QStringLiteral("response")},
+            {QStringLiteral("header"), params.value(QStringLiteral("serverName")).toString()},
+            {QStringLiteral("question"), params.value(QStringLiteral("message")).toString()},
+            {QStringLiteral("options"), QVariantList{}}});
+    }
+    return questions;
+}
+
+QJsonValue coercedMcpValue(const QString &text, const QString &type)
+{
+    if (type == QStringLiteral("boolean")) {
+        const auto lower = text.trimmed().toLower();
+        return lower == QStringLiteral("true") || lower == QStringLiteral("yes")
+            || lower == QStringLiteral("y") || lower == QStringLiteral("1");
+    }
+    if (type == QStringLiteral("number") || type == QStringLiteral("integer")) {
+        bool ok = false;
+        const auto number = text.trimmed().toDouble(&ok);
+        return ok ? QJsonValue(number) : QJsonValue(text);
+    }
+    return text;
 }
 
 } // namespace
@@ -408,6 +494,37 @@ void CodexClient::handleLine(const QByteArray &line)
 void CodexClient::handleServerRequest(const QJsonValue &id, const QString &method,
                                       const QJsonObject &params)
 {
+    if (method == QStringLiteral("mcpServer/elicitation/request")) {
+        const auto mode = params.value(QStringLiteral("mode")).toString();
+        if (mode == QStringLiteral("url")) {
+            writeResponse(id, {{QStringLiteral("action"), QStringLiteral("decline")}});
+            emit providerError(QStringLiteral("MCP server %1 requested unsupported URL input: %2")
+                                   .arg(params.value(QStringLiteral("serverName")).toString(),
+                                        params.value(QStringLiteral("url")).toString()));
+            return;
+        }
+        if (mode == QStringLiteral("openai/form")) {
+            writeResponse(id, {{QStringLiteral("action"), QStringLiteral("decline")}});
+            emit providerError(QStringLiteral("MCP server %1 requested an unsupported rich form.")
+                                   .arg(params.value(QStringLiteral("serverName")).toString()));
+            return;
+        }
+        const auto itemId = QStringLiteral("mcp:%1").arg(
+            QUuid::createUuid().toString(QUuid::WithoutBraces));
+        m_pendingMcpElicitationRequests.insert(itemId, id);
+        m_pendingMcpElicitationParams.insert(itemId, params);
+        auto questions = mcpElicitationQuestions(params);
+        for (auto &question : questions) {
+            auto map = question.toMap();
+            map.insert(QStringLiteral("mcpElicitation"), true);
+            question = map;
+        }
+        emit userInputRequested(
+            params.value(QStringLiteral("threadId")).toString(),
+            params.value(QStringLiteral("turnId")).toString(), itemId, questions);
+        return;
+    }
+
     if (method != QStringLiteral("item/tool/requestUserInput")) {
         QJsonObject response{{QStringLiteral("id"), id},
                              {QStringLiteral("error"),
@@ -472,6 +589,14 @@ void CodexClient::handleNotification(const QString &method, const QJsonObject &p
                          QStringLiteral("assistant"), QStringLiteral("Artemis"),
                          params.value(QStringLiteral("delta")).toString(),
                          {{QStringLiteral("delta"), true},
+                          {QStringLiteral("itemId"),
+                           params.value(QStringLiteral("itemId")).toString()},
+                          {QStringLiteral("turnId"), turnId}});
+    } else if (method == QStringLiteral("item/mcpToolCall/progress")) {
+        emit domainEvent(params.value(QStringLiteral("threadId")).toString(),
+                         QStringLiteral("mcp"), QStringLiteral("MCP progress"),
+                         params.value(QStringLiteral("message")).toString(),
+                         {{QStringLiteral("lifecycle"), QStringLiteral("started")},
                           {QStringLiteral("itemId"),
                            params.value(QStringLiteral("itemId")).toString()},
                           {QStringLiteral("turnId"), turnId}});
@@ -543,6 +668,12 @@ void CodexClient::normalizeItem(const QString &lifecycle, const QJsonObject &par
             return;
         domainType = QStringLiteral("task");
         title = QStringLiteral("Tasks");
+    } else if (type == QStringLiteral("mcpToolCall")) {
+        domainType = QStringLiteral("mcp");
+        const auto server = item.value(QStringLiteral("server")).toString();
+        const auto tool = item.value(QStringLiteral("tool")).toString();
+        title = server.isEmpty() ? QStringLiteral("MCP tool")
+                                 : QStringLiteral("%1:%2").arg(server, tool);
     }
     const auto content = itemContent(item);
     if (content.isEmpty())
@@ -561,6 +692,26 @@ QString CodexClient::itemContent(const QJsonObject &item) const
         const auto text = item.value(key).toString();
         if (!text.isEmpty())
             return text;
+    }
+    if (item.value(QStringLiteral("type")).toString() == QStringLiteral("mcpToolCall")) {
+        const auto status = item.value(QStringLiteral("status")).toString();
+        const auto server = item.value(QStringLiteral("server")).toString();
+        const auto tool = item.value(QStringLiteral("tool")).toString();
+        QStringList lines;
+        lines.push_back(QStringLiteral("%1:%2 %3").arg(server, tool, status));
+        const auto arguments = compactJsonText(item.value(QStringLiteral("arguments")));
+        if (!arguments.isEmpty())
+            lines.push_back(QStringLiteral("Arguments: %1").arg(arguments));
+        const auto error = item.value(QStringLiteral("error")).toObject()
+                               .value(QStringLiteral("message")).toString();
+        if (!error.isEmpty())
+            lines.push_back(QStringLiteral("Error: %1").arg(error));
+        const auto resultValue = item.value(QStringLiteral("result"));
+        const auto result = resultValue.isObject() ? mcpResultText(resultValue.toObject())
+                                                   : QString();
+        if (!result.isEmpty())
+            lines.push_back(QStringLiteral("Result: %1").arg(result));
+        return lines.join(QLatin1Char('\n'));
     }
     const auto content = item.value(QStringLiteral("content"));
     if (content.isString())
@@ -668,6 +819,29 @@ void CodexClient::interruptTurn(const QString &threadId, const QString &turnId,
 void CodexClient::respondToUserInput(const QString &itemId, const QVariantMap &answers,
                                      ResultHandler handler)
 {
+    if (m_pendingMcpElicitationRequests.contains(itemId)) {
+        const auto id = m_pendingMcpElicitationRequests.take(itemId);
+        const auto params = m_pendingMcpElicitationParams.take(itemId);
+        const auto properties = params.value(QStringLiteral("requestedSchema")).toObject()
+                                    .value(QStringLiteral("properties")).toObject();
+        QJsonObject content;
+        for (auto it = answers.begin(); it != answers.end(); ++it) {
+            const auto answerObject = it.value().toMap();
+            const auto answerList = answerObject.value(QStringLiteral("answers")).toStringList();
+            const auto text = answerList.isEmpty() ? QString() : answerList.first();
+            if (text.isEmpty())
+                continue;
+            const auto type = properties.value(it.key()).toObject()
+                                  .value(QStringLiteral("type")).toString();
+            content.insert(it.key(), coercedMcpValue(text, type));
+        }
+        writeResponse(id, {{QStringLiteral("action"), QStringLiteral("accept")},
+                           {QStringLiteral("content"), content}});
+        if (handler)
+            handler({}, {});
+        return;
+    }
+
     const auto id = m_pendingUserInputRequests.take(itemId);
     if (id.isUndefined()) {
         if (handler)
@@ -685,6 +859,27 @@ void CodexClient::setThreadName(const QString &threadId, const QString &name,
     request(QStringLiteral("thread/name/set"),
             {{QStringLiteral("threadId"), threadId},
              {QStringLiteral("name"), name}},
+            std::move(handler));
+}
+
+void CodexClient::listMcpServers(ResultHandler handler)
+{
+    request(QStringLiteral("mcpServerStatus/list"),
+            {{QStringLiteral("detail"), QStringLiteral("full")},
+             {QStringLiteral("limit"), 100}},
+            std::move(handler));
+}
+
+void CodexClient::reloadMcpServers(ResultHandler handler)
+{
+    request(QStringLiteral("config/mcpServer/reload"), {}, std::move(handler));
+}
+
+void CodexClient::loginMcpServer(const QString &name, ResultHandler handler)
+{
+    request(QStringLiteral("mcpServer/oauth/login"),
+            {{QStringLiteral("name"), name},
+             {QStringLiteral("timeoutSecs"), 120}},
             std::move(handler));
 }
 

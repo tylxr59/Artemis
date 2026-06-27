@@ -41,6 +41,9 @@ public:
                             ResultHandler handler) override;
     void setThreadName(const QString &threadId, const QString &name,
                        ResultHandler handler) override;
+    void listMcpServers(ResultHandler handler) override;
+    void reloadMcpServers(ResultHandler handler) override;
+    void loginMcpServer(const QString &name, ResultHandler handler) override;
     QString itemContent(const QJsonObject &item) const override;
 
     void request(const QString &method, const QJsonObject &params, ResultHandler handler = {});
@@ -72,6 +75,8 @@ private:
     QByteArray m_buffer;
     QHash<qint64, Pending> m_pending;
     QHash<QString, QJsonValue> m_pendingUserInputRequests;
+    QHash<QString, QJsonValue> m_pendingMcpElicitationRequests;
+    QHash<QString, QJsonObject> m_pendingMcpElicitationParams;
     qint64 m_nextId = 1;
     bool m_ready = false;
     bool m_setupRequired = false;

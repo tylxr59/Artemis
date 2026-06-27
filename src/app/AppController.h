@@ -53,6 +53,10 @@ class AppController : public QObject {
     Q_PROPERTY(QString providerSetupInstructions READ providerSetupInstructions NOTIFY providerSetupChanged)
     Q_PROPERTY(QString providerIssueText READ providerIssueText NOTIFY providerIssueChanged)
     Q_PROPERTY(QString providerVersion READ providerVersion NOTIFY providerReadyChanged)
+    Q_PROPERTY(QVariantList mcpServers READ mcpServers NOTIFY mcpServersChanged)
+    Q_PROPERTY(bool mcpBusy READ mcpBusy NOTIFY mcpServersChanged)
+    Q_PROPERTY(QString mcpIssueText READ mcpIssueText NOTIFY mcpServersChanged)
+    Q_PROPERTY(QString mcpLoginUrl READ mcpLoginUrl NOTIFY mcpServersChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
     Q_PROPERTY(qint64 contextTokens READ contextTokens NOTIFY tokenUsageChanged)
     Q_PROPERTY(qint64 totalProcessedTokens READ totalProcessedTokens NOTIFY tokenUsageChanged)
@@ -104,6 +108,10 @@ public:
     QString providerSetupInstructions() const;
     QString providerIssueText() const;
     QString providerVersion() const;
+    QVariantList mcpServers() const;
+    bool mcpBusy() const;
+    QString mcpIssueText() const;
+    QString mcpLoginUrl() const;
     QString statusText() const;
     qint64 contextTokens() const;
     qint64 totalProcessedTokens() const;
@@ -147,6 +155,12 @@ public:
     Q_INVOKABLE void openProjectFolder();
     Q_INVOKABLE void openProjectEditor();
     Q_INVOKABLE void openTerminal();
+    Q_INVOKABLE void refreshMcpServers();
+    Q_INVOKABLE void reloadMcpServers();
+    Q_INVOKABLE void loginMcpServer(const QString &name);
+    Q_INVOKABLE void addMcpServer(const QString &name, const QString &transport,
+                                  const QString &target);
+    Q_INVOKABLE void removeMcpServer(const QString &name);
     void setCodingModelId(const QString &modelId);
     void setCodingReasoningEffort(const QString &reasoningEffort);
     void setCommitModelId(const QString &modelId);
@@ -173,6 +187,7 @@ signals:
     void providerReadyChanged();
     void providerSetupChanged();
     void providerIssueChanged();
+    void mcpServersChanged();
     void statusTextChanged();
     void statusMessage(const QString &text);
     void tokenUsageChanged();
@@ -220,6 +235,7 @@ private:
     QString cleanTitleDraft(const QString &raw) const;
     void persistConversationEvent(const ConversationEvent &event,
                                   const QString &contentOverride = {});
+    void runCodexMcpCommand(const QStringList &arguments, const QString &successMessage);
 
     Database m_database;
     ProjectTreeModel m_projects;
@@ -235,6 +251,10 @@ private:
     QTimer m_turnElapsedUpdateTimer;
     QString m_status;
     QString m_providerIssue;
+    QVariantList m_mcpServers;
+    bool m_mcpBusy = false;
+    QString m_mcpIssue;
+    QString m_mcpLoginUrl;
     QHash<QString, QVariantMap> m_threadTokenUsage;
     QString m_diff;
     QString m_gitStatus;

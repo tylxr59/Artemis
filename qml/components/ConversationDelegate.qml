@@ -14,6 +14,7 @@ Item {
     signal imageOpenRequested(string path)
 
     readonly property bool isTool: eventType === "command" || eventType === "file"
+                                  || eventType === "mcp"
     readonly property bool isReasoning: eventType === "reasoning"
     readonly property bool isStatus: eventType === "status"
     readonly property bool isDiff: eventType === "diff"
@@ -69,7 +70,7 @@ Item {
                 rightPadding: Kirigami.Units.largeSpacing
                 topPadding: Math.max(0, Kirigami.Units.smallSpacing - 1)
                 bottomPadding: Kirigami.Units.smallSpacing + 1
-                checkable: root.eventType === "command"
+                checkable: root.eventType === "command" || root.eventType === "mcp"
                 hoverEnabled: checkable
                 Accessible.name: root.eventType === "command"
                                  ? (checked ? "Hide full command" : "Show full command")
@@ -86,7 +87,7 @@ Item {
 
                         Kirigami.Icon {
                             anchors.fill: parent
-                            visible: root.eventType === "command"
+                            visible: root.eventType === "command" || root.eventType === "mcp"
                             source: toolToggle.checked ? "arrow-down" : "arrow-right"
                             opacity: 0.5
                         }
@@ -95,7 +96,9 @@ Item {
                         Layout.preferredWidth: 17
                         Layout.preferredHeight: 17
                         source: root.eventType === "file"
-                                ? "document-edit" : "utilities-terminal"
+                                ? "document-edit"
+                                : root.eventType === "mcp"
+                                  ? "network-connect" : "utilities-terminal"
                         color: root.isRunning ? Kirigami.Theme.highlightColor
                                               : Kirigami.Theme.textColor
                         opacity: root.isRunning ? 0.9 : 0.62
@@ -105,7 +108,9 @@ Item {
                         text: root.isRunning
                               ? "Running"
                               : (root.eventType === "file"
-                                 ? "Changed files" : "Ran command")
+                                 ? "Changed files"
+                                 : root.eventType === "mcp"
+                                   ? root.title : "Ran command")
                         font.family: Kirigami.Theme.smallFont.family
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
                         font.bold: true

@@ -66,6 +66,21 @@ public:
                                     ResultHandler handler) = 0;
     virtual void setThreadName(const QString &threadId, const QString &name,
                                ResultHandler handler) = 0;
+    virtual void listMcpServers(ResultHandler handler)
+    {
+        if (handler)
+            handler({}, QStringLiteral("MCP is not supported by this provider"));
+    }
+    virtual void reloadMcpServers(ResultHandler handler)
+    {
+        if (handler)
+            handler({}, QStringLiteral("MCP is not supported by this provider"));
+    }
+    virtual void loginMcpServer(const QString &, ResultHandler handler)
+    {
+        if (handler)
+            handler({}, QStringLiteral("MCP is not supported by this provider"));
+    }
     virtual QString itemContent(const QJsonObject &item) const = 0;
 
 signals:

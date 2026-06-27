@@ -17,11 +17,13 @@
 #include <QJsonObject>
 #include <QLocale>
 #include <QMimeData>
+#include <QProcess>
 #include <QTextStream>
 #include <QTime>
 #include <QUrl>
 #include <QUuid>
 
+#include <memory>
 #include <utility>
 
 namespace Artemis {
@@ -98,6 +100,12 @@ bool removeOrphanedAttachments(const Database &database, QString *error)
     return true;
 }
 
+QString codexExecutable()
+{
+    const auto override = qEnvironmentVariable("ARTEMIS_CODEX_EXECUTABLE").trimmed();
+    return override.isEmpty() ? QStringLiteral("codex") : override;
+}
+
 } // namespace
 
 AppController::AppController(QObject *parent)
@@ -132,6 +140,7 @@ void AppController::connectProvider()
             setStatus(QStringLiteral("Codex connected"));
             loadModels();
             loadThreads();
+            refreshMcpServers();
         }
     });
     connect(m_provider, &AgentProvider::setupChanged, this, [this] {
@@ -287,6 +296,10 @@ QString AppController::providerSetupInstructions() const
 }
 QString AppController::providerIssueText() const { return m_providerIssue; }
 QString AppController::providerVersion() const { return m_provider->version(); }
+QVariantList AppController::mcpServers() const { return m_mcpServers; }
+bool AppController::mcpBusy() const { return m_mcpBusy; }
+QString AppController::mcpIssueText() const { return m_mcpIssue; }
+QString AppController::mcpLoginUrl() const { return m_mcpLoginUrl; }
 QString AppController::statusText() const { return m_status; }
 qint64 AppController::contextTokens() const
 {
@@ -720,6 +733,11 @@ void AppController::selectThread(int index)
                 } else if (type == QStringLiteral("plan")) {
                     eventType = QStringLiteral("task");
                     title = QStringLiteral("Tasks");
+                } else if (type == QStringLiteral("mcpToolCall")) {
+                    eventType = QStringLiteral("mcp");
+                    title = QStringLiteral("%1:%2")
+                                .arg(item.value(QStringLiteral("server")).toString(),
+                                     item.value(QStringLiteral("tool")).toString());
                 } else {
                     continue;
                 }
@@ -1585,6 +1603,128 @@ void AppController::openTerminal()
     }
 }
 
+void AppController::refreshMcpServers()
+{
+    if (!m_provider->ready())
+        return;
+    m_mcpBusy = true;
+    m_mcpIssue.clear();
+    emit mcpServersChanged();
+    m_provider->listMcpServers([this](const QJsonObject &result, const QString &error) {
+        m_mcpBusy = false;
+        if (!error.isEmpty()) {
+            m_mcpIssue = error;
+            setStatus(error);
+            emit mcpServersChanged();
+            return;
+        }
+        QVariantList rows;
+        for (const auto &entry : result.value(QStringLiteral("data")).toArray()) {
+            const auto server = entry.toObject();
+            const auto tools = server.value(QStringLiteral("tools")).toObject();
+            const auto resources = server.value(QStringLiteral("resources")).toArray();
+            const auto templates =
+                server.value(QStringLiteral("resourceTemplates")).toArray();
+            const auto info = server.value(QStringLiteral("serverInfo")).toObject();
+            rows.push_back(QVariantMap{
+                {QStringLiteral("name"), server.value(QStringLiteral("name")).toString()},
+                {QStringLiteral("title"),
+                 info.value(QStringLiteral("title")).toString(
+                     server.value(QStringLiteral("name")).toString())},
+                {QStringLiteral("version"), info.value(QStringLiteral("version")).toString()},
+                {QStringLiteral("description"),
+                 info.value(QStringLiteral("description")).toString()},
+                {QStringLiteral("authStatus"),
+                 server.value(QStringLiteral("authStatus")).toString()},
+                {QStringLiteral("toolCount"), tools.size()},
+                {QStringLiteral("resourceCount"), resources.size() + templates.size()}});
+        }
+        m_mcpServers = rows;
+        emit mcpServersChanged();
+    });
+}
+
+void AppController::reloadMcpServers()
+{
+    if (!m_provider->ready())
+        return;
+    m_mcpBusy = true;
+    m_mcpIssue.clear();
+    emit mcpServersChanged();
+    m_provider->reloadMcpServers([this](const QJsonObject &, const QString &error) {
+        m_mcpBusy = false;
+        if (!error.isEmpty()) {
+            m_mcpIssue = error;
+            setStatus(error);
+            emit mcpServersChanged();
+            return;
+        }
+        setStatus(QStringLiteral("MCP configuration reloaded"));
+        refreshMcpServers();
+    });
+}
+
+void AppController::loginMcpServer(const QString &name)
+{
+    const auto trimmed = name.trimmed();
+    if (trimmed.isEmpty() || !m_provider->ready())
+        return;
+    m_mcpBusy = true;
+    m_mcpIssue.clear();
+    m_mcpLoginUrl.clear();
+    emit mcpServersChanged();
+    m_provider->loginMcpServer(trimmed, [this](const QJsonObject &result,
+                                               const QString &error) {
+        m_mcpBusy = false;
+        if (!error.isEmpty()) {
+            m_mcpIssue = error;
+            setStatus(error);
+            emit mcpServersChanged();
+            return;
+        }
+        m_mcpLoginUrl = result.value(QStringLiteral("authorizationUrl")).toString();
+        setStatus(m_mcpLoginUrl.isEmpty()
+                      ? QStringLiteral("MCP login started")
+                      : QStringLiteral("Open the MCP login URL to continue"));
+        refreshMcpServers();
+    });
+}
+
+void AppController::addMcpServer(const QString &name, const QString &transport,
+                                 const QString &target)
+{
+    const auto trimmedName = name.trimmed();
+    const auto trimmedTarget = target.trimmed();
+    if (trimmedName.isEmpty() || trimmedTarget.isEmpty()) {
+        m_mcpIssue = QStringLiteral("MCP server name and target are required.");
+        emit mcpServersChanged();
+        return;
+    }
+    QStringList arguments{QStringLiteral("mcp"), QStringLiteral("add"), trimmedName};
+    if (transport == QStringLiteral("http")) {
+        arguments << QStringLiteral("--url") << trimmedTarget;
+    } else {
+        const auto command = QProcess::splitCommand(trimmedTarget);
+        if (command.isEmpty()) {
+            m_mcpIssue = QStringLiteral("MCP stdio command is empty.");
+            emit mcpServersChanged();
+            return;
+        }
+        arguments << QStringLiteral("--");
+        arguments << command;
+    }
+    runCodexMcpCommand(arguments, QStringLiteral("MCP server added"));
+}
+
+void AppController::removeMcpServer(const QString &name)
+{
+    const auto trimmed = name.trimmed();
+    if (trimmed.isEmpty())
+        return;
+    runCodexMcpCommand({QStringLiteral("mcp"), QStringLiteral("remove"), trimmed},
+                       QStringLiteral("MCP server removed"));
+}
+
 void AppController::setStatus(const QString &text)
 {
     QTextStream(stdout) << text << Qt::endl;
@@ -1593,6 +1733,56 @@ void AppController::setStatus(const QString &text)
         return;
     m_status = text;
     emit statusTextChanged();
+}
+
+void AppController::runCodexMcpCommand(const QStringList &arguments,
+                                       const QString &successMessage)
+{
+    if (m_mcpBusy)
+        return;
+    m_mcpBusy = true;
+    m_mcpIssue.clear();
+    m_mcpLoginUrl.clear();
+    emit mcpServersChanged();
+    auto *process = new QProcess(this);
+    auto *timeout = new QTimer(process);
+    timeout->setSingleShot(true);
+    const auto completed = std::make_shared<bool>(false);
+    const auto finish = [this, process, timeout, successMessage, completed](
+                            bool ok, const QString &message) {
+        if (std::exchange(*completed, true))
+            return;
+        timeout->stop();
+        process->deleteLater();
+        m_mcpBusy = false;
+        if (!ok) {
+            m_mcpIssue = message;
+            setStatus(message);
+            emit mcpServersChanged();
+            return;
+        }
+        setStatus(successMessage);
+        emit mcpServersChanged();
+        reloadMcpServers();
+    };
+    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
+            [process, finish](int code, QProcess::ExitStatus status) {
+        const auto output = QString::fromUtf8(process->readAllStandardOutput()
+                                              + process->readAllStandardError())
+                                .trimmed();
+        finish(status == QProcess::NormalExit && code == 0,
+               output.isEmpty() ? QStringLiteral("Codex MCP command failed") : output);
+    });
+    connect(process, &QProcess::errorOccurred, this,
+            [process, finish](QProcess::ProcessError) {
+        finish(false, process->errorString());
+    });
+    connect(timeout, &QTimer::timeout, this, [process, finish] {
+        process->kill();
+        finish(false, QStringLiteral("Timed out while updating MCP configuration."));
+    });
+    process->start(codexExecutable(), arguments);
+    timeout->start(30000);
 }
 
 void AppController::persistConversationEvent(const ConversationEvent &event,
