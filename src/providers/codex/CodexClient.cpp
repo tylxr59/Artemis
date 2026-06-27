@@ -108,6 +108,34 @@ QString mcpResultText(const QJsonObject &result)
     return compactJsonText(result);
 }
 
+QString providerErrorText(const QString &text)
+{
+    const auto trimmed = text.trimmed();
+    if (trimmed.isEmpty())
+        return {};
+
+    if (trimmed.contains(QStringLiteral("apply_patch verification failed"))) {
+        const QRegularExpression expectedLinesExpression(
+            QStringLiteral("Failed to find expected lines in ([^:\\n]+):\\s*(.*)"),
+            QRegularExpression::DotMatchesEverythingOption);
+        const auto match = expectedLinesExpression.match(trimmed);
+        QStringList parts;
+        parts.push_back(QStringLiteral(
+            "Codex could not apply the patch because the file no longer matched "
+            "the expected context."));
+        if (match.hasMatch()) {
+            parts.push_back(QStringLiteral("File: %1").arg(match.captured(1).trimmed()));
+            const auto expectedContext = match.captured(2).trimmed();
+            if (!expectedContext.isEmpty())
+                parts.push_back(QStringLiteral("Expected context:\n%1").arg(expectedContext));
+        }
+        parts.push_back(QStringLiteral("Reread the file and retry the edit."));
+        return parts.join(QStringLiteral("\n\n"));
+    }
+
+    return QStringLiteral("Codex: %1").arg(trimmed);
+}
+
 QVariantList mcpElicitationQuestions(const QJsonObject &params)
 {
     QVariantList questions;
@@ -198,7 +226,7 @@ CodexClient::CodexClient(QObject *parent)
         if (isAuthenticationError(text))
             requireAuthentication();
         else if (!text.isEmpty())
-            emit providerError(QStringLiteral("Codex: %1").arg(text));
+            emit providerError(providerErrorText(text));
     });
     connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError) {
         scheduleRestart(m_process.errorString());

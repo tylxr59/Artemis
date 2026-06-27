@@ -635,6 +635,49 @@ private slots:
         qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
     }
 
+    void codexFormatsPatchVerificationFailures()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto executable = directory.filePath(QStringLiteral("fake-codex"));
+        QFile script(executable);
+        QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Text));
+        script.write(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = \"--version\" ]; then\n"
+            "  echo 'codex-cli 0.141.0'\n"
+            "  exit 0\n"
+            "fi\n"
+            "IFS= read -r request\n"
+            "id=$(printf '%s' \"$request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
+            "printf '{\"id\":%s,\"result\":{}}\\n' \"$id\"\n"
+            "IFS= read -r initialized\n"
+            "IFS= read -r account_request\n"
+            "id=$(printf '%s' \"$account_request\" | sed -n 's/.*\"id\":\\([0-9][0-9]*\\).*/\\1/p')\n"
+            "printf '{\"id\":%s,\"result\":{\"requiresOpenaiAuth\":false}}\\n' \"$id\"\n"
+            "printf '%s\\n' '2026-06-27T02:55:59.622259Z ERROR "
+            "codex_core::tools::router: error=apply_patch verification failed: "
+            "Failed to find expected lines in /tmp/project/src/main.cpp:' >&2\n"
+            "printf '%s\\n' '#include <QJsonArray>' >&2\n"
+            "sleep 5\n");
+        script.close();
+        QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                      | QFileDevice::ExeOwner));
+
+        qputenv("ARTEMIS_CODEX_EXECUTABLE", executable.toUtf8());
+        CodexClient client;
+        QSignalSpy errors(&client, &CodexClient::providerError);
+        client.start();
+
+        QTRY_VERIFY_WITH_TIMEOUT(!errors.isEmpty(), 3000);
+        const auto message = errors.constFirst().constFirst().toString();
+        QVERIFY(message.contains(QStringLiteral("could not apply the patch")));
+        QVERIFY(message.contains(QStringLiteral("File: /tmp/project/src/main.cpp")));
+        QVERIFY(message.contains(QStringLiteral("#include <QJsonArray>")));
+        QVERIFY(!message.contains(QStringLiteral("codex_core::tools::router")));
+        qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
+    }
+
     void codexDisconnectCallbacksAreNotReentrant()
     {
         QTemporaryDir directory;
