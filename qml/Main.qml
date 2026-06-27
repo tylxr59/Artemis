@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import org.kde.kirigami as Kirigami
 import org.artemis
 
@@ -144,6 +145,7 @@ Kirigami.ApplicationWindow {
     SettingsDialog {
         id: settingsDialog
         controller: appController
+        transientParent: root
     }
 
     Connections {
@@ -1562,14 +1564,40 @@ Kirigami.ApplicationWindow {
         id: imageViewer
     }
 
-    Dialog {
+    Window {
         id: diagnosticsDialog
-        title: "Diagnostics"
-        modal: true
-        width: Math.min(root.width - 40, 900)
-        height: Math.min(root.height - 40, 660)
-        anchors.centerIn: parent
-        contentItem: DiagnosticsPage { controller: appController }
-        standardButtons: Dialog.Close
+        title: "Diagnostics - Artemis"
+        visible: false
+        modality: Qt.NonModal
+        transientParent: root
+        width: 900
+        height: 640
+        minimumWidth: 720
+        minimumHeight: 520
+        color: Kirigami.Theme.backgroundColor
+
+        function centerOnMainWindow() {
+            x = root.x + Math.round((root.width - width) / 2)
+            y = root.y + Math.round((root.height - height) / 2)
+        }
+
+        function open() {
+            if (!visible) {
+                centerOnMainWindow()
+                visible = true
+            }
+            raise()
+            requestActivate()
+        }
+
+        Shortcut {
+            sequence: "Esc"
+            onActivated: diagnosticsDialog.close()
+        }
+
+        DiagnosticsPage {
+            anchors.fill: parent
+            controller: appController
+        }
     }
 }

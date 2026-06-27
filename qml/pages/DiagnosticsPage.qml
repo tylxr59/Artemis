@@ -7,6 +7,9 @@ ScrollView {
     id: root
     required property var controller
     contentWidth: availableWidth
+    background: Rectangle {
+        color: Kirigami.Theme.backgroundColor
+    }
 
     function connectionText() {
         if (controller.providerSetupRequired)

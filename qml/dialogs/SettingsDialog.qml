@@ -1,17 +1,38 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import org.kde.kirigami as Kirigami
 
-Dialog {
+Window {
     id: root
     required property var controller
     property bool settingsApplied: false
-    title: "Settings"
-    modal: true
-    anchors.centerIn: parent
-    width: Math.min(parent ? parent.width - 40 : 920, 920)
-    height: Math.min(parent ? parent.height - 40 : 680, 680)
+    title: "Settings - Artemis"
+    visible: false
+    modality: Qt.NonModal
+    width: 920
+    height: 560
+    minimumWidth: 760
+    minimumHeight: 500
+    color: Kirigami.Theme.backgroundColor
+
+    function centerOnTransientParent() {
+        if (!transientParent)
+            return
+        x = transientParent.x + Math.round((transientParent.width - width) / 2)
+        y = transientParent.y + Math.round((transientParent.height - height) / 2)
+    }
+
+    function open() {
+        if (!visible) {
+            loadValues()
+            centerOnTransientParent()
+            visible = true
+        }
+        raise()
+        requestActivate()
+    }
 
     function modelIndex(modelId) {
         const exact = codingModel.indexOfValue(modelId)
@@ -150,253 +171,237 @@ Dialog {
             confirmationTimer.restart()
     }
 
-    onOpened: loadValues()
-    onApplied: applyValues()
-
     Timer {
         id: confirmationTimer
         interval: 3500
         onTriggered: root.settingsApplied = false
     }
 
-    footer: DialogButtonBox {
-        standardButtons: DialogButtonBox.Cancel | DialogButtonBox.Apply
-
-        RowLayout {
-            spacing: Kirigami.Units.smallSpacing
-            opacity: root.settingsApplied ? 1 : 0
-            DialogButtonBox.buttonRole: DialogButtonBox.HelpRole
-
-            Behavior on opacity {
-                NumberAnimation { duration: Kirigami.Units.shortDuration }
-            }
-
-            Kirigami.Icon {
-                source: "dialog-ok-apply"
-                color: Kirigami.Theme.positiveTextColor
-                Layout.preferredWidth: Kirigami.Units.iconSizes.small
-                Layout.preferredHeight: Kirigami.Units.iconSizes.small
-            }
-
-            Label {
-                text: "Settings applied"
-                color: Kirigami.Theme.positiveTextColor
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-            }
-        }
+    Shortcut {
+        sequence: "Esc"
+        onActivated: root.close()
     }
 
-    contentItem: RowLayout {
+    ColumnLayout {
+        anchors.fill: parent
         spacing: 0
 
-        Pane {
-            Layout.fillHeight: true
-            Layout.preferredWidth: 210
-            padding: Kirigami.Units.smallSpacing
-
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: Kirigami.Units.smallSpacing
-
-                Label {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: Kirigami.Units.smallSpacing
-                    Layout.rightMargin: Kirigami.Units.smallSpacing
-                    Layout.topMargin: Kirigami.Units.smallSpacing
-                    text: "Settings"
-                    font.bold: true
-                    font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
-                    elide: Text.ElideRight
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: Kirigami.Units.smallSpacing
-                    Layout.rightMargin: Kirigami.Units.smallSpacing
-                    text: "Configure Artemis"
-                    opacity: 0.62
-                    font.pointSize: Kirigami.Theme.smallFont.pointSize
-                    elide: Text.ElideRight
-                }
-
-                Kirigami.Separator {
-                    Layout.fillWidth: true
-                    Layout.topMargin: Kirigami.Units.smallSpacing
-                }
-
-                ListView {
-                    id: settingsNavigation
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    currentIndex: 0
-                    spacing: 2
-                    model: ListModel {
-                        ListElement {
-                            title: "Models"
-                            subtitle: "Default choices"
-                            iconName: "applications-development"
-                        }
-                        ListElement {
-                            title: "MCP Servers"
-                            subtitle: "Tools and resources"
-                            iconName: "network-connect"
-                        }
-                        ListElement {
-                            title: "Applications"
-                            subtitle: "Open with"
-                            iconName: "applications-utilities"
-                        }
-                    }
-
-                    delegate: ItemDelegate {
-                        id: navigationDelegate
-                        required property int index
-                        required property string title
-                        required property string subtitle
-                        required property string iconName
-                        width: ListView.view.width
-                        height: 54
-                        highlighted: ListView.isCurrentItem
-                        leftPadding: Kirigami.Units.smallSpacing
-                        rightPadding: Kirigami.Units.smallSpacing
-                        topPadding: 0
-                        bottomPadding: 0
-                        onClicked: settingsNavigation.currentIndex = index
-
-                        background: Rectangle {
-                            radius: Kirigami.Units.smallSpacing
-                            color: navigationDelegate.highlighted
-                                   ? Qt.alpha(Kirigami.Theme.highlightColor, 0.17)
-                                   : navigationDelegate.hovered
-                                     ? Qt.alpha(Kirigami.Theme.textColor, 0.05)
-                                     : "transparent"
-                        }
-
-                        contentItem: RowLayout {
-                            spacing: Kirigami.Units.smallSpacing
-
-                            Kirigami.Icon {
-                                source: navigationDelegate.iconName
-                                color: navigationDelegate.highlighted
-                                       ? Kirigami.Theme.highlightColor
-                                       : Kirigami.Theme.textColor
-                                opacity: navigationDelegate.highlighted ? 1 : 0.72
-                                Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                                Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 0
-
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: navigationDelegate.title
-                                    font.bold: navigationDelegate.highlighted
-                                    elide: Text.ElideRight
-                                }
-
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: navigationDelegate.subtitle
-                                    opacity: 0.62
-                                    elide: Text.ElideRight
-                                    font.pointSize: Kirigami.Theme.smallFont.pointSize
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Kirigami.Separator {
-            Layout.preferredWidth: 1
-            Layout.fillHeight: true
-        }
-
-        ColumnLayout {
+        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
 
-            ToolBar {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 64
+            Pane {
+                Layout.fillHeight: true
+                Layout.preferredWidth: 210
+                padding: Kirigami.Units.smallSpacing
 
-                RowLayout {
+                ColumnLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: Kirigami.Units.largeSpacing
-                    anchors.rightMargin: Kirigami.Units.smallSpacing
                     spacing: Kirigami.Units.smallSpacing
 
-                    Kirigami.Icon {
-                        source: root.pageIcon(settingsNavigation.currentIndex)
-                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                        color: Kirigami.Theme.highlightColor
-                    }
-
-                    ColumnLayout {
+                    Label {
                         Layout.fillWidth: true
-                        spacing: 0
+                        Layout.leftMargin: Kirigami.Units.smallSpacing
+                        Layout.rightMargin: Kirigami.Units.smallSpacing
+                        Layout.topMargin: Kirigami.Units.smallSpacing
+                        text: "Settings"
+                        font.bold: true
+                        font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
+                        elide: Text.ElideRight
+                    }
 
-                        Label {
-                            Layout.fillWidth: true
-                            text: root.pageTitle(settingsNavigation.currentIndex)
-                            font.bold: true
-                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
-                            elide: Text.ElideRight
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Kirigami.Units.smallSpacing
+                        Layout.rightMargin: Kirigami.Units.smallSpacing
+                        text: "Configure Artemis"
+                        opacity: 0.62
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        elide: Text.ElideRight
+                    }
+
+                    Kirigami.Separator {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Kirigami.Units.smallSpacing
+                    }
+
+                    ListView {
+                        id: settingsNavigation
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        currentIndex: 0
+                        spacing: 2
+                        model: ListModel {
+                            ListElement {
+                                title: "Models"
+                                subtitle: "Default choices"
+                                iconName: "applications-development"
+                            }
+                            ListElement {
+                                title: "MCP Servers"
+                                subtitle: "Tools and resources"
+                                iconName: "network-connect"
+                            }
+                            ListElement {
+                                title: "Applications"
+                                subtitle: "Open with"
+                                iconName: "applications-utilities"
+                            }
                         }
 
-                        Label {
-                            Layout.fillWidth: true
-                            text: root.pageDescription(settingsNavigation.currentIndex)
-                            opacity: 0.64
-                            elide: Text.ElideRight
-                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        delegate: ItemDelegate {
+                            id: navigationDelegate
+                            required property int index
+                            required property string title
+                            required property string subtitle
+                            required property string iconName
+                            width: ListView.view.width
+                            height: 54
+                            highlighted: ListView.isCurrentItem
+                            leftPadding: Kirigami.Units.smallSpacing
+                            rightPadding: Kirigami.Units.smallSpacing
+                            topPadding: 0
+                            bottomPadding: 0
+                            onClicked: settingsNavigation.currentIndex = index
+
+                            background: Rectangle {
+                                radius: Kirigami.Units.smallSpacing
+                                color: navigationDelegate.highlighted
+                                       ? Qt.alpha(Kirigami.Theme.highlightColor, 0.17)
+                                       : navigationDelegate.hovered
+                                         ? Qt.alpha(Kirigami.Theme.textColor, 0.05)
+                                         : "transparent"
+                            }
+
+                            contentItem: RowLayout {
+                                spacing: Kirigami.Units.smallSpacing
+
+                                Kirigami.Icon {
+                                    source: navigationDelegate.iconName
+                                    color: navigationDelegate.highlighted
+                                           ? Kirigami.Theme.highlightColor
+                                           : Kirigami.Theme.textColor
+                                    opacity: navigationDelegate.highlighted ? 1 : 0.72
+                                    Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                                    Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 0
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: navigationDelegate.title
+                                        font.bold: navigationDelegate.highlighted
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: navigationDelegate.subtitle
+                                        opacity: 0.62
+                                        elide: Text.ElideRight
+                                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                    }
+                                }
+                            }
                         }
-                    }
-
-                    BusyIndicator {
-                        visible: settingsNavigation.currentIndex === 1
-                                 && root.controller.mcpBusy
-                        running: visible
-                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                    }
-
-                    ToolButton {
-                        visible: settingsNavigation.currentIndex === 1
-                        icon.name: "view-refresh"
-                        enabled: !root.controller.mcpBusy
-                        Accessible.name: "Refresh MCP servers"
-                        ToolTip.text: Accessible.name
-                        ToolTip.visible: hovered
-                        onClicked: root.controller.refreshMcpServers()
-                    }
-
-                    ToolButton {
-                        visible: settingsNavigation.currentIndex === 1
-                        icon.name: "system-reboot"
-                        enabled: !root.controller.mcpBusy
-                        Accessible.name: "Reload MCP configuration"
-                        ToolTip.text: Accessible.name
-                        ToolTip.visible: hovered
-                        onClicked: root.controller.reloadMcpServers()
                     }
                 }
             }
 
-            StackLayout {
+            Kirigami.Separator {
+                Layout.preferredWidth: 1
+                Layout.fillHeight: true
+            }
+
+            ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                currentIndex: settingsNavigation.currentIndex
+                spacing: 0
+
+                ToolBar {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 64
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Kirigami.Units.largeSpacing
+                        anchors.rightMargin: Kirigami.Units.smallSpacing
+                        spacing: Kirigami.Units.smallSpacing
+
+                        Kirigami.Icon {
+                            source: root.pageIcon(settingsNavigation.currentIndex)
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                            Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                            color: Kirigami.Theme.highlightColor
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: root.pageTitle(settingsNavigation.currentIndex)
+                                font.bold: true
+                                font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
+                                elide: Text.ElideRight
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: root.pageDescription(settingsNavigation.currentIndex)
+                                opacity: 0.64
+                                elide: Text.ElideRight
+                                font.pointSize: Kirigami.Theme.smallFont.pointSize
+                            }
+                        }
+
+                        BusyIndicator {
+                            visible: settingsNavigation.currentIndex === 1
+                                     && root.controller.mcpBusy
+                            running: visible
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                            Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                        }
+
+                        ToolButton {
+                            visible: settingsNavigation.currentIndex === 1
+                            icon.name: "view-refresh"
+                            enabled: !root.controller.mcpBusy
+                            Accessible.name: "Refresh MCP servers"
+                            ToolTip.text: Accessible.name
+                            ToolTip.visible: hovered
+                            onClicked: root.controller.refreshMcpServers()
+                        }
+
+                        ToolButton {
+                            visible: settingsNavigation.currentIndex === 1
+                            icon.name: "system-reboot"
+                            enabled: !root.controller.mcpBusy
+                            Accessible.name: "Reload MCP configuration"
+                            ToolTip.text: Accessible.name
+                            ToolTip.visible: hovered
+                            onClicked: root.controller.reloadMcpServers()
+                        }
+                    }
+                }
+
+                StackLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    currentIndex: settingsNavigation.currentIndex
 
                 ScrollView {
                     id: modelsPage
                     contentWidth: availableWidth
+                    background: Rectangle {
+                        color: Kirigami.Theme.backgroundColor
+                    }
 
                     ColumnLayout {
                         width: modelsPage.availableWidth
@@ -482,6 +487,9 @@ Dialog {
                 ScrollView {
                     id: mcpPage
                     contentWidth: availableWidth
+                    background: Rectangle {
+                        color: Kirigami.Theme.backgroundColor
+                    }
 
                     ColumnLayout {
                         width: mcpPage.availableWidth
@@ -723,6 +731,9 @@ Dialog {
                 ScrollView {
                     id: applicationsPage
                     contentWidth: availableWidth
+                    background: Rectangle {
+                        color: Kirigami.Theme.backgroundColor
+                    }
 
                     ColumnLayout {
                         width: applicationsPage.availableWidth
@@ -774,6 +785,55 @@ Dialog {
                             Layout.minimumHeight: Kirigami.Units.largeSpacing
                         }
                     }
+                }
+                }
+            }
+        }
+
+        Kirigami.Separator { Layout.fillWidth: true }
+
+        Pane {
+            Layout.fillWidth: true
+            padding: Kirigami.Units.smallSpacing
+
+            RowLayout {
+                anchors.fill: parent
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
+                    opacity: root.settingsApplied ? 1 : 0
+
+                    Behavior on opacity {
+                        NumberAnimation { duration: Kirigami.Units.shortDuration }
+                    }
+
+                    Kirigami.Icon {
+                        source: "dialog-ok-apply"
+                        color: Kirigami.Theme.positiveTextColor
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                    }
+
+                    Label {
+                        text: "Settings applied"
+                        color: Kirigami.Theme.positiveTextColor
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                Button {
+                    text: "Apply"
+                    icon.name: "dialog-ok-apply"
+                    onClicked: root.applyValues()
+                }
+
+                Button {
+                    text: "Cancel"
+                    icon.name: "dialog-cancel"
+                    onClicked: root.close()
                 }
             }
         }
