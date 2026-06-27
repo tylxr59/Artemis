@@ -254,8 +254,24 @@ private slots:
         QCOMPARE(controller.workingThreadIds(),
                  QStringList({QStringLiteral("thread-a"), QStringLiteral("thread-b")}));
 
+        emit provider.domainEvent(
+            QStringLiteral("thread-a"), QStringLiteral("command"),
+            QStringLiteral("Ran command"), QStringLiteral("background output"),
+            {{QStringLiteral("itemId"), QStringLiteral("command-a")}});
+
         controller.selectProjectThread(firstIndex, QStringLiteral("thread-a"));
         QVERIFY(controller.turnRunning());
+        QCOMPARE(controller.conversation()->rowCount(), 2);
+        QCOMPARE(controller.conversation()
+                     ->data(controller.conversation()->index(0),
+                            ConversationModel::ContentRole)
+                     .toString(),
+                 QStringLiteral("First task"));
+        QCOMPARE(controller.conversation()
+                     ->data(controller.conversation()->index(1),
+                            ConversationModel::ContentRole)
+                     .toString(),
+                 QStringLiteral("background output"));
         const int rowsBeforeForeignDelta = controller.conversation()->rowCount();
         emit provider.domainEvent(
             QStringLiteral("thread-b"), QStringLiteral("assistant"),

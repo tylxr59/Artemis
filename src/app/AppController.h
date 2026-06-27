@@ -204,6 +204,7 @@ private:
     void activateProject(int index, const QString &threadToSelect = {});
     void loadThreads(const QString &threadToSelect = {});
     void loadModels();
+    bool loadPersistedConversationEvents(const QString &threadId);
     void setStatus(const QString &text);
     void setTurnRunning(const QString &threadId, bool running);
     void markThreadViewed(const QString &threadId);

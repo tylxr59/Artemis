@@ -592,9 +592,11 @@ void AppController::loadThreads(const QString &threadToSelect)
                     m_selectedThread = i;
                     markThreadViewed(threadToSelect);
                     m_conversation.setThread(threadToSelect);
+                    loadPersistedConversationEvents(threadToSelect);
                     emit selectedThreadChanged();
                     emit turnRunningChanged();
                     emit turnElapsedChanged();
+                    emit tokenUsageChanged();
                     emit currentTasksChanged();
                     emit currentPlanChanged();
                 } else {
@@ -668,42 +670,8 @@ void AppController::selectThread(int index)
         }
         if (threadId != selectedThreadId())
             return;
-        QString databaseError;
-        const auto persistedEvents =
-            m_database.conversationEvents(threadId, &databaseError);
-        if (!databaseError.isEmpty()) {
-            setStatus(QStringLiteral("Could not load conversation history: %1")
-                          .arg(databaseError));
+        if (loadPersistedConversationEvents(threadId))
             return;
-        }
-        if (!persistedEvents.isEmpty()) {
-            for (const auto &stored : persistedEvents) {
-                const auto type = stored.value(QStringLiteral("type")).toString();
-                const auto content = stored.value(QStringLiteral("content")).toString();
-                const auto metadata = stored.value(QStringLiteral("metadata")).toMap();
-                if (type != QStringLiteral("plan") && type != QStringLiteral("task")) {
-                    m_conversation.append(
-                        {threadId,
-                         type,
-                         stored.value(QStringLiteral("title")).toString(),
-                         content,
-                         metadata});
-                }
-                if (type == QStringLiteral("plan")) {
-                    m_threadPlans.insert(threadId, metadata.value(QStringLiteral("plan")).toList());
-                    m_threadPlanExplanations.insert(
-                        threadId, metadata.value(QStringLiteral("explanation")).toString());
-                } else if (type == QStringLiteral("task")) {
-                    m_threadTasks.insert(threadId, content);
-                } else if (type == QStringLiteral("diff")) {
-                    m_diff = content;
-                }
-            }
-            emit currentTasksChanged();
-            emit currentPlanChanged();
-            emit diffChanged();
-            return;
-        }
         const auto thread = result.value(QStringLiteral("thread")).toObject();
         for (const auto &turnValue : thread.value(QStringLiteral("turns")).toArray()) {
             const auto turn = turnValue.toObject();
@@ -754,6 +722,47 @@ void AppController::selectThread(int index)
         }
         emit currentTasksChanged();
     });
+}
+
+bool AppController::loadPersistedConversationEvents(const QString &threadId)
+{
+    if (threadId.isEmpty() || threadId != selectedThreadId())
+        return false;
+
+    QString databaseError;
+    const auto persistedEvents = m_database.conversationEvents(threadId, &databaseError);
+    if (!databaseError.isEmpty()) {
+        setStatus(QStringLiteral("Could not load conversation history: %1").arg(databaseError));
+        return false;
+    }
+    if (persistedEvents.isEmpty())
+        return false;
+
+    for (const auto &stored : persistedEvents) {
+        const auto type = stored.value(QStringLiteral("type")).toString();
+        const auto content = stored.value(QStringLiteral("content")).toString();
+        const auto metadata = stored.value(QStringLiteral("metadata")).toMap();
+        if (type != QStringLiteral("plan") && type != QStringLiteral("task")) {
+            m_conversation.append({threadId,
+                                   type,
+                                   stored.value(QStringLiteral("title")).toString(),
+                                   content,
+                                   metadata});
+        }
+        if (type == QStringLiteral("plan")) {
+            m_threadPlans.insert(threadId, metadata.value(QStringLiteral("plan")).toList());
+            m_threadPlanExplanations.insert(
+                threadId, metadata.value(QStringLiteral("explanation")).toString());
+        } else if (type == QStringLiteral("task")) {
+            m_threadTasks.insert(threadId, content);
+        } else if (type == QStringLiteral("diff")) {
+            m_diff = content;
+        }
+    }
+    emit currentTasksChanged();
+    emit currentPlanChanged();
+    emit diffChanged();
+    return true;
 }
 
 PermissionProfile AppController::permissionProfile(const QString &mode) const
