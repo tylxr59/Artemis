@@ -23,6 +23,7 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     void setThread(const QString &threadId);
+    void resetThread(const QString &threadId);
     void append(const ConversationEvent &event);
     void appendOrMergeDelta(const ConversationEvent &event);
     void clear();

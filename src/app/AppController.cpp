@@ -735,6 +735,7 @@ bool AppController::loadPersistedConversationEvents(const QString &threadId)
         setStatus(QStringLiteral("Could not load conversation history: %1").arg(databaseError));
         return false;
     }
+    m_conversation.resetThread(threadId);
     if (persistedEvents.isEmpty())
         return false;
 

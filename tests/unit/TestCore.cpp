@@ -303,6 +303,50 @@ private slots:
         QVERIFY(controller.turnRunning());
     }
 
+    void persistedConversationReloadDoesNotDuplicateRows()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const auto projectPath = root.filePath(QStringLiteral("reload-project"));
+        QVERIFY(QDir().mkpath(projectPath));
+        const auto threadId = QStringLiteral("reload-thread-%1").arg(
+            QUuid::createUuid().toString(QUuid::WithoutBraces));
+
+        FakeAgentProvider provider;
+        provider.availableThreads.insert(
+            projectPath,
+            QJsonArray{QJsonObject{
+                {QStringLiteral("id"), threadId},
+                {QStringLiteral("name"), QStringLiteral("Reload thread")},
+                {QStringLiteral("cwd"), projectPath}}});
+
+        AppController controller(&provider);
+        QVERIFY(controller.initialize());
+        controller.addProject(projectPath);
+        const int projectIndex = controller.selectedProjectIndex();
+        QVERIFY(projectIndex >= 0);
+
+        controller.selectProjectThread(projectIndex, threadId);
+        QCOMPARE(controller.selectedThreadId(), threadId);
+        QVERIFY(controller.sendPrompt(
+            QStringLiteral("First task"), {}, QStringLiteral("test-model"), {},
+            QStringLiteral("full-access"), QStringLiteral("default")));
+        QCOMPARE(controller.conversation()->rowCount(), 1);
+        QCOMPARE(controller.conversation()
+                     ->data(controller.conversation()->index(0),
+                            ConversationModel::ContentRole)
+                     .toString(),
+                 QStringLiteral("First task"));
+
+        controller.selectProjectThread(projectIndex, threadId);
+        QCOMPARE(controller.conversation()->rowCount(), 1);
+        QCOMPARE(controller.conversation()
+                     ->data(controller.conversation()->index(0),
+                            ConversationModel::ContentRole)
+                     .toString(),
+                 QStringLiteral("First task"));
+    }
+
     void gitRepositoryDetection()
     {
         QTemporaryDir directory;

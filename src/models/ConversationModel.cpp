@@ -33,6 +33,11 @@ void ConversationModel::setThread(const QString &threadId)
 {
     if (threadId == m_threadId)
         return;
+    resetThread(threadId);
+}
+
+void ConversationModel::resetThread(const QString &threadId)
+{
     beginResetModel();
     m_threadId = threadId;
     m_events.clear();
