@@ -8,7 +8,7 @@ Window {
     id: root
     required property var controller
     property bool settingsApplied: false
-    title: "Settings - Artemis"
+    title: "Configure - Artemis"
     visible: false
     modality: Qt.NonModal
     width: 920
@@ -193,46 +193,25 @@ Window {
 
             Pane {
                 Layout.fillHeight: true
-                Layout.preferredWidth: 210
+                Layout.preferredWidth: 132
                 padding: Kirigami.Units.smallSpacing
+
+                background: Rectangle {
+                    color: Kirigami.Theme.alternateBackgroundColor
+                }
 
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: Kirigami.Units.smallSpacing
-
-                    Label {
-                        Layout.fillWidth: true
-                        Layout.leftMargin: Kirigami.Units.smallSpacing
-                        Layout.rightMargin: Kirigami.Units.smallSpacing
-                        Layout.topMargin: Kirigami.Units.smallSpacing
-                        text: "Settings"
-                        font.bold: true
-                        font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
-                        elide: Text.ElideRight
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        Layout.leftMargin: Kirigami.Units.smallSpacing
-                        Layout.rightMargin: Kirigami.Units.smallSpacing
-                        text: "Configure Artemis"
-                        opacity: 0.62
-                        font.pointSize: Kirigami.Theme.smallFont.pointSize
-                        elide: Text.ElideRight
-                    }
-
-                    Kirigami.Separator {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Kirigami.Units.smallSpacing
-                    }
+                    spacing: 0
 
                     ListView {
                         id: settingsNavigation
                         Layout.fillWidth: true
                         Layout.fillHeight: true
+                        Layout.topMargin: Kirigami.Units.smallSpacing
                         clip: true
                         currentIndex: 0
-                        spacing: 2
+                        spacing: Kirigami.Units.smallSpacing
                         model: ListModel {
                             ListElement {
                                 title: "Models"
@@ -258,13 +237,15 @@ Window {
                             required property string subtitle
                             required property string iconName
                             width: ListView.view.width
-                            height: 54
+                            height: 72
                             highlighted: ListView.isCurrentItem
                             leftPadding: Kirigami.Units.smallSpacing
                             rightPadding: Kirigami.Units.smallSpacing
-                            topPadding: 0
-                            bottomPadding: 0
+                            topPadding: Kirigami.Units.smallSpacing
+                            bottomPadding: Kirigami.Units.smallSpacing
                             onClicked: settingsNavigation.currentIndex = index
+                            ToolTip.text: navigationDelegate.subtitle
+                            ToolTip.visible: hovered && navigationDelegate.subtitle.length > 0
 
                             background: Rectangle {
                                 radius: Kirigami.Units.smallSpacing
@@ -275,37 +256,26 @@ Window {
                                          : "transparent"
                             }
 
-                            contentItem: RowLayout {
-                                spacing: Kirigami.Units.smallSpacing
+                            contentItem: ColumnLayout {
+                                spacing: 2
 
                                 Kirigami.Icon {
+                                    Layout.alignment: Qt.AlignHCenter
                                     source: navigationDelegate.iconName
                                     color: navigationDelegate.highlighted
                                            ? Kirigami.Theme.highlightColor
                                            : Kirigami.Theme.textColor
                                     opacity: navigationDelegate.highlighted ? 1 : 0.72
-                                    Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                                    Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                                    Layout.preferredWidth: Kirigami.Units.iconSizes.medium
+                                    Layout.preferredHeight: Kirigami.Units.iconSizes.medium
                                 }
 
-                                ColumnLayout {
+                                Label {
                                     Layout.fillWidth: true
-                                    spacing: 0
-
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: navigationDelegate.title
-                                        font.bold: navigationDelegate.highlighted
-                                        elide: Text.ElideRight
-                                    }
-
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: navigationDelegate.subtitle
-                                        opacity: 0.62
-                                        elide: Text.ElideRight
-                                        font.pointSize: Kirigami.Theme.smallFont.pointSize
-                                    }
+                                    text: navigationDelegate.title
+                                    horizontalAlignment: Text.AlignHCenter
+                                    font.bold: navigationDelegate.highlighted
+                                    elide: Text.ElideRight
                                 }
                             }
                         }
@@ -325,7 +295,7 @@ Window {
 
                 ToolBar {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 64
+                    Layout.preferredHeight: 38
 
                     RowLayout {
                         anchors.fill: parent
@@ -333,32 +303,11 @@ Window {
                         anchors.rightMargin: Kirigami.Units.smallSpacing
                         spacing: Kirigami.Units.smallSpacing
 
-                        Kirigami.Icon {
-                            source: root.pageIcon(settingsNavigation.currentIndex)
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                            Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                            color: Kirigami.Theme.highlightColor
-                        }
-
-                        ColumnLayout {
+                        Label {
                             Layout.fillWidth: true
-                            spacing: 0
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: root.pageTitle(settingsNavigation.currentIndex)
-                                font.bold: true
-                                font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
-                                elide: Text.ElideRight
-                            }
-
-                            Label {
-                                Layout.fillWidth: true
-                                text: root.pageDescription(settingsNavigation.currentIndex)
-                                opacity: 0.64
-                                elide: Text.ElideRight
-                                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                            }
+                            text: root.pageTitle(settingsNavigation.currentIndex)
+                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 4
+                            elide: Text.ElideRight
                         }
 
                         BusyIndicator {
@@ -825,6 +774,16 @@ Window {
                 Item { Layout.fillWidth: true }
 
                 Button {
+                    text: "OK"
+                    icon.name: "dialog-ok"
+                    onClicked: {
+                        root.applyValues()
+                        if (root.settingsApplied)
+                            root.close()
+                    }
+                }
+
+                Button {
                     text: "Apply"
                     icon.name: "dialog-ok-apply"
                     onClicked: root.applyValues()
@@ -839,56 +798,47 @@ Window {
         }
     }
 
-    component SectionFrame: Frame {
+    component SectionFrame: ColumnLayout {
         id: sectionFrame
         property string title
         property string subtitle: ""
         default property alias content: contentArea.data
         Layout.fillWidth: true
-        padding: 0
+        spacing: Kirigami.Units.smallSpacing
 
-        background: Rectangle {
-            color: Kirigami.Theme.backgroundColor
-            border.color: Qt.alpha(Kirigami.Theme.textColor, 0.16)
-            radius: Kirigami.Units.smallSpacing
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 2
+
+            Label {
+                Layout.fillWidth: true
+                text: sectionFrame.title
+                textFormat: Text.PlainText
+                font.bold: true
+                font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
+                elide: Text.ElideRight
+            }
+
+            Label {
+                Layout.fillWidth: true
+                visible: sectionFrame.subtitle.length > 0
+                text: sectionFrame.subtitle
+                textFormat: Text.PlainText
+                opacity: 0.64
+                wrapMode: Text.Wrap
+                font.pointSize: Kirigami.Theme.smallFont.pointSize
+            }
         }
 
-        contentItem: ColumnLayout {
-            spacing: 0
+        Kirigami.Separator { Layout.fillWidth: true }
 
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.margins: Kirigami.Units.largeSpacing
-                spacing: 2
-
-                Label {
-                    Layout.fillWidth: true
-                    text: sectionFrame.title
-                    textFormat: Text.PlainText
-                    font.bold: true
-                    font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
-                    elide: Text.ElideRight
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    visible: sectionFrame.subtitle.length > 0
-                    text: sectionFrame.subtitle
-                    textFormat: Text.PlainText
-                    opacity: 0.64
-                    wrapMode: Text.Wrap
-                    font.pointSize: Kirigami.Theme.smallFont.pointSize
-                }
-            }
-
-            Kirigami.Separator { Layout.fillWidth: true }
-
-            ColumnLayout {
-                id: contentArea
-                Layout.fillWidth: true
-                Layout.margins: Kirigami.Units.largeSpacing
-                spacing: Kirigami.Units.largeSpacing
-            }
+        ColumnLayout {
+            id: contentArea
+            Layout.fillWidth: true
+            Layout.topMargin: Kirigami.Units.smallSpacing
+            Layout.leftMargin: Kirigami.Units.largeSpacing * 2
+            Layout.rightMargin: Kirigami.Units.largeSpacing * 2
+            spacing: Kirigami.Units.largeSpacing
         }
     }
 
