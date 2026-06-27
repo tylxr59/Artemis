@@ -75,6 +75,8 @@ ScrollView {
         const value = status || ""
         if (value === "notLoggedIn")
             return "Not logged in"
+        if (value === "unsupported")
+            return "Local"
         if (value.length === 0)
             return "Unknown"
         return value.charAt(0).toUpperCase() + value.slice(1)

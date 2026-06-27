@@ -116,6 +116,8 @@ Window {
         const value = status || ""
         if (value === "notLoggedIn")
             return "Not logged in"
+        if (value === "unsupported")
+            return "Local"
         if (value.length === 0)
             return "Unknown"
         return value.charAt(0).toUpperCase() + value.slice(1)
@@ -580,6 +582,7 @@ Window {
 
                                                 ToolButton {
                                                     icon.name: "dialog-password"
+                                                    visible: mcpServerRow.modelData.authStatus === "notLoggedIn"
                                                     enabled: !root.controller.mcpBusy
                                                     Accessible.name: "Log in to MCP server"
                                                     ToolTip.text: Accessible.name
