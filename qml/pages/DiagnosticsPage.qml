@@ -6,6 +6,7 @@ import org.kde.kirigami as Kirigami
 ScrollView {
     id: root
     required property var controller
+    contentWidth: availableWidth
 
     function connectionText() {
         if (controller.providerSetupRequired)
@@ -21,155 +22,104 @@ ScrollView {
         return Kirigami.Theme.negativeTextColor
     }
 
+    function statusText() {
+        if (controller.providerSetupRequired)
+            return controller.providerSetupInstructions
+        if (controller.mcpIssueText.length > 0)
+            return controller.mcpIssueText
+        if (controller.providerIssueText.length > 0)
+            return controller.providerIssueText
+        if (controller.statusText.length > 0)
+            return controller.statusText
+        return "No current issues."
+    }
+
     ColumnLayout {
         width: root.availableWidth
         spacing: Kirigami.Units.largeSpacing
 
-        RowLayout {
+        Pane {
             Layout.fillWidth: true
-            spacing: Kirigami.Units.largeSpacing
+            padding: Kirigami.Units.largeSpacing
 
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
+            RowLayout {
+                anchors.fill: parent
+                spacing: Kirigami.Units.largeSpacing
 
-                Label {
-                    text: "Diagnostics"
-                    font.bold: true
-                    font.pointSize: Kirigami.Theme.defaultFont.pointSize + 8
+                Kirigami.Icon {
+                    source: controller.providerReady
+                            ? "network-connect" : "network-disconnect"
+                    color: root.connectionColor()
+                    Layout.preferredWidth: Kirigami.Units.iconSizes.medium
+                    Layout.preferredHeight: Kirigami.Units.iconSizes.medium
                 }
-                Label {
-                    Layout.fillWidth: true
-                    text: "Runtime, provider, project, and integration state."
-                    opacity: 0.62
-                    wrapMode: Text.Wrap
-                }
-            }
-
-            Button {
-                text: "Refresh MCP"
-                icon.name: "view-refresh"
-                enabled: controller.providerReady && !controller.mcpBusy
-                onClicked: controller.refreshMcpServers()
-            }
-        }
-
-        GridLayout {
-            Layout.fillWidth: true
-            columns: width < 760 ? 1 : 3
-            columnSpacing: Kirigami.Units.largeSpacing
-            rowSpacing: Kirigami.Units.largeSpacing
-
-            Frame {
-                Layout.fillWidth: true
-                padding: Kirigami.Units.largeSpacing
 
                 ColumnLayout {
-                    anchors.fill: parent
-                    spacing: Kirigami.Units.smallSpacing
+                    Layout.fillWidth: true
+                    spacing: 0
 
-                    RowLayout {
+                    Label {
                         Layout.fillWidth: true
-                        Kirigami.Icon {
-                            source: controller.providerReady
-                                    ? "network-connect" : "network-disconnect"
-                            color: root.connectionColor()
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.medium
-                            Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-                        }
-                        Label {
-                            text: root.connectionText()
-                            color: root.connectionColor()
-                            font.bold: true
-                        }
+                        text: root.connectionText()
+                        color: root.connectionColor()
+                        font.bold: true
+                        font.pointSize: Kirigami.Theme.defaultFont.pointSize + 3
                     }
 
                     Label {
                         Layout.fillWidth: true
                         text: controller.providerVersion || "Codex not detected"
                         wrapMode: Text.WrapAnywhere
-                        opacity: 0.74
+                        opacity: 0.68
                     }
                 }
+
+                Button {
+                    text: "Refresh MCP"
+                    icon.name: "view-refresh"
+                    enabled: controller.providerReady && !controller.mcpBusy
+                    onClicked: controller.refreshMcpServers()
+                }
             }
+        }
 
-            Frame {
+        GridLayout {
+            Layout.fillWidth: true
+            columns: width < 720 ? 1 : 2
+            columnSpacing: Kirigami.Units.largeSpacing
+            rowSpacing: Kirigami.Units.largeSpacing
+
+            DiagnosticsSection {
                 Layout.fillWidth: true
-                padding: Kirigami.Units.largeSpacing
+                title: "Runtime"
 
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: Kirigami.Units.smallSpacing
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: 2
+                    columnSpacing: Kirigami.Units.largeSpacing
+                    rowSpacing: Kirigami.Units.smallSpacing
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Kirigami.Icon {
-                            source: "database"
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.medium
-                            Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-                            opacity: 0.75
-                        }
-                        Label {
-                            text: "Storage"
-                            font.bold: true
-                        }
-                    }
-
+                    Label { text: "Storage"; opacity: 0.62 }
                     Label {
                         Layout.fillWidth: true
                         text: controller.databasePath
                         wrapMode: Text.WrapAnywhere
-                        opacity: 0.74
-                    }
-                }
-            }
-
-            Frame {
-                Layout.fillWidth: true
-                padding: Kirigami.Units.largeSpacing
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: Kirigami.Units.smallSpacing
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Kirigami.Icon {
-                            source: "network-server"
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.medium
-                            Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-                            opacity: 0.75
-                        }
-                        Label {
-                            text: "MCP"
-                            font.bold: true
-                        }
                     }
 
+                    Label { text: "MCP"; opacity: 0.62 }
                     Label {
                         Layout.fillWidth: true
                         text: controller.mcpBusy
                               ? "Refreshing servers"
                               : controller.mcpServers.length + " servers configured"
-                        opacity: 0.74
+                        wrapMode: Text.Wrap
                     }
                 }
             }
-        }
 
-        Frame {
-            Layout.fillWidth: true
-            padding: Kirigami.Units.largeSpacing
-
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: Kirigami.Units.largeSpacing
-
-                Label {
-                    text: "Current Context"
-                    font.bold: true
-                    font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
-                }
+            DiagnosticsSection {
+                Layout.fillWidth: true
+                title: "Current Context"
 
                 GridLayout {
                     Layout.fillWidth: true
@@ -202,87 +152,116 @@ ScrollView {
             }
         }
 
-        Frame {
+        DiagnosticsSection {
             Layout.fillWidth: true
-            padding: Kirigami.Units.largeSpacing
-            visible: controller.mcpServers.length > 0
+            title: "MCP Servers"
+
+            Label {
+                Layout.fillWidth: true
+                visible: controller.mcpServers.length === 0
+                text: "No MCP servers configured."
+                opacity: 0.62
+            }
 
             ColumnLayout {
-                anchors.fill: parent
-                spacing: Kirigami.Units.smallSpacing
-
-                Label {
-                    text: "MCP Servers"
-                    font.bold: true
-                    font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
-                }
+                Layout.fillWidth: true
+                spacing: 0
 
                 Repeater {
                     model: controller.mcpServers
 
-                    delegate: RowLayout {
+                    delegate: ColumnLayout {
                         id: mcpRow
                         required property var modelData
                         Layout.fillWidth: true
                         spacing: Kirigami.Units.smallSpacing
 
-                        Kirigami.Icon {
-                            source: mcpRow.modelData.authStatus === "notLoggedIn"
-                                    ? "emblem-warning" : "dialog-ok-apply"
-                            color: mcpRow.modelData.authStatus === "notLoggedIn"
-                                   ? Kirigami.Theme.neutralTextColor
-                                   : Kirigami.Theme.positiveTextColor
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.small
-                            Layout.preferredHeight: Kirigami.Units.iconSizes.small
-                        }
-                        Label {
+                        RowLayout {
                             Layout.fillWidth: true
-                            text: (mcpRow.modelData.title || mcpRow.modelData.name)
-                                  + " · "
-                                  + mcpRow.modelData.toolCount
-                                  + " tools · "
-                                  + mcpRow.modelData.authStatus
-                            elide: Text.ElideRight
+                            Layout.topMargin: Kirigami.Units.smallSpacing
+                            Layout.bottomMargin: Kirigami.Units.smallSpacing
+                            spacing: Kirigami.Units.smallSpacing
+
+                            Kirigami.Icon {
+                                source: mcpRow.modelData.authStatus === "notLoggedIn"
+                                        ? "emblem-warning" : "dialog-ok-apply"
+                                color: mcpRow.modelData.authStatus === "notLoggedIn"
+                                       ? Kirigami.Theme.neutralTextColor
+                                       : Kirigami.Theme.positiveTextColor
+                                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 0
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: mcpRow.modelData.title || mcpRow.modelData.name
+                                    textFormat: Text.PlainText
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: mcpRow.modelData.name
+                                          + " · "
+                                          + mcpRow.modelData.toolCount
+                                          + " tools · "
+                                          + mcpRow.modelData.resourceCount
+                                          + " resources · "
+                                          + mcpRow.modelData.authStatus
+                                    textFormat: Text.PlainText
+                                    opacity: 0.62
+                                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                    elide: Text.ElideRight
+                                }
+                            }
                         }
+
+                        Separator {}
                     }
                 }
             }
         }
 
-        Frame {
+        DiagnosticsSection {
             Layout.fillWidth: true
-            padding: Kirigami.Units.largeSpacing
-            visible: controller.providerSetupRequired
-                     || controller.providerIssueText.length > 0
-                     || controller.mcpIssueText.length > 0
-                     || controller.statusText.length > 0
+            Layout.bottomMargin: Kirigami.Units.largeSpacing
+            title: "Latest Status"
 
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: Kirigami.Units.smallSpacing
-
-                Label {
-                    text: "Latest Status"
-                    font.bold: true
-                    font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
-                }
-                Label {
-                    Layout.fillWidth: true
-                    text: controller.providerSetupRequired
-                          ? controller.providerSetupInstructions
-                          : controller.mcpIssueText.length > 0
-                            ? controller.mcpIssueText
-                            : controller.providerIssueText.length > 0
-                              ? controller.providerIssueText
-                              : controller.statusText
-                    wrapMode: Text.Wrap
-                    color: controller.providerIssueText.length > 0
-                           || controller.mcpIssueText.length > 0
-                           ? Kirigami.Theme.negativeTextColor
-                           : Kirigami.Theme.textColor
-                    opacity: 0.86
-                }
+            Label {
+                Layout.fillWidth: true
+                text: root.statusText()
+                wrapMode: Text.Wrap
+                color: controller.providerIssueText.length > 0
+                       || controller.mcpIssueText.length > 0
+                       ? Kirigami.Theme.negativeTextColor
+                       : Kirigami.Theme.textColor
+                opacity: 0.86
             }
         }
+    }
+
+    component DiagnosticsSection: ColumnLayout {
+        property string title
+        spacing: Kirigami.Units.smallSpacing
+
+        Label {
+            Layout.fillWidth: true
+            text: title
+            font.bold: true
+        }
+
+        Separator {}
+    }
+
+    component Separator: Rectangle {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 1
+        color: Kirigami.Theme.disabledTextColor
+        opacity: 0.25
     }
 }

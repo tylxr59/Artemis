@@ -1566,7 +1566,7 @@ Kirigami.ApplicationWindow {
         id: diagnosticsDialog
         title: "Diagnostics"
         modal: true
-        width: Math.min(root.width - 40, 680)
+        width: Math.min(root.width - 40, 760)
         height: Math.min(root.height - 40, 560)
         anchors.centerIn: parent
         contentItem: DiagnosticsPage { controller: appController }
