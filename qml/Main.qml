@@ -847,6 +847,7 @@ Kirigami.ApplicationWindow {
                         property bool followTail: true
                         property bool tailScrollPending: false
                         property bool followUpdatePending: false
+                        property bool layoutRefreshPending: false
                         readonly property real tailThreshold:
                             Kirigami.Units.gridUnit * 2
                         readonly property real distanceFromEnd: Math.max(
@@ -889,6 +890,17 @@ Kirigami.ApplicationWindow {
                             followTail = true
                             positionViewAtEnd()
                             scrollToEndIfFollowing()
+                        }
+
+                        function refreshLayoutLater() {
+                            if (layoutRefreshPending)
+                                return
+                            layoutRefreshPending = true
+                            Qt.callLater(function() {
+                                conversationList.layoutRefreshPending = false
+                                conversationList.forceLayout()
+                                conversationList.scrollToEndIfFollowing()
+                            })
                         }
 
                         anchors.fill: parent
@@ -955,6 +967,7 @@ Kirigami.ApplicationWindow {
                                 content: conversationRow.content
                                 metadata: conversationRow.metadata
                                 onImageOpenRequested: path => imageViewer.showImage(path)
+                                onContentLayoutChanged: conversationList.refreshLayoutLater()
                             }
                         }
                         onCountChanged: scrollToEndIfFollowing()

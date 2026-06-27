@@ -12,6 +12,7 @@ Item {
     required property string content
     required property var metadata
     signal imageOpenRequested(string path)
+    signal contentLayoutChanged()
 
     readonly property bool isTool: eventType === "command" || eventType === "file"
                                   || eventType === "mcp"
@@ -27,6 +28,8 @@ Item {
     }
 
     implicitHeight: card.implicitHeight
+    onImplicitHeightChanged: contentLayoutChanged()
+    onContentChanged: contentLayoutChanged()
 
     Rectangle {
         id: card
@@ -326,6 +329,8 @@ Item {
                 selectByMouse: true
                 background: null
                 font.family: Kirigami.Theme.defaultFont.family
+                onContentHeightChanged: root.contentLayoutChanged()
+                onImplicitHeightChanged: root.contentLayoutChanged()
                 onLinkActivated: function(link) {
                     Qt.openUrlExternally(link)
                 }
