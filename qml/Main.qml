@@ -250,7 +250,8 @@ Kirigami.ApplicationWindow {
                 visible: !root.navigationVisible
                 text: "☰"
                 Accessible.name: "Projects"
-                onClicked: navigationDrawer.open()
+                onClicked: navigationDrawer.visible ? navigationDrawer.close()
+                                                    : navigationDrawer.open()
             }
             Label {
                 text: appController.selectedThreadTitle.length > 0
@@ -371,43 +372,9 @@ Kirigami.ApplicationWindow {
         }
     }
 
-    Drawer {
-        id: navigationDrawer
-        width: Math.min(root.width * 0.82, 340)
-        height: root.height
-        edge: Qt.LeftEdge
-        modal: true
-        contentItem: navigationPane
-    }
-
-    RowLayout {
-        anchors.fill: parent
-        spacing: 0
-
-        SplitView {
-            id: workspaceSplit
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            orientation: Qt.Horizontal
-
-            handle: Rectangle {
-                implicitWidth: root.splitHandleWidth
-                color: SplitHandle.pressed
-                       ? Kirigami.Theme.highlightColor
-                       : SplitHandle.hovered
-                         ? Qt.alpha(Kirigami.Theme.highlightColor, 0.55)
-                         : Qt.alpha(Kirigami.Theme.textColor, 0.18)
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: 1
-                    height: parent.height
-                    color: Kirigami.Theme.textColor
-                    opacity: 0.28
-                }
-            }
-
-            Pane {
+    Component {
+        id: navigationPaneComponent
+        Pane {
             id: navigationPane
             readonly property real projectRowHeight: 36
             readonly property real threadRowHeight: 34
@@ -415,11 +382,6 @@ Kirigami.ApplicationWindow {
             readonly property real horizontalInset: Kirigami.Units.smallSpacing
             readonly property real threadIndent: Kirigami.Units.gridUnit * 2
             readonly property real rowRadius: 5
-            visible: root.navigationVisible || navigationDrawer.visible
-            SplitView.preferredWidth: 310
-            SplitView.minimumWidth: root.navigationVisible
-                                    ? root.navigationMinimumWidth : 0
-            SplitView.maximumWidth: root.navigationVisible ? 480 : 0
             padding: Kirigami.Units.largeSpacing
             clip: true
 
@@ -444,6 +406,17 @@ Kirigami.ApplicationWindow {
                         Layout.preferredHeight: 32
                         onClicked: appController.chooseProjectFolder()
                         Accessible.name: "Add project folder"
+                        ToolTip.text: Accessible.name
+                        ToolTip.visible: hovered
+                    }
+                    ToolButton {
+                        flat: true
+                        visible: !root.navigationVisible
+                        icon.name: "window-close"
+                        Layout.preferredWidth: 32
+                        Layout.preferredHeight: 32
+                        onClicked: navigationDrawer.close()
+                        Accessible.name: "Close projects"
                         ToolTip.text: Accessible.name
                         ToolTip.visible: hovered
                     }
@@ -801,6 +774,57 @@ Kirigami.ApplicationWindow {
                 }
             }
         }
+    }
+
+    Drawer {
+        id: navigationDrawer
+        width: Math.min(root.width * 0.82, 340)
+        height: root.height
+        edge: Qt.LeftEdge
+        modal: true
+        contentItem: Loader {
+            active: navigationDrawer.visible
+            sourceComponent: navigationPaneComponent
+        }
+    }
+
+    RowLayout {
+        anchors.fill: parent
+        spacing: 0
+
+        SplitView {
+            id: workspaceSplit
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            orientation: Qt.Horizontal
+
+            handle: Rectangle {
+                implicitWidth: root.splitHandleWidth
+                color: SplitHandle.pressed
+                       ? Kirigami.Theme.highlightColor
+                       : SplitHandle.hovered
+                         ? Qt.alpha(Kirigami.Theme.highlightColor, 0.55)
+                         : Qt.alpha(Kirigami.Theme.textColor, 0.18)
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 1
+                    height: parent.height
+                    color: Kirigami.Theme.textColor
+                    opacity: 0.28
+                }
+            }
+
+            Loader {
+                id: navigationPaneHost
+                visible: root.navigationVisible
+                active: root.navigationVisible
+                sourceComponent: navigationPaneComponent
+                SplitView.preferredWidth: 310
+                SplitView.minimumWidth: root.navigationVisible
+                                        ? root.navigationMinimumWidth : 0
+                SplitView.maximumWidth: root.navigationVisible ? 480 : 0
+            }
 
             Pane {
             id: conversationPane
