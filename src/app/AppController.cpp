@@ -84,6 +84,33 @@ QString elapsedText(qint64 elapsedMilliseconds)
     return QStringLiteral("%1s").arg(seconds);
 }
 
+QString boundedDisplayText(const QString &text, const QString &label)
+{
+    constexpr qsizetype maxCharacters = 524288;
+    if (text.size() <= maxCharacters)
+        return text;
+    return text.left(maxCharacters)
+        + QStringLiteral(
+            "\n\n[Artemis truncated this %1 before displaying it. "
+            "Open the repository in a terminal or editor to inspect the remaining changes.]\n")
+              .arg(label);
+}
+
+QString boundedEventContent(const QString &type, const QString &content)
+{
+    if (type == QStringLiteral("diff"))
+        return boundedDisplayText(content, QStringLiteral("diff"));
+    if (type == QStringLiteral("file"))
+        return boundedDisplayText(content, QStringLiteral("file change"));
+    if (type == QStringLiteral("command"))
+        return boundedDisplayText(content, QStringLiteral("command output"));
+    if (type == QStringLiteral("mcp"))
+        return boundedDisplayText(content, QStringLiteral("MCP output"));
+    if (type == QStringLiteral("reasoning"))
+        return boundedDisplayText(content, QStringLiteral("reasoning item"));
+    return content;
+}
+
 bool removeOrphanedAttachments(const Database &database, QString *error)
 {
     const auto referenced = database.referencedAttachmentPaths(error);
@@ -741,7 +768,8 @@ bool AppController::loadPersistedConversationEvents(const QString &threadId)
 
     for (const auto &stored : persistedEvents) {
         const auto type = stored.value(QStringLiteral("type")).toString();
-        const auto content = stored.value(QStringLiteral("content")).toString();
+        const auto content = boundedEventContent(
+            type, stored.value(QStringLiteral("content")).toString());
         const auto metadata = stored.value(QStringLiteral("metadata")).toMap();
         if (type != QStringLiteral("plan") && type != QStringLiteral("task")) {
             m_conversation.append({threadId,
@@ -1162,7 +1190,8 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
         }
         return;
     }
-    ConversationEvent event{threadId, type, title, content, metadata};
+    ConversationEvent event{threadId, type, title, boundedEventContent(type, content),
+                            metadata};
     if (type == QStringLiteral("status") && content == QStringLiteral("completed")) {
         const auto activeTurn = m_activeTurns.constFind(threadId);
         const auto elapsed = activeTurn == m_activeTurns.cend()
@@ -1217,7 +1246,7 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
         m_conversation.append(event);
     if (type == QStringLiteral("diff")) {
         if (threadId == selectedThreadId()) {
-            m_diff = content;
+            m_diff = event.content;
             emit diffChanged();
         }
     }
@@ -1257,7 +1286,9 @@ void AppController::refreshGit()
     m_git.diff(path, [this, path](const GitResult &result) {
         if (path != selectedWorkspacePath())
             return;
-        m_diff = result.ok() ? QString::fromUtf8(result.output) : QString::fromUtf8(result.error);
+        m_diff = result.ok() ? boundedDisplayText(QString::fromUtf8(result.output),
+                                                  QStringLiteral("diff"))
+                             : QString::fromUtf8(result.error);
         emit diffChanged();
     });
     m_git.remoteUrl(path, QStringLiteral("origin"), [this, path](const GitResult &result) {

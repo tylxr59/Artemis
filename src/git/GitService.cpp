@@ -43,7 +43,8 @@ GitResult GitService::runSync(const QString &cwd, const QStringList &arguments,
 }
 
 void GitService::run(const QString &cwd, const QStringList &arguments, Handler handler,
-                     const QProcessEnvironment &environment, int timeoutMs)
+                     const QProcessEnvironment &environment, int timeoutMs,
+                     qsizetype maxOutputBytes)
 {
     auto *process = new QProcess(this);
     auto *timeout = new QTimer(process);
@@ -51,17 +52,50 @@ void GitService::run(const QString &cwd, const QStringList &arguments, Handler h
     process->setWorkingDirectory(cwd);
     if (!environment.isEmpty())
         process->setProcessEnvironment(environment);
-    const auto complete = [process, timeout, handler = std::move(handler),
+    auto output = std::make_shared<QByteArray>();
+    auto error = std::make_shared<QByteArray>();
+    auto outputTruncated = std::make_shared<bool>(false);
+    auto errorTruncated = std::make_shared<bool>(false);
+    const auto appendOutput = [maxOutputBytes](QByteArray *target, const QByteArray &chunk,
+                                               bool *truncated) {
+        if (chunk.isEmpty())
+            return;
+        if (maxOutputBytes <= 0 || target->size() < maxOutputBytes) {
+            const auto available = maxOutputBytes <= 0
+                ? chunk.size()
+                : qMin<qsizetype>(chunk.size(), maxOutputBytes - target->size());
+            target->append(chunk.constData(), available);
+            if (available < chunk.size())
+                *truncated = true;
+        } else {
+            *truncated = true;
+        }
+    };
+    connect(process, &QProcess::readyReadStandardOutput, this,
+            [process, output, outputTruncated, appendOutput] {
+        appendOutput(output.get(), process->readAllStandardOutput(), outputTruncated.get());
+    });
+    connect(process, &QProcess::readyReadStandardError, this,
+            [process, error, errorTruncated, appendOutput] {
+        appendOutput(error.get(), process->readAllStandardError(), errorTruncated.get());
+    });
+    const auto complete = [process, timeout, output, error, outputTruncated, errorTruncated,
+                           appendOutput, handler = std::move(handler),
                            completed = std::make_shared<bool>(false)](
                               int code, const QByteArray &fallbackError = {}) {
         if (std::exchange(*completed, true))
             return;
         timeout->stop();
-        const auto error = process->readAllStandardError();
+        appendOutput(output.get(), process->readAllStandardOutput(), outputTruncated.get());
+        appendOutput(error.get(), process->readAllStandardError(), errorTruncated.get());
+        if (*outputTruncated)
+            output->append("\n\n[Artemis truncated git stdout output]\n");
+        if (*errorTruncated)
+            error->append("\n\n[Artemis truncated git stderr output]\n");
         const GitResult result{
             code,
-            process->readAllStandardOutput(),
-            error.isEmpty() ? fallbackError : error
+            *output,
+            error->isEmpty() ? fallbackError : *error
         };
         process->deleteLater();
         if (handler)
@@ -138,7 +172,7 @@ void GitService::status(const QString &path, Handler handler)
 void GitService::diff(const QString &path, Handler handler)
 {
     run(path, {QStringLiteral("diff"), QStringLiteral("--no-ext-diff"),
-               QStringLiteral("--binary"), QStringLiteral("HEAD")}, std::move(handler));
+               QStringLiteral("HEAD")}, std::move(handler), {}, 120000, 524288);
 }
 
 void GitService::remoteUrl(const QString &path, const QString &remote, Handler handler)
@@ -409,7 +443,7 @@ void GitService::generateCommitSnapshot(const QString &path, Handler handler)
                 [handler = std::move(handler), temp](const GitResult &result) {
                     if (handler)
                         handler(result);
-                }, environment);
+                }, environment, 120000, 262144);
         }, environment);
     }, environment);
 }

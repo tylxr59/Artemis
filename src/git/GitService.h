@@ -55,7 +55,8 @@ private:
     using StepHandler = std::function<void(const GitResult &)>;
 
     void run(const QString &cwd, const QStringList &arguments, Handler handler,
-             const QProcessEnvironment &environment = {}, int timeoutMs = 120000);
+             const QProcessEnvironment &environment = {}, int timeoutMs = 120000,
+             qsizetype maxOutputBytes = 0);
     void startMutation(const QString &path, Handler handler,
                        std::function<void(const Workflow &)> start);
     void runMutationStep(const Workflow &workflow, const QStringList &arguments,
