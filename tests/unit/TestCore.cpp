@@ -303,6 +303,49 @@ private slots:
         QVERIFY(controller.turnRunning());
     }
 
+    void activeTurnElapsedTextAdvances()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const auto projectPath = root.filePath(QStringLiteral("elapsed-project"));
+        QVERIFY(QDir().mkpath(projectPath));
+
+        FakeAgentProvider provider;
+        provider.availableThreads.insert(
+            projectPath,
+            QJsonArray{QJsonObject{
+                {QStringLiteral("id"), QStringLiteral("elapsed-thread")},
+                {QStringLiteral("name"), QStringLiteral("Elapsed thread")},
+                {QStringLiteral("cwd"), projectPath}}});
+
+        AppController controller(&provider);
+        QVERIFY(controller.initialize());
+        controller.addProject(projectPath);
+
+        int projectIndex = -1;
+        for (int row = 0; row < controller.projects()->rowCount(); ++row) {
+            const auto index = controller.projects()->index(row);
+            if (controller.projects()->data(index, ProjectTreeModel::PathRole).toString()
+                == projectPath) {
+                projectIndex = row;
+                break;
+            }
+        }
+        QVERIFY(projectIndex >= 0);
+
+        controller.selectProjectThread(projectIndex, QStringLiteral("elapsed-thread"));
+        QCOMPARE(controller.selectedThreadId(), QStringLiteral("elapsed-thread"));
+        QSignalSpy elapsedSpy(&controller, &AppController::turnElapsedChanged);
+
+        emit provider.activeTurnStarted(QStringLiteral("elapsed-thread"),
+                                        QStringLiteral("elapsed-turn"));
+
+        QVERIFY(controller.turnRunning());
+        QCOMPARE(controller.turnElapsedText(), QStringLiteral("0s"));
+        QTRY_VERIFY_WITH_TIMEOUT(controller.turnElapsedText() != QStringLiteral("0s"), 2500);
+        QVERIFY(elapsedSpy.count() > 0);
+    }
+
     void persistedConversationReloadDoesNotDuplicateRows()
     {
         QTemporaryDir root;

@@ -6,6 +6,7 @@
 #include "persistence/Database.h"
 #include "domain/AgentProvider.h"
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QObject>
 #include <QSet>
@@ -268,7 +269,7 @@ private:
     QHash<QString, QString> m_assistantDraftBuffers;
     struct ActiveTurn {
         QString turnId;
-        qint64 startedAtMs = 0;
+        QElapsedTimer elapsedTimer;
         QString threadTitle;
         QString projectName;
     };

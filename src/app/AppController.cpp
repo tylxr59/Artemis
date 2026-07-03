@@ -313,7 +313,7 @@ QString AppController::turnElapsedText() const
     const auto activeTurn = m_activeTurns.constFind(selectedThreadId());
     if (activeTurn == m_activeTurns.cend())
         return elapsedText(0);
-    return elapsedText(QDateTime::currentMSecsSinceEpoch() - activeTurn->startedAtMs);
+    return elapsedText(activeTurn->elapsedTimer.elapsed());
 }
 bool AppController::providerReady() const { return m_provider->ready(); }
 bool AppController::providerSetupRequired() const { return m_provider->setupRequired(); }
@@ -1195,7 +1195,7 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
     if (type == QStringLiteral("status") && content == QStringLiteral("completed")) {
         const auto activeTurn = m_activeTurns.constFind(threadId);
         const auto elapsed = activeTurn == m_activeTurns.cend()
-            ? 0 : QDateTime::currentMSecsSinceEpoch() - activeTurn->startedAtMs;
+            ? 0 : activeTurn->elapsedTimer.elapsed();
         event.content = QStringLiteral("Complete · %1 · %2 total")
                             .arg(QLocale().toString(QTime::currentTime(), QLocale::ShortFormat),
                                  elapsedText(elapsed));
@@ -1843,12 +1843,12 @@ void AppController::setTurnRunning(const QString &threadId, bool running)
         return;
     if (running) {
         markThreadViewed(threadId);
-        m_activeTurns.insert(
-            threadId,
-            ActiveTurn{{}, QDateTime::currentMSecsSinceEpoch(),
-                       selectedThreadId() == threadId
-                           ? selectedThreadTitle() : QStringLiteral("Untitled thread"),
-                       selectedThreadId() == threadId ? selectedProjectName() : QString()});
+        ActiveTurn activeTurn;
+        activeTurn.elapsedTimer.start();
+        activeTurn.threadTitle = selectedThreadId() == threadId
+            ? selectedThreadTitle() : QStringLiteral("Untitled thread");
+        activeTurn.projectName = selectedThreadId() == threadId ? selectedProjectName() : QString();
+        m_activeTurns.insert(threadId, activeTurn);
     } else {
         m_activeTurns.remove(threadId);
     }
