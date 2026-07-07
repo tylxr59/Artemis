@@ -559,9 +559,15 @@ Kirigami.ApplicationWindow {
                                     id: threadItem
                                     required property int index
                                     required property var modelData
+                                    readonly property bool pendingThread:
+                                        typeof modelData !== "undefined"
+                                        && modelData.pending === true
+                                    readonly property bool externalThread:
+                                        typeof modelData !== "undefined"
+                                        && modelData.external === true
                                     Layout.fillWidth: true
                                     Layout.maximumWidth: projectList.width
-                                    Layout.preferredHeight: modelData.external
+                                    Layout.preferredHeight: threadItem.externalThread
                                                             ? navigationPane.threadMetadataRowHeight
                                                             : navigationPane.threadRowHeight
                                     leftPadding: navigationPane.threadIndent
@@ -588,7 +594,7 @@ Kirigami.ApplicationWindow {
                                                 appController.completedThreadIds.indexOf(
                                                     threadItem.modelData.id) >= 0
                                             readonly property bool pending:
-                                                threadItem.modelData.pending === true
+                                                threadItem.pendingThread
                                             Layout.preferredWidth: 16
                                             Layout.preferredHeight: 16
                                             Accessible.name: pending ? "Starting"
@@ -631,9 +637,9 @@ Kirigami.ApplicationWindow {
                                                 elide: Text.ElideRight
                                             }
                                             Label {
-                                                visible: threadItem.modelData.external
-                                                         || threadItem.modelData.pending
-                                                text: threadItem.modelData.pending
+                                                visible: threadItem.externalThread
+                                                         || threadItem.pendingThread
+                                                text: threadItem.pendingThread
                                                       ? "Starting" : "External"
                                                 font: Kirigami.Theme.smallFont
                                                 opacity: 0.55
@@ -657,7 +663,7 @@ Kirigami.ApplicationWindow {
                                         MenuItem {
                                             text: "Remove thread from Artemis"
                                             icon.name: "edit-delete"
-                                            enabled: !threadItem.modelData.pending
+                                            enabled: !threadItem.pendingThread
                                             onTriggered: appController.removeProjectThread(
                                                 projectDelegate.index,
                                                 threadItem.modelData.id)
