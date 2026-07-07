@@ -38,6 +38,7 @@ class AppController : public QObject {
     Q_PROPERTY(QString selectedThreadId READ selectedThreadId NOTIFY selectedThreadChanged)
     Q_PROPERTY(QString selectedThreadTitle READ selectedThreadTitle NOTIFY selectedThreadChanged)
     Q_PROPERTY(QVariantMap selectedThreadInfo READ selectedThreadInfo NOTIFY selectedThreadChanged)
+    Q_PROPERTY(bool threadCreationPending READ threadCreationPending NOTIFY threadCreationPendingChanged)
     Q_PROPERTY(QString currentTasks READ currentTasks NOTIFY currentTasksChanged)
     Q_PROPERTY(QVariantList currentPlan READ currentPlan NOTIFY currentPlanChanged)
     Q_PROPERTY(QString currentPlanExplanation READ currentPlanExplanation NOTIFY currentPlanChanged)
@@ -93,6 +94,7 @@ public:
     QString selectedThreadId() const;
     QString selectedThreadTitle() const;
     QVariantMap selectedThreadInfo() const;
+    bool threadCreationPending() const;
     QString currentTasks() const;
     QVariantList currentPlan() const;
     QString currentPlanExplanation() const;
@@ -177,6 +179,7 @@ signals:
     void settingsChanged();
     void selectedProjectChanged();
     void selectedThreadChanged();
+    void threadCreationPendingChanged();
     void currentTasksChanged();
     void currentPlanChanged();
     void taskPanelRequested();
@@ -212,6 +215,10 @@ private:
     void handleDomainEvent(const QString &threadId, const QString &type,
                            const QString &title, const QString &content,
                            const QVariantMap &metadata);
+    QString createPendingThread(const QString &modelId, const QString &prompt,
+                                const QStringList &images);
+    void clearPendingThread(const QString &threadId);
+    bool isPendingThreadId(const QString &threadId) const;
     void beginThread(const QString &modelId, const QString &reasoningEffort,
                      PermissionProfile permissionProfile);
     void startPromptTurn(const QString &threadId, const QString &prompt,
@@ -296,6 +303,7 @@ private:
     QString m_pendingCollaborationMode = QStringLiteral("default");
     PermissionProfile m_pendingPermissionProfile = PermissionProfile::FullAccess;
     bool m_threadCreationPending = false;
+    QString m_pendingThreadId;
     QString m_codingModelId;
     QString m_codingReasoningEffort;
     QString m_commitModelId;

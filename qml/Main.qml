@@ -587,15 +587,19 @@ Kirigami.ApplicationWindow {
                                             readonly property bool completed:
                                                 appController.completedThreadIds.indexOf(
                                                     threadItem.modelData.id) >= 0
+                                            readonly property bool pending:
+                                                threadItem.modelData.pending === true
                                             Layout.preferredWidth: 16
                                             Layout.preferredHeight: 16
-                                            Accessible.name: working ? "Working"
+                                            Accessible.name: pending ? "Starting"
+                                                                      : working ? "Working"
                                                                       : completed ? "Completed"
                                                                                   : "Thread"
 
                                             Kirigami.Icon {
                                                 anchors.fill: parent
                                                 visible: !threadStatus.working
+                                                         && !threadStatus.pending
                                                 source: threadStatus.completed
                                                         ? "dialog-ok-apply"
                                                         : "dialog-messages"
@@ -606,6 +610,7 @@ Kirigami.ApplicationWindow {
                                                 id: workingThreadIcon
                                                 anchors.fill: parent
                                                 visible: threadStatus.working
+                                                         || threadStatus.pending
                                                 source: "view-refresh"
                                                 opacity: 0.7
                                                 NumberAnimation on rotation {
@@ -627,7 +632,9 @@ Kirigami.ApplicationWindow {
                                             }
                                             Label {
                                                 visible: threadItem.modelData.external
-                                                text: "External"
+                                                         || threadItem.modelData.pending
+                                                text: threadItem.modelData.pending
+                                                      ? "Starting" : "External"
                                                 font: Kirigami.Theme.smallFont
                                                 opacity: 0.55
                                             }
@@ -650,6 +657,7 @@ Kirigami.ApplicationWindow {
                                         MenuItem {
                                             text: "Remove thread from Artemis"
                                             icon.name: "edit-delete"
+                                            enabled: !threadItem.modelData.pending
                                             onTriggered: appController.removeProjectThread(
                                                 projectDelegate.index,
                                                 threadItem.modelData.id)
@@ -1224,6 +1232,8 @@ Kirigami.ApplicationWindow {
                                 width: composerScrollView.availableWidth
                                 placeholderText: root.pendingQuestionVisible
                                                  ? "Type your own answer, or leave this blank to use the selected option"
+                                                 : appController.threadCreationPending
+                                                 ? "Starting thread..."
                                                  : appController.turnRunning
                                                  ? "Add guidance while Artemis is working…"
                                                  : "Describe a task, ask a question, or paste an error…"
@@ -1271,6 +1281,7 @@ Kirigami.ApplicationWindow {
                                 valueRole: "id"
                                 currentIndex: root.modelIndex(appController.codingModelId)
                                 enabled: !appController.turnRunning
+                                         && !appController.threadCreationPending
                                 onActivated: {
                                     appController.codingModelId = currentValue || ""
                                     const options = root.reasoningOptions()
@@ -1298,7 +1309,9 @@ Kirigami.ApplicationWindow {
                                 valueRole: "value"
                                 currentIndex: root.reasoningIndex(
                                                   appController.codingReasoningEffort)
-                                enabled: !appController.turnRunning && count > 1
+                                enabled: !appController.turnRunning
+                                         && !appController.threadCreationPending
+                                         && count > 1
                                 onActivated: appController.codingReasoningEffort =
                                              currentValue || ""
                                 ToolTip.text: "Reasoning effort for new threads"
@@ -1320,6 +1333,7 @@ Kirigami.ApplicationWindow {
                                 valueRole: "value"
                                 currentIndex: 2
                                 enabled: !appController.turnRunning
+                                         && !appController.threadCreationPending
                                 ToolTip.text: currentValue === "approval-required"
                                               ? "Ask before commands and file changes."
                                               : currentValue === "auto-accept-edits"
@@ -1337,6 +1351,7 @@ Kirigami.ApplicationWindow {
                                 text: checked ? "Plan" : "Build"
                                 checkable: true
                                 enabled: !appController.turnRunning
+                                         && !appController.threadCreationPending
                                 Accessible.name: checked ? "Plan mode" : "Build mode"
                                 ToolTip.text: checked
                                               ? "Plan the work without making changes."
@@ -1483,17 +1498,21 @@ Kirigami.ApplicationWindow {
                                 RoundButton {
                                     id: sendPromptButton
                                     visible: !root.pendingQuestionVisible
-                                    text: "↑"
+                                    text: appController.threadCreationPending ? "…" : "↑"
                                     Accessible.name: appController.turnRunning
+                                                     || appController.threadCreationPending
                                                      ? "Add message" : "Send"
                                     ToolTip.text: appController.turnRunning
                                                   ? "Add message to current turn (Enter)"
+                                                  : appController.threadCreationPending
+                                                  ? "Starting thread"
                                                   : "Send (Enter)"
                                     ToolTip.visible: hovered
                                     enabled: (composer.text.trim().length > 0
-                                              || root.composerImages.length > 0)
+                                             || root.composerImages.length > 0)
                                              && root.hasProject
                                              && appController.providerReady
+                                             && !appController.threadCreationPending
                                     onClicked: {
                                         if (appController.sendPrompt(
                                                     composer.text,

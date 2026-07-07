@@ -970,6 +970,55 @@ private slots:
         QCOMPARE(restored.count(), 1);
     }
 
+    void firstPromptShowsPendingThreadImmediately()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const auto projectPath = root.filePath(QStringLiteral("pending-project"));
+        QVERIFY(QDir().mkpath(projectPath));
+
+        FakeAgentProvider provider;
+        AppController controller(&provider);
+        QVERIFY(controller.initialize());
+        controller.addProject(projectPath);
+
+        QVERIFY(controller.sendPrompt(
+            QStringLiteral("Create the pending UI"), {}, QStringLiteral("test-model"), {},
+            QStringLiteral("full-access"), QStringLiteral("default")));
+
+        QVERIFY(controller.threadCreationPending());
+        QCOMPARE(controller.threads().size(), 1);
+        const auto pendingThread = controller.threads().at(0).toMap();
+        QVERIFY(pendingThread.value(QStringLiteral("pending")).toBool());
+        QCOMPARE(pendingThread.value(QStringLiteral("title")).toString(),
+                 QStringLiteral("Starting thread..."));
+        QVERIFY(controller.selectedThreadId().startsWith(QStringLiteral("pending-")));
+        QCOMPARE(controller.conversation()->rowCount(), 1);
+        QCOMPARE(controller.conversation()
+                     ->data(controller.conversation()->index(0),
+                            ConversationModel::ContentRole)
+                     .toString(),
+                 QStringLiteral("Create the pending UI"));
+
+        provider.completeThreadStart(QStringLiteral("real-thread"));
+
+        QVERIFY(!controller.threadCreationPending());
+        QCOMPARE(controller.selectedThreadId(), QStringLiteral("real-thread"));
+        QCOMPARE(controller.threads().size(), 1);
+        const auto realThread = controller.threads().at(0).toMap();
+        QVERIFY(!realThread.value(QStringLiteral("pending")).toBool());
+        QCOMPARE(realThread.value(QStringLiteral("id")).toString(),
+                 QStringLiteral("real-thread"));
+        QCOMPARE(provider.startedTurnThreads,
+                 QStringList{QStringLiteral("real-thread")});
+        QCOMPARE(controller.conversation()->rowCount(), 1);
+        QCOMPARE(controller.conversation()
+                     ->data(controller.conversation()->index(0),
+                            ConversationModel::ContentRole)
+                     .toString(),
+                 QStringLiteral("Create the pending UI"));
+    }
+
     void planModeUserInputCollectsAnswers()
     {
         QTemporaryDir root;

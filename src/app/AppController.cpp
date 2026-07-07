@@ -259,6 +259,7 @@ QVariantMap AppController::selectedThreadInfo() const
     return m_selectedThread >= 0 && m_selectedThread < m_threads.size()
         ? m_threads.at(m_selectedThread).toMap() : QVariantMap{};
 }
+bool AppController::threadCreationPending() const { return m_threadCreationPending; }
 QString AppController::currentTasks() const
 {
     return m_threadTasks.value(selectedThreadId());
@@ -474,6 +475,8 @@ void AppController::removeThread(int index)
         return;
     const auto project = m_projects.row(m_selectedProject);
     const auto threadId = m_threads.at(index).toMap().value(QStringLiteral("id")).toString();
+    if (isPendingThreadId(threadId))
+        return;
     QString error;
     if (!m_database.hideThread(project.id, threadId, &error)) {
         setStatus(error);
@@ -546,11 +549,16 @@ void AppController::activateProject(int index, const QString &threadToSelect)
 {
     if (index < 0 || index >= m_projects.rowCount())
         return;
+    const auto previousPendingThreadId = m_pendingThreadId;
     m_selectedProject = index;
     m_selectedThread = -1;
     m_conversation.setThread({});
+    if (!previousPendingThreadId.isEmpty())
+        m_pendingThreadId.clear();
     emit selectedProjectChanged();
     emit selectedThreadChanged();
+    if (!previousPendingThreadId.isEmpty())
+        emit threadCreationPendingChanged();
     emit turnRunningChanged();
     emit turnElapsedChanged();
     emit tokenUsageChanged();
@@ -612,6 +620,18 @@ void AppController::loadThreads(const QString &threadToSelect)
                 QString bindError;
                 if (!m_database.bindThread(project.id, id, project.path, true, &bindError))
                     setStatus(QStringLiteral("Could not save thread binding: %1").arg(bindError));
+            }
+        }
+        if (m_projects.row(m_selectedProject).id == project.id
+            && !m_pendingThreadId.isEmpty()) {
+            for (const auto &threadValue : std::as_const(m_threads)) {
+                const auto pendingThread = threadValue.toMap();
+                if (pendingThread.value(QStringLiteral("id")).toString()
+                    != m_pendingThreadId) {
+                    continue;
+                }
+                rows.prepend(pendingThread);
+                break;
             }
         }
         emit projectThreadsLoaded(project.path, rows);
@@ -688,15 +708,17 @@ void AppController::selectThread(int index)
     if (index < 0 || index >= m_threads.size())
         return;
     m_selectedThread = index;
-    markThreadViewed(selectedThreadId());
-    m_conversation.setThread(selectedThreadId());
+    const auto threadId = selectedThreadId();
+    markThreadViewed(threadId);
+    m_conversation.setThread(threadId);
     emit selectedThreadChanged();
     emit turnRunningChanged();
     emit turnElapsedChanged();
     emit tokenUsageChanged();
     emit currentTasksChanged();
     emit currentPlanChanged();
-    const auto threadId = selectedThreadId();
+    if (isPendingThreadId(threadId))
+        return;
     m_provider->resumeThread(threadId, [this, threadId](const QJsonObject &result,
                                                         const QString &error) {
         if (!error.isEmpty()) {
@@ -819,8 +841,82 @@ void AppController::createThread(const QString &modelId, const QString &reasonin
         return;
     if (m_threadCreationPending)
         return;
+    if (m_pendingThreadId.isEmpty())
+        createPendingThread(modelId, {}, {});
     m_threadCreationPending = true;
+    emit threadCreationPendingChanged();
+    setStatus(QStringLiteral("Starting thread..."));
     beginThread(modelId, reasoningEffort, permissionProfile(permissionMode));
+}
+
+QString AppController::createPendingThread(const QString &modelId, const QString &prompt,
+                                           const QStringList &images)
+{
+    const auto project = m_projects.row(m_selectedProject);
+    if (project.id < 0)
+        return {};
+    const auto threadId = QStringLiteral("pending-%1").arg(
+        QUuid::createUuid().toString(QUuid::WithoutBraces));
+    m_pendingThreadId = threadId;
+    m_threads.prepend(QVariantMap{
+        {QStringLiteral("id"), threadId},
+        {QStringLiteral("title"), QStringLiteral("Starting thread...")},
+        {QStringLiteral("named"), false},
+        {QStringLiteral("cwd"), project.path},
+        {QStringLiteral("model"), modelId.isEmpty() ? m_codingModelId : modelId},
+        {QStringLiteral("external"), false},
+        {QStringLiteral("pending"), true}});
+    m_selectedThread = 0;
+    m_conversation.setThread(threadId);
+    if (!prompt.isEmpty() || !images.isEmpty()) {
+        m_conversation.append({threadId,
+                               QStringLiteral("user"),
+                               QStringLiteral("You"),
+                               prompt,
+                               {{QStringLiteral("images"), images},
+                                {QStringLiteral("pending"), true}}});
+    }
+    emit threadsChanged();
+    emit selectedThreadChanged();
+    emit turnRunningChanged();
+    emit turnElapsedChanged();
+    emit tokenUsageChanged();
+    emit currentTasksChanged();
+    emit currentPlanChanged();
+    return threadId;
+}
+
+void AppController::clearPendingThread(const QString &threadId)
+{
+    if (threadId.isEmpty())
+        return;
+    for (int i = 0; i < m_threads.size(); ++i) {
+        if (m_threads.at(i).toMap().value(QStringLiteral("id")).toString() != threadId)
+            continue;
+        const bool removedSelected = i == m_selectedThread;
+        m_threads.removeAt(i);
+        if (removedSelected) {
+            m_selectedThread = -1;
+            m_conversation.setThread({});
+        } else if (i < m_selectedThread) {
+            --m_selectedThread;
+        }
+        emit threadsChanged();
+        emit selectedThreadChanged();
+        emit turnRunningChanged();
+        emit turnElapsedChanged();
+        emit tokenUsageChanged();
+        emit currentTasksChanged();
+        emit currentPlanChanged();
+        break;
+    }
+    if (m_pendingThreadId == threadId)
+        m_pendingThreadId.clear();
+}
+
+bool AppController::isPendingThreadId(const QString &threadId) const
+{
+    return !threadId.isEmpty() && threadId == m_pendingThreadId;
 }
 
 void AppController::beginThread(const QString &modelId, const QString &reasoningEffort,
@@ -829,18 +925,23 @@ void AppController::beginThread(const QString &modelId, const QString &reasoning
     const auto project = m_projects.row(m_selectedProject);
     ThreadConfiguration config{project.path, project.path, modelId, reasoningEffort,
                                permissionProfile, false};
+    const auto pendingThreadId = m_pendingThreadId;
     m_provider->startThread(
-        config, [this, project, permissionProfile](const QJsonObject &result,
-                                                   const QString &error) {
+        config, [this, project, permissionProfile, pendingThreadId](
+                    const QJsonObject &result, const QString &error) {
         m_threadCreationPending = false;
+        emit threadCreationPendingChanged();
         if (!error.isEmpty()) {
             if (!m_pendingPrompt.isEmpty() || !m_pendingImages.isEmpty())
                 emit promptRestoreRequested(m_pendingPrompt,
                                             QVariantList(m_pendingImages.cbegin(),
                                                          m_pendingImages.cend()));
+            clearPendingThread(pendingThreadId);
             m_pendingPrompt.clear();
             m_pendingImages.clear();
             m_pendingModelId.clear();
+            m_pendingReasoningEffort.clear();
+            m_pendingCollaborationMode = QStringLiteral("default");
             setStatus(error);
             return;
         }
@@ -852,6 +953,7 @@ void AppController::beginThread(const QString &modelId, const QString &reasoning
         }
         loadProjects();
         if (m_projects.row(m_selectedProject).id != project.id) {
+            clearPendingThread(pendingThreadId);
             if (!m_pendingPrompt.isEmpty() || !m_pendingImages.isEmpty()) {
                 emit promptRestoreRequested(
                     m_pendingPrompt,
@@ -864,15 +966,31 @@ void AppController::beginThread(const QString &modelId, const QString &reasoning
             }
             return;
         }
-        m_threads.prepend(QVariantMap{
+        QVariantMap threadRow{
             {QStringLiteral("id"), id},
             {QStringLiteral("title"), QStringLiteral("Untitled thread")},
             {QStringLiteral("named"), false},
             {QStringLiteral("cwd"), project.path},
             {QStringLiteral("model"), m_pendingModelId.isEmpty()
                 ? m_codingModelId : m_pendingModelId},
-            {QStringLiteral("external"), false}});
-        m_selectedThread = 0;
+            {QStringLiteral("external"), false}};
+        int pendingIndex = -1;
+        for (int i = 0; i < m_threads.size(); ++i) {
+            if (m_threads.at(i).toMap().value(QStringLiteral("id")).toString()
+                == pendingThreadId) {
+                pendingIndex = i;
+                break;
+            }
+        }
+        if (pendingIndex >= 0) {
+            m_threads[pendingIndex] = threadRow;
+            m_selectedThread = pendingIndex;
+        } else {
+            m_threads.prepend(threadRow);
+            m_selectedThread = 0;
+        }
+        if (m_pendingThreadId == pendingThreadId)
+            m_pendingThreadId.clear();
         m_conversation.setThread(id);
         emit threadsChanged();
         emit selectedThreadChanged();
@@ -912,6 +1030,8 @@ bool AppController::sendPrompt(const QString &text, const QVariantList &imageVal
     images.removeDuplicates();
     if (prompt.isEmpty() && images.isEmpty())
         return false;
+    if (m_threadCreationPending)
+        return false;
     if (selectedThreadId().isEmpty()) {
         if (selectedProjectPath().isEmpty() || !m_provider->ready()
             || m_threadCreationPending)
@@ -922,6 +1042,7 @@ bool AppController::sendPrompt(const QString &text, const QVariantList &imageVal
         m_pendingReasoningEffort = reasoningEffort;
         m_pendingCollaborationMode = collaborationMode;
         m_pendingPermissionProfile = permissionProfile(permissionMode);
+        createPendingThread(modelId, prompt, images);
         createThread(modelId, reasoningEffort, permissionMode);
         return true;
     }
