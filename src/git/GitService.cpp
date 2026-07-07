@@ -376,31 +376,39 @@ void GitService::removeIndexLockAndRetry(Handler handler)
         return;
     }
 
-    const auto lockResult = runSync(
-        m_activeMutation->path,
+    const auto workflow = m_activeMutation;
+    run(
+        workflow->path,
         {QStringLiteral("rev-parse"), QStringLiteral("--git-path"),
-         QStringLiteral("index.lock")});
-    if (!lockResult.ok()) {
-        if (handler)
-            handler(lockResult);
-        return;
-    }
-
-    auto lockPath = QString::fromUtf8(lockResult.output).trimmed();
-    if (QDir::isRelativePath(lockPath))
-        lockPath = QDir(m_activeMutation->path).absoluteFilePath(lockPath);
-    QFile lock(lockPath);
-    if (lock.exists() && !lock.remove()) {
-        if (handler) {
-            handler({-1, {},
-                     QStringLiteral("Could not remove Git lock file: %1").arg(lock.errorString())
-                         .toUtf8()});
+         QStringLiteral("index.lock")},
+        [this, workflow, handler = std::move(handler)](const GitResult &lockResult) {
+        if (m_activeMutation != workflow || !workflow->resume) {
+            if (handler)
+                handler({-1, {}, QByteArray("The blocked Git operation is no longer active.")});
+            return;
         }
-        return;
-    }
-    if (handler)
-        handler({0, QByteArray("Removed stale Git index lock."), {}});
-    retryLockedOperation();
+        if (!lockResult.ok()) {
+            if (handler)
+                handler(lockResult);
+            return;
+        }
+
+        auto lockPath = QString::fromUtf8(lockResult.output).trimmed();
+        if (QDir::isRelativePath(lockPath))
+            lockPath = QDir(workflow->path).absoluteFilePath(lockPath);
+        QFile lock(lockPath);
+        if (lock.exists() && !lock.remove()) {
+            if (handler) {
+                handler({-1, {},
+                         QStringLiteral("Could not remove Git lock file: %1")
+                             .arg(lock.errorString()).toUtf8()});
+            }
+            return;
+        }
+        if (handler)
+            handler({0, QByteArray("Removed stale Git index lock."), {}});
+        retryLockedOperation();
+    });
 }
 
 void GitService::cancelLockedOperation()

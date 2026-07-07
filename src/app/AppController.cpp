@@ -1325,6 +1325,7 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
             }
             m_commitThreadId.clear();
             m_commitDraftBuffer.clear();
+            m_commitDraftRunning = false;
         }
         return;
     }
@@ -1442,6 +1443,12 @@ void AppController::refreshGit()
 
 void AppController::generateCommitMessage()
 {
+    if (m_commitDraftRunning) {
+        const auto message = QStringLiteral("Commit message generation is already running.");
+        setStatus(message);
+        emit commitDraftFinished(false, message);
+        return;
+    }
     if (!selectedProjectIsGit()) {
         emit commitDraftFinished(false, QStringLiteral("Select a Git repository first."));
         return;
@@ -1459,6 +1466,7 @@ void AppController::generateCommitMessage()
     const auto firstStatusLine = m_gitStatus.section(QChar(u'\n'), 0, 0);
     if (firstStatusLine.startsWith(QStringLiteral("## ")))
         branch = firstStatusLine.mid(3).section(QStringLiteral("..."), 0, 0).trimmed();
+    m_commitDraftRunning = true;
     setStatus(QStringLiteral("Preparing commit snapshot…"));
     m_git.generateCommitSnapshot(
         workspace,
@@ -1466,6 +1474,7 @@ void AppController::generateCommitMessage()
             const GitResult &snapshot) {
         if (!snapshot.ok()) {
             const auto message = QString::fromUtf8(snapshot.error).trimmed();
+            m_commitDraftRunning = false;
             setStatus(message);
             emit commitDraftFinished(false, message);
             return;
@@ -1477,6 +1486,7 @@ void AppController::generateCommitMessage()
             [this, projectId, projectName, modelId, branch, snapshot](
                 const QJsonObject &result, const QString &error) {
             if (!error.isEmpty()) {
+                m_commitDraftRunning = false;
                 setStatus(error);
                 emit commitDraftFinished(false, error);
                 return;
@@ -1492,6 +1502,7 @@ void AppController::generateCommitMessage()
                 if (!turnError.isEmpty()) {
                     setStatus(turnError);
                     m_commitThreadId.clear();
+                    m_commitDraftRunning = false;
                     emit commitDraftFinished(false, turnError);
                 }
             });

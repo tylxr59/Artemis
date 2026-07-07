@@ -1119,6 +1119,7 @@ private slots:
         controller.addProject(firstPath);
         controller.addProject(secondPath);
         controller.setCommitModelId(QStringLiteral("commit-test-model"));
+        QSignalSpy draftFinished(&controller, &AppController::commitDraftFinished);
 
         int firstIndex = -1;
         int secondIndex = -1;
@@ -1136,6 +1137,10 @@ private slots:
 
         controller.selectProject(firstIndex);
         controller.generateCommitMessage();
+        controller.generateCommitMessage();
+        QCOMPARE(draftFinished.count(), 1);
+        QVERIFY(draftFinished.constFirst().at(1).toString().contains(
+            QStringLiteral("already running")));
         QTRY_VERIFY_WITH_TIMEOUT(provider.pendingStartThread, 3000);
         QCOMPARE(provider.lastThreadConfiguration.projectPath, firstPath);
         QCOMPARE(provider.lastThreadConfiguration.workspacePath, firstPath);

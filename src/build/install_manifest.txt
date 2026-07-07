@@ -1,5 +1,0 @@
-/usr/bin/artemis
-/usr/share/applications/org.artemis.Artemis.desktop
-/usr/share/icons/hicolor/256x256/apps/artemis.png
-/usr/share/icons/hicolor/scalable/apps/artemis.svg
-/usr/share/knotifications6/artemis.notifyrc

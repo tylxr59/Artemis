@@ -271,6 +271,7 @@ private:
     bool m_hasGitChanges = false;
     QString m_commitThreadId;
     QString m_commitDraftBuffer;
+    bool m_commitDraftRunning = false;
     QHash<QString, QString> m_titleTargets;
     QHash<QString, QString> m_titleDraftBuffers;
     QHash<QString, QString> m_assistantDraftBuffers;

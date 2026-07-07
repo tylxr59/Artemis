@@ -1,9 +1,0 @@
-<RCC>
-  <qresource prefix="/qt/qml/org/artemis/">
-    <file alias="qml/qmldir">/home/tylxr/git/Artemis/src/build/org/artemis/qml/qmldir</file>
-    <file alias="qml/components/qmldir">/home/tylxr/git/Artemis/src/build/org/artemis/qml/components/qmldir</file>
-    <file alias="qml/dialogs/qmldir">/home/tylxr/git/Artemis/src/build/org/artemis/qml/dialogs/qmldir</file>
-    <file alias="qml/pages/qmldir">/home/tylxr/git/Artemis/src/build/org/artemis/qml/pages/qmldir</file>
-  </qresource>
-</RCC>
-
