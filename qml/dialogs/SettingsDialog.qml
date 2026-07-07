@@ -622,7 +622,7 @@ Window {
                                     id: mcpName
                                     Kirigami.FormData.label: "Name:"
                                     Layout.fillWidth: true
-                                    placeholderText: "context7"
+                                    placeholderText: "my-mcp-server"
                                     Accessible.name: "MCP server name"
                                 }
 
@@ -646,7 +646,7 @@ Window {
                                     Layout.fillWidth: true
                                     placeholderText: mcpTransport.currentValue === "http"
                                                      ? "https://mcp.example.com/mcp"
-                                                     : "npx -y @upstash/context7-mcp"
+                                                     : "npx -y example-mcp-server"
                                     Accessible.name: mcpTransport.currentValue === "http"
                                                      ? "MCP server URL"
                                                      : "MCP server command"
