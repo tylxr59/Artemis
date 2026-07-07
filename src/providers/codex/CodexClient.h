@@ -7,6 +7,8 @@
 #include <QProcess>
 #include <QTimer>
 
+#include <functional>
+
 namespace Artemis {
 
 class CodexClient final : public AgentProvider {
@@ -44,6 +46,10 @@ public:
     void listMcpServers(ResultHandler handler) override;
     void reloadMcpServers(ResultHandler handler) override;
     void loginMcpServer(const QString &name, ResultHandler handler) override;
+    void addMcpServer(const QString &name, const QString &transport,
+                      const QString &target, const QString &bearerToken,
+                      ResultHandler handler) override;
+    void removeMcpServer(const QString &name, ResultHandler handler) override;
     QString itemContent(const QJsonObject &item) const override;
 
     void request(const QString &method, const QJsonObject &params, ResultHandler handler = {});
@@ -67,6 +73,8 @@ private:
                              const QJsonObject &params);
     void normalizeItem(const QString &lifecycle, const QJsonObject &params);
     void writeResponse(const QJsonValue &id, const QJsonObject &result);
+    void runMcpCommand(const QStringList &arguments, ResultHandler handler,
+                       std::function<bool(QString *)> afterSuccess = {});
     void setReady(bool ready);
     void setSetupRequired(bool required, const QString &instructions = {});
 

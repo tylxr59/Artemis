@@ -38,7 +38,7 @@ ScrollView {
             return controller.providerSetupInstructions
         if (controller.providerIssueText.length > 0)
             return controller.providerIssueText
-        return controller.providerVersion || "Codex not detected"
+        return controller.providerVersion || "Provider not detected"
     }
 
     function statusText() {
@@ -133,7 +133,7 @@ ScrollView {
 
                     Label {
                         Layout.fillWidth: true
-                        text: "Codex connection"
+                        text: "Provider connection"
                         opacity: 0.68
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
                         elide: Text.ElideRight
@@ -190,9 +190,9 @@ ScrollView {
                     }
 
                     Label {
-                        Kirigami.FormData.label: "Codex:"
+                        Kirigami.FormData.label: "Provider:"
                         Layout.fillWidth: true
-                        text: controller.providerVersion || "Codex not detected"
+                        text: controller.providerVersion || "Provider not detected"
                         textFormat: Text.PlainText
                         wrapMode: Text.WrapAnywhere
                     }

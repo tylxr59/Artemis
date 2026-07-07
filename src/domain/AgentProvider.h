@@ -81,6 +81,17 @@ public:
         if (handler)
             handler({}, QStringLiteral("MCP is not supported by this provider"));
     }
+    virtual void addMcpServer(const QString &, const QString &, const QString &,
+                              const QString &, ResultHandler handler)
+    {
+        if (handler)
+            handler({}, QStringLiteral("MCP configuration is not supported by this provider"));
+    }
+    virtual void removeMcpServer(const QString &, ResultHandler handler)
+    {
+        if (handler)
+            handler({}, QStringLiteral("MCP configuration is not supported by this provider"));
+    }
     virtual QString itemContent(const QJsonObject &item) const = 0;
 
 signals:

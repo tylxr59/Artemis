@@ -39,6 +39,8 @@ set(ARTEMIS_SOURCES
     src/models/ProjectTreeModel.h
     src/persistence/Database.cpp
     src/persistence/Database.h
+    src/providers/ProviderFactory.cpp
+    src/providers/ProviderFactory.h
     src/providers/codex/CodexClient.cpp
     src/providers/codex/CodexClient.h
     src/platform/Paths.cpp

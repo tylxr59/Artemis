@@ -13,7 +13,6 @@
 #include <QTimer>
 #include <QVariantList>
 
-#include <functional>
 #include <memory>
 
 namespace Artemis {
@@ -247,10 +246,6 @@ private:
     QString cleanTitleDraft(const QString &raw) const;
     void persistConversationEvent(const ConversationEvent &event,
                                   const QString &contentOverride = {});
-    void runCodexMcpCommand(
-        const QStringList &arguments, const QString &successMessage,
-        std::function<bool(QString *)> afterSuccess = {});
-
     Database m_database;
     ProjectTreeModel m_projects;
     ConversationModel m_conversation;

@@ -14,6 +14,8 @@ qt_add_executable(artemis-unit-tests
     ../src/platform/Paths.h
     ../src/platform/DesktopIntegration.cpp
     ../src/platform/DesktopIntegration.h
+    ../src/providers/ProviderFactory.cpp
+    ../src/providers/ProviderFactory.h
     ../src/providers/codex/CodexClient.cpp
     ../src/providers/codex/CodexClient.h
     ../src/domain/AgentProvider.h

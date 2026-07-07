@@ -704,8 +704,8 @@ Kirigami.ApplicationWindow {
                                 text: appController.providerReady
                                       ? "No chats yet. Send a message to start one."
                                       : appController.providerSetupRequired
-                                        ? "Codex setup is required."
-                                        : "Codex is unavailable."
+                                        ? "Provider setup is required."
+                                        : "Provider is unavailable."
                                 wrapMode: Text.Wrap
                                 opacity: 0.55
                                 font: Kirigami.Theme.smallFont
@@ -723,7 +723,7 @@ Kirigami.ApplicationWindow {
                             font.bold: true
                         }
                         Label {
-                            text: "Add a folder to start working with Codex."
+                            text: "Add a folder to start working with the active provider."
                             Layout.fillWidth: true
                             horizontalAlignment: Text.AlignHCenter
                             wrapMode: Text.Wrap
@@ -761,8 +761,8 @@ Kirigami.ApplicationWindow {
                                 id: connectionLabel
                                 Layout.alignment: Qt.AlignVCenter
                                 text: appController.providerSetupRequired
-                                      ? "Codex setup required"
-                                      : "Codex unavailable"
+                                      ? "Provider setup required"
+                                      : "Provider unavailable"
                                 color: Kirigami.Theme.negativeTextColor
                             }
                         }
@@ -1017,8 +1017,8 @@ Kirigami.ApplicationWindow {
                             visible: conversationList.count === 0
                             text: !root.hasProject ? "Start with a project"
                                   : appController.providerSetupRequired
-                                    ? "Set up Codex"
-                                  : !appController.providerReady ? "Codex is unavailable"
+                                    ? "Set up provider"
+                                  : !appController.providerReady ? "Provider is unavailable"
                                   : "What would you like to build?"
                             explanation: !root.hasProject
                                          ? "Add a project folder to give Artemis a workspace."
@@ -1026,7 +1026,7 @@ Kirigami.ApplicationWindow {
                                            ? appController.providerSetupInstructions
                                          : !appController.providerReady
                                            ? (appController.providerIssueText
-                                              || "Open Diagnostics to inspect the Codex connection.")
+                                              || "Open Diagnostics to inspect the provider connection.")
                                            : appController.selectedProjectIsGit
                                              ? "Describe a task below. Use Diff to review file changes."
                                              : "Describe a task below. Git review is unavailable for this folder."

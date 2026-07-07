@@ -1,7 +1,7 @@
 #include "app/AppController.h"
 #include "platform/DesktopIntegration.h"
 #include "platform/Paths.h"
-#include "providers/codex/CodexClient.h"
+#include "providers/ProviderFactory.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -17,8 +17,6 @@
 #include <QJsonObject>
 #include <QLocale>
 #include <QMimeData>
-#include <QProcess>
-#include <QSaveFile>
 #include <QTextStream>
 #include <QTime>
 #include <QUrl>
@@ -128,179 +126,11 @@ bool removeOrphanedAttachments(const Database &database, QString *error)
     return true;
 }
 
-QString codexExecutable()
-{
-    const auto override = qEnvironmentVariable("ARTEMIS_CODEX_EXECUTABLE").trimmed();
-    return override.isEmpty() ? QStringLiteral("codex") : override;
-}
-
-QString codexConfigPath()
-{
-    const auto codexHome = qEnvironmentVariable("CODEX_HOME").trimmed();
-    return QDir(codexHome.isEmpty()
-                    ? QDir::home().filePath(QStringLiteral(".codex"))
-                    : codexHome)
-        .filePath(QStringLiteral("config.toml"));
-}
-
-QString tomlBasicString(const QString &value)
-{
-    QString escaped;
-    escaped.reserve(value.size());
-    for (const auto character : value) {
-        switch (character.unicode()) {
-        case '\\':
-            escaped += QStringLiteral("\\\\");
-            break;
-        case '"':
-            escaped += QStringLiteral("\\\"");
-            break;
-        case '\b':
-            escaped += QStringLiteral("\\b");
-            break;
-        case '\t':
-            escaped += QStringLiteral("\\t");
-            break;
-        case '\n':
-            escaped += QStringLiteral("\\n");
-            break;
-        case '\f':
-            escaped += QStringLiteral("\\f");
-            break;
-        case '\r':
-            escaped += QStringLiteral("\\r");
-            break;
-        default:
-            if (character.unicode() < 0x20) {
-                escaped += QStringLiteral("\\u%1").arg(
-                    static_cast<uint>(character.unicode()), 4, 16, QChar(u'0'));
-            } else {
-                escaped += character;
-            }
-            break;
-        }
-    }
-    return QStringLiteral("\"%1\"").arg(escaped);
-}
-
-int nextTomlTableIndex(const QStringList &lines, int start)
-{
-    for (int i = start; i < lines.size(); ++i) {
-        const auto line = lines.at(i).trimmed();
-        if (line.startsWith(QChar(u'[')) && line.contains(QChar(u']')))
-            return i;
-    }
-    return lines.size();
-}
-
-int tomlTableIndex(const QStringList &lines, const QString &header)
-{
-    for (int i = 0; i < lines.size(); ++i) {
-        if (lines.at(i).trimmed() == header)
-            return i;
-    }
-    return -1;
-}
-
-bool writeMcpBearerTokenHeader(const QString &serverName, const QString &token,
-                               QString *error)
-{
-    const auto path = codexConfigPath();
-    const QFileInfo info(path);
-    if (!QDir().mkpath(info.absolutePath())) {
-        if (error)
-            *error = QStringLiteral("Could not create Codex config directory.");
-        return false;
-    }
-
-    QFile file(path);
-    QString text;
-    if (file.exists()) {
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            if (error)
-                *error = QStringLiteral("Could not read Codex config: %1")
-                             .arg(file.errorString());
-            return false;
-        }
-        text = QString::fromUtf8(file.readAll());
-    }
-
-    auto lines = text.split(QChar(u'\n'));
-    if (text.endsWith(QChar(u'\n')))
-        lines.removeLast();
-
-    const auto serverHeader = QStringLiteral("[mcp_servers.%1]").arg(serverName);
-    const auto headersHeader =
-        QStringLiteral("[mcp_servers.%1.http_headers]").arg(serverName);
-    const auto headerLine = QStringLiteral("Authorization = %1").arg(
-        tomlBasicString(token.startsWith(QStringLiteral("Bearer "), Qt::CaseInsensitive)
-                            ? token
-                            : QStringLiteral("Bearer %1").arg(token)));
-
-    const auto headersIndex = tomlTableIndex(lines, headersHeader);
-    if (headersIndex >= 0) {
-        const auto headersEnd = nextTomlTableIndex(lines, headersIndex + 1);
-        for (int i = headersIndex + 1; i < headersEnd; ++i) {
-            if (lines.at(i).trimmed().startsWith(QStringLiteral("Authorization"))) {
-                lines[i] = headerLine;
-                QSaveFile output(path);
-                if (!output.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                    if (error)
-                        *error = QStringLiteral("Could not write Codex config: %1")
-                                     .arg(output.errorString());
-                    return false;
-                }
-                output.write(lines.join(QChar(u'\n')).toUtf8());
-                output.write("\n");
-                if (!output.commit()) {
-                    if (error)
-                        *error = QStringLiteral("Could not save Codex config: %1")
-                                     .arg(output.errorString());
-                    return false;
-                }
-                QFile::setPermissions(path, QFileDevice::ReadOwner
-                                                | QFileDevice::WriteOwner);
-                return true;
-            }
-        }
-        lines.insert(headersEnd, headerLine);
-    } else {
-        const auto serverIndex = tomlTableIndex(lines, serverHeader);
-        const auto insertIndex =
-            serverIndex >= 0 ? nextTomlTableIndex(lines, serverIndex + 1)
-                             : lines.size();
-        QStringList block;
-        if (insertIndex > 0 && !lines.at(insertIndex - 1).trimmed().isEmpty())
-            block << QString{};
-        block << headersHeader << headerLine;
-        for (int i = 0; i < block.size(); ++i)
-            lines.insert(insertIndex + i, block.at(i));
-    }
-
-    QSaveFile output(path);
-    if (!output.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        if (error)
-            *error = QStringLiteral("Could not write Codex config: %1")
-                         .arg(output.errorString());
-        return false;
-    }
-    output.write(lines.join(QChar(u'\n')).toUtf8());
-    output.write("\n");
-    if (!output.commit()) {
-        if (error)
-            *error = QStringLiteral("Could not save Codex config: %1")
-                         .arg(output.errorString());
-        return false;
-    }
-    QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
-    return true;
-}
-
 } // namespace
 
 AppController::AppController(QObject *parent)
     : QObject(parent),
-      m_ownedProvider(std::make_unique<CodexClient>()),
+      m_ownedProvider(makeDefaultAgentProvider()),
       m_provider(m_ownedProvider.get())
 {
     connectProvider();
@@ -331,7 +161,7 @@ void AppController::connectProvider()
                 m_providerIssue.clear();
                 emit providerIssueChanged();
             }
-            setStatus(QStringLiteral("Codex connected"));
+            setStatus(QStringLiteral("Provider connected"));
             loadModels();
             loadThreads();
             refreshMcpServers();
@@ -1285,7 +1115,7 @@ void AppController::handleUserInputRequest(const QString &threadId, const QStrin
     if (itemId.isEmpty() || questions.isEmpty())
         return;
     if (hasPendingUserInput()) {
-        setStatus(QStringLiteral("Codex requested new input before the previous question was answered."));
+        setStatus(QStringLiteral("Provider requested new input before the previous question was answered."));
         return;
     }
     m_pendingUserInputThreadId = threadId;
@@ -1486,7 +1316,7 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
             const auto draft = cleanCommitDraft(m_commitDraftBuffer);
             if (draft.isEmpty()) {
                 emit commitDraftFinished(
-                    false, QStringLiteral("Codex returned an empty commit message."));
+                    false, QStringLiteral("Provider returned an empty commit message."));
             } else {
                 emit commitDraftFinished(true, draft);
             }
@@ -1621,7 +1451,7 @@ void AppController::generateCommitMessage()
         return;
     }
     if (!m_provider->ready()) {
-        emit commitDraftFinished(false, QStringLiteral("Codex is offline."));
+        emit commitDraftFinished(false, QStringLiteral("Provider is offline."));
         return;
     }
     const auto projectId = m_projects.row(m_selectedProject).id;
@@ -2052,35 +1882,25 @@ void AppController::addMcpServer(const QString &name, const QString &transport,
                                  const QString &target,
                                  const QString &bearerToken)
 {
-    const auto trimmedName = name.trimmed();
-    const auto trimmedTarget = target.trimmed();
-    const auto trimmedBearerToken = bearerToken.trimmed();
-    if (trimmedName.isEmpty() || trimmedTarget.isEmpty()) {
-        m_mcpIssue = QStringLiteral("MCP server name and target are required.");
-        emit mcpServersChanged();
+    if (m_mcpBusy)
         return;
-    }
-    QStringList arguments{QStringLiteral("mcp"), QStringLiteral("add"), trimmedName};
-    if (transport == QStringLiteral("http")) {
-        arguments << QStringLiteral("--url") << trimmedTarget;
-    } else {
-        const auto command = QProcess::splitCommand(trimmedTarget);
-        if (command.isEmpty()) {
-            m_mcpIssue = QStringLiteral("MCP stdio command is empty.");
+    m_mcpBusy = true;
+    m_mcpIssue.clear();
+    m_mcpLoginUrl.clear();
+    emit mcpServersChanged();
+    m_provider->addMcpServer(name, transport, target, bearerToken,
+                             [this](const QJsonObject &, const QString &error) {
+        m_mcpBusy = false;
+        if (!error.isEmpty()) {
+            m_mcpIssue = error;
+            setStatus(error);
             emit mcpServersChanged();
             return;
         }
-        arguments << QStringLiteral("--");
-        arguments << command;
-    }
-    std::function<bool(QString *)> afterSuccess;
-    if (transport == QStringLiteral("http") && !trimmedBearerToken.isEmpty()) {
-        afterSuccess = [trimmedName, trimmedBearerToken](QString *error) {
-            return writeMcpBearerTokenHeader(trimmedName, trimmedBearerToken, error);
-        };
-    }
-    runCodexMcpCommand(arguments, QStringLiteral("MCP server added"),
-                       std::move(afterSuccess));
+        setStatus(QStringLiteral("MCP server added"));
+        emit mcpServersChanged();
+        reloadMcpServers();
+    });
 }
 
 void AppController::removeMcpServer(const QString &name)
@@ -2088,8 +1908,24 @@ void AppController::removeMcpServer(const QString &name)
     const auto trimmed = name.trimmed();
     if (trimmed.isEmpty())
         return;
-    runCodexMcpCommand({QStringLiteral("mcp"), QStringLiteral("remove"), trimmed},
-                       QStringLiteral("MCP server removed"));
+    if (m_mcpBusy)
+        return;
+    m_mcpBusy = true;
+    m_mcpIssue.clear();
+    m_mcpLoginUrl.clear();
+    emit mcpServersChanged();
+    m_provider->removeMcpServer(trimmed, [this](const QJsonObject &, const QString &error) {
+        m_mcpBusy = false;
+        if (!error.isEmpty()) {
+            m_mcpIssue = error;
+            setStatus(error);
+            emit mcpServersChanged();
+            return;
+        }
+        setStatus(QStringLiteral("MCP server removed"));
+        emit mcpServersChanged();
+        reloadMcpServers();
+    });
 }
 
 void AppController::setStatus(const QString &text)
@@ -2100,71 +1936,6 @@ void AppController::setStatus(const QString &text)
         return;
     m_status = text;
     emit statusTextChanged();
-}
-
-void AppController::runCodexMcpCommand(
-    const QStringList &arguments, const QString &successMessage,
-    std::function<bool(QString *)> afterSuccess)
-{
-    if (m_mcpBusy)
-        return;
-    m_mcpBusy = true;
-    m_mcpIssue.clear();
-    m_mcpLoginUrl.clear();
-    emit mcpServersChanged();
-    auto *process = new QProcess(this);
-    auto *timeout = new QTimer(process);
-    timeout->setSingleShot(true);
-    const auto completed = std::make_shared<bool>(false);
-    const auto finish = [this, process, timeout, successMessage, completed,
-                         afterSuccess = std::move(afterSuccess)](
-                            bool ok, const QString &message) {
-        if (std::exchange(*completed, true))
-            return;
-        timeout->stop();
-        process->deleteLater();
-        m_mcpBusy = false;
-        if (!ok) {
-            m_mcpIssue = message;
-            setStatus(message);
-            emit mcpServersChanged();
-            return;
-        }
-        if (afterSuccess) {
-            QString error;
-            if (!afterSuccess(&error)) {
-                const auto finalError =
-                    error.isEmpty()
-                    ? QStringLiteral("Could not save MCP bearer token.")
-                    : error;
-                m_mcpIssue = finalError;
-                setStatus(finalError);
-                emit mcpServersChanged();
-                return;
-            }
-        }
-        setStatus(successMessage);
-        emit mcpServersChanged();
-        reloadMcpServers();
-    };
-    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [process, finish](int code, QProcess::ExitStatus status) {
-        const auto output = QString::fromUtf8(process->readAllStandardOutput()
-                                              + process->readAllStandardError())
-                                .trimmed();
-        finish(status == QProcess::NormalExit && code == 0,
-               output.isEmpty() ? QStringLiteral("Codex MCP command failed") : output);
-    });
-    connect(process, &QProcess::errorOccurred, this,
-            [process, finish](QProcess::ProcessError) {
-        finish(false, process->errorString());
-    });
-    connect(timeout, &QTimer::timeout, this, [process, finish] {
-        process->kill();
-        finish(false, QStringLiteral("Timed out while updating MCP configuration."));
-    });
-    process->start(codexExecutable(), arguments);
-    timeout->start(30000);
 }
 
 void AppController::persistConversationEvent(const ConversationEvent &event,

@@ -57,7 +57,7 @@ Window {
         if (index === 0)
             return "Model defaults for new work, commits, and generated titles."
         if (index === 1)
-            return "External context servers available to Codex."
+            return "External context servers available to the active provider."
         return "Desktop applications used for project actions."
     }
 
@@ -364,7 +364,7 @@ Window {
                             Layout.leftMargin: Kirigami.Units.largeSpacing
                             Layout.rightMargin: Kirigami.Units.largeSpacing
                             title: "Default models"
-                            subtitle: "These choices are used when Artemis starts a new Codex task."
+                            subtitle: "These choices are used when Artemis starts a new provider task."
 
                             Kirigami.FormLayout {
                                 Layout.fillWidth: true
@@ -613,7 +613,7 @@ Window {
                             Layout.leftMargin: Kirigami.Units.largeSpacing
                             Layout.rightMargin: Kirigami.Units.largeSpacing
                             title: "Add server"
-                            subtitle: "Register an MCP server for Codex."
+                            subtitle: "Register an MCP server for the active provider."
 
                             Kirigami.FormLayout {
                                 Layout.fillWidth: true
