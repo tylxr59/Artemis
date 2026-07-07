@@ -107,6 +107,14 @@ bool Database::migrate(QString *error)
             QStringLiteral(
                 "CREATE INDEX IF NOT EXISTS conversation_events_thread_order "
                 "ON conversation_events(provider_thread_id, id)")
+        }},
+        {4, {
+            QStringLiteral("ALTER TABLE projects ADD COLUMN active_at TEXT"),
+            QStringLiteral(
+                "UPDATE projects SET active_at=COALESCE("
+                "(SELECT MAX(updated_at) FROM thread_bindings "
+                "WHERE thread_bindings.project_id=projects.id), "
+                "created_at, strftime('%Y-%m-%d %H:%M:%f', 'now'))")
         }}
     };
 
@@ -159,7 +167,13 @@ QVector<QVariantMap> Database::projects(QString *error) const
     QVector<QVariantMap> result;
     QSqlQuery query(m_db);
     if (!query.exec(QStringLiteral(
-            "SELECT id, path, name FROM projects ORDER BY name COLLATE NOCASE"))) {
+            "SELECT p.id, p.path, p.name "
+            "FROM projects p LEFT JOIN thread_bindings b ON b.project_id=p.id "
+            "GROUP BY p.id, p.path, p.name, p.active_at, p.created_at "
+            "ORDER BY CASE "
+            "WHEN MAX(b.updated_at) > COALESCE(p.active_at, p.created_at) "
+            "THEN MAX(b.updated_at) ELSE COALESCE(p.active_at, p.created_at) END DESC, "
+            "p.name COLLATE NOCASE"))) {
         if (error)
             *error = query.lastError().text();
         return result;
@@ -174,7 +188,12 @@ QVector<QVariantMap> Database::projects(QString *error) const
 qint64 Database::addProject(const QString &path, const QString &name, QString *error)
 {
     QSqlQuery query(m_db);
-    query.prepare(QStringLiteral("INSERT INTO projects(path, name) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET name=excluded.name RETURNING id"));
+    query.prepare(QStringLiteral(
+        "INSERT INTO projects(path, name, active_at) "
+        "VALUES (?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now')) "
+        "ON CONFLICT(path) DO UPDATE SET "
+        "name=excluded.name, active_at=strftime('%Y-%m-%d %H:%M:%f', 'now') "
+        "RETURNING id"));
     query.addBindValue(path);
     query.addBindValue(name);
     if (!query.exec() || !query.next()) {
@@ -201,16 +220,53 @@ bool Database::removeProject(qint64 id, QString *error)
 bool Database::bindThread(qint64 projectId, const QString &threadId, const QString &workspacePath,
                           bool external, QString *error)
 {
+    if (!m_db.transaction()) {
+        if (error)
+            *error = m_db.lastError().text();
+        return false;
+    }
+
     QSqlQuery query(m_db);
     query.prepare(QStringLiteral(
         "INSERT INTO thread_bindings(provider_thread_id, project_id, workspace_path, external) "
         "VALUES (?, ?, ?, ?) ON CONFLICT(provider_thread_id) DO UPDATE SET "
         "project_id=excluded.project_id, workspace_path=excluded.workspace_path, "
-        "external=excluded.external, updated_at=CURRENT_TIMESTAMP"));
+        "external=excluded.external, updated_at=strftime('%Y-%m-%d %H:%M:%f', 'now')"));
     query.addBindValue(threadId);
     query.addBindValue(projectId);
     query.addBindValue(workspacePath);
     query.addBindValue(external);
+    if (!query.exec()) {
+        if (error)
+            *error = query.lastError().text();
+        m_db.rollback();
+        return false;
+    }
+
+    QSqlQuery projectQuery(m_db);
+    projectQuery.prepare(QStringLiteral(
+        "UPDATE projects SET active_at=strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id=?"));
+    projectQuery.addBindValue(projectId);
+    if (!projectQuery.exec()) {
+        if (error)
+            *error = projectQuery.lastError().text();
+        m_db.rollback();
+        return false;
+    }
+    if (!m_db.commit()) {
+        if (error)
+            *error = m_db.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+bool Database::touchProject(qint64 id, QString *error)
+{
+    QSqlQuery query(m_db);
+    query.prepare(QStringLiteral(
+        "UPDATE projects SET active_at=strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id=?"));
+    query.addBindValue(id);
     if (!query.exec()) {
         if (error)
             *error = query.lastError().text();

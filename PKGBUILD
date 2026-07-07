@@ -1,5 +1,5 @@
 pkgname=artemis-git
-pkgver=0.1.0.r0.g0000000
+pkgver=2d3a47f
 pkgrel=1
 pkgdesc="Native KDE AI coding client for Codex"
 arch=('x86_64')

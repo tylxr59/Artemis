@@ -1,0 +1,16 @@
+--resource
+/home/tylxr/git/Artemis/src/build/.qt/rcc/artemis_icons.qrc
+--resource
+/home/tylxr/git/Artemis/src/build/.qt/rcc/qmake_org_artemis.qrc
+--resource
+/home/tylxr/git/Artemis/src/build/.qt/rcc/artemis_raw_qml_0.qrc
+--resource
+/home/tylxr/git/Artemis/src/build/.qt/rcc/artemis_raw_qml_0_extra_qmldirs.qrc
+/qt/qml/org/artemis/qml/Main.qml
+/qt/qml/org/artemis/qml/components/ConversationDelegate.qml
+/qt/qml/org/artemis/qml/components/DiffView.qml
+/qt/qml/org/artemis/qml/components/ThreadPane.qml
+/qt/qml/org/artemis/qml/dialogs/CommitDialog.qml
+/qt/qml/org/artemis/qml/dialogs/ImageViewerDialog.qml
+/qt/qml/org/artemis/qml/dialogs/SettingsDialog.qml
+/qt/qml/org/artemis/qml/pages/DiagnosticsPage.qml

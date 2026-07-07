@@ -233,7 +233,19 @@ private slots:
         }
         QVERIFY(firstIndex >= 0);
         QVERIFY(secondIndex >= 0);
+        const auto projectIndexForPath = [&controller](const QString &path) {
+            for (int row = 0; row < controller.projects()->rowCount(); ++row) {
+                const auto index = controller.projects()->index(row);
+                if (controller.projects()->data(index, ProjectTreeModel::PathRole).toString()
+                    == path) {
+                    return row;
+                }
+            }
+            return -1;
+        };
 
+        firstIndex = projectIndexForPath(firstPath);
+        QVERIFY(firstIndex >= 0);
         controller.selectProjectThread(firstIndex, QStringLiteral("thread-a"));
         QCOMPARE(controller.selectedThreadId(), QStringLiteral("thread-a"));
         QVERIFY(controller.sendPrompt(
@@ -243,6 +255,8 @@ private slots:
         QCOMPARE(controller.workingThreadIds(),
                  QStringList({QStringLiteral("thread-a")}));
 
+        secondIndex = projectIndexForPath(secondPath);
+        QVERIFY(secondIndex >= 0);
         controller.selectProjectThread(secondIndex, QStringLiteral("thread-b"));
         QCOMPARE(controller.selectedThreadId(), QStringLiteral("thread-b"));
         QVERIFY(controller.sendPrompt(
@@ -259,6 +273,8 @@ private slots:
             QStringLiteral("Ran command"), QStringLiteral("background output"),
             {{QStringLiteral("itemId"), QStringLiteral("command-a")}});
 
+        firstIndex = projectIndexForPath(firstPath);
+        QVERIFY(firstIndex >= 0);
         controller.selectProjectThread(firstIndex, QStringLiteral("thread-a"));
         QVERIFY(controller.turnRunning());
         QCOMPARE(controller.conversation()->rowCount(), 2);
@@ -294,11 +310,15 @@ private slots:
         QCOMPARE(controller.completedThreadIds(),
                  QStringList({QStringLiteral("thread-b")}));
 
+        secondIndex = projectIndexForPath(secondPath);
+        QVERIFY(secondIndex >= 0);
         controller.selectProjectThread(secondIndex, QStringLiteral("thread-b"));
         QVERIFY(!controller.turnRunning());
         QVERIFY(controller.completedThreadIds().isEmpty());
         QCOMPARE(controller.workingThreadIds(),
                  QStringList({QStringLiteral("thread-a")}));
+        firstIndex = projectIndexForPath(firstPath);
+        QVERIFY(firstIndex >= 0);
         controller.selectProjectThread(firstIndex, QStringLiteral("thread-a"));
         QVERIFY(controller.turnRunning());
     }
@@ -433,11 +453,37 @@ private slots:
         Database database;
         QString error;
         QVERIFY2(database.open(&error), qPrintable(error));
-        QCOMPARE(database.schemaVersion(), 3);
+        QCOMPARE(database.schemaVersion(), 4);
         const auto id = database.addProject(QDir::tempPath() + QStringLiteral("/artemis-test-project"),
                                             QStringLiteral("Test"), &error);
         QVERIFY2(id > 0, qPrintable(error));
         QVERIFY(!database.projects().isEmpty());
+        const auto olderProjectPath = QDir::tempPath()
+            + QStringLiteral("/artemis-older-active-project-%1")
+                  .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
+        const auto newerProjectPath = QDir::tempPath()
+            + QStringLiteral("/artemis-newer-active-project-%1")
+                  .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
+        const auto olderProjectId = database.addProject(
+            olderProjectPath, QStringLiteral("Older Active"), &error);
+        QVERIFY2(olderProjectId > 0, qPrintable(error));
+        QVERIFY(database.bindThread(olderProjectId, QStringLiteral("older-active-thread"),
+                                    olderProjectPath, false, &error));
+        QTest::qWait(5);
+        const auto newerProjectId = database.addProject(
+            newerProjectPath, QStringLiteral("Newer Active"), &error);
+        QVERIFY2(newerProjectId > 0, qPrintable(error));
+        auto projects = database.projects(&error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QVERIFY(!projects.isEmpty());
+        QCOMPARE(projects.first().value(QStringLiteral("path")).toString(), newerProjectPath);
+        QTest::qWait(5);
+        QVERIFY(database.touchProject(olderProjectId, &error));
+        projects = database.projects(&error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QVERIFY(!projects.isEmpty());
+        QCOMPARE(projects.first().value(QStringLiteral("path")).toString(), olderProjectPath);
+        Q_UNUSED(newerProjectId);
         QVERIFY(database.bindThread(id, QStringLiteral("thread-to-hide"),
                                     QDir::tempPath(), false, &error));
         QVERIFY(database.hideThread(id, QStringLiteral("thread-to-hide"), &error));
@@ -491,9 +537,9 @@ private slots:
         Database database;
         QString error;
         QVERIFY2(database.open(&error), qPrintable(error));
-        QCOMPARE(database.schemaVersion(), 3);
+        QCOMPARE(database.schemaVersion(), 4);
         QVERIFY2(database.migrate(&error), qPrintable(error));
-        QCOMPARE(database.schemaVersion(), 3);
+        QCOMPARE(database.schemaVersion(), 4);
     }
 
     void asynchronousGitStartupFailureCompletes()

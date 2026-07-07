@@ -1,0 +1,18 @@
+{
+    "classes": [
+        {
+            "className": "GitService",
+            "lineNumber": 25,
+            "object": true,
+            "qualifiedClassName": "Artemis::GitService",
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QObject"
+                }
+            ]
+        }
+    ],
+    "inputFile": "GitService.h",
+    "outputRevision": 69
+}

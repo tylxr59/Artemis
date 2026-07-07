@@ -1,0 +1,18 @@
+{
+    "classes": [
+        {
+            "className": "ProjectTreeModel",
+            "lineNumber": 16,
+            "object": true,
+            "qualifiedClassName": "Artemis::ProjectTreeModel",
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QAbstractListModel"
+                }
+            ]
+        }
+    ],
+    "inputFile": "ProjectTreeModel.h",
+    "outputRevision": 69
+}

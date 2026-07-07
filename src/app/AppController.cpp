@@ -377,6 +377,7 @@ void AppController::loadProjects()
 {
     QVector<ProjectRow> rows;
     QString error;
+    const auto selectedId = m_projects.row(m_selectedProject).id;
     const auto projects = m_database.projects(&error);
     if (!error.isEmpty()) {
         setStatus(QStringLiteral("Could not load projects: %1").arg(error));
@@ -397,6 +398,13 @@ void AppController::loadProjects()
         rows.push_back(row);
     }
     m_projects.setRows(std::move(rows));
+    if (selectedId >= 0) {
+        const auto selectedIndex = m_projects.indexOfId(selectedId);
+        if (selectedIndex != m_selectedProject) {
+            m_selectedProject = selectedIndex;
+            emit selectedProjectChanged();
+        }
+    }
     if (m_projects.rowCount() > 0 && m_selectedProject < 0)
         selectProject(0);
 }
@@ -1063,6 +1071,15 @@ void AppController::startPromptTurn(const QString &threadId, const QString &prom
     const auto titleProjectPath = selectedProjectPath();
     const auto titleWorkspacePath = selectedWorkspacePath();
     const auto titleModelId = m_titleModelId;
+    const auto project = m_projects.row(m_selectedProject);
+    if (project.id >= 0) {
+        QString touchError;
+        if (!m_database.touchProject(project.id, &touchError)) {
+            setStatus(QStringLiteral("Could not update project activity: %1").arg(touchError));
+        } else {
+            loadProjects();
+        }
+    }
     m_conversation.setThread(threadId);
     const ConversationEvent userEvent{
         threadId, QStringLiteral("user"), QStringLiteral("You"), prompt,

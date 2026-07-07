@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/">
+    <file alias="/qt/qml/org/artemis">/home/tylxr/git/Artemis/src/build/org/artemis</file>
+
+  </qresource>
+</RCC>

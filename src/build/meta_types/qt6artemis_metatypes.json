@@ -1,0 +1,1782 @@
+[
+    {
+        "classes": [
+            {
+                "className": "GitService",
+                "lineNumber": 25,
+                "object": true,
+                "qualifiedClassName": "Artemis::GitService",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QObject"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "GitService.h",
+        "outputRevision": 69
+    },
+    {
+        "classes": [
+            {
+                "className": "AgentProvider",
+                "lineNumber": 37,
+                "object": true,
+                "qualifiedClassName": "Artemis::AgentProvider",
+                "signals": [
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "ready",
+                                "type": "bool"
+                            }
+                        ],
+                        "index": 0,
+                        "lineNumber": 87,
+                        "name": "readyChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 1,
+                        "lineNumber": 88,
+                        "name": "setupChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 2,
+                        "lineNumber": 89,
+                        "name": "versionChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "threadId",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "turnId",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 3,
+                        "lineNumber": 90,
+                        "name": "activeTurnStarted",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "threadId",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "contextTokens",
+                                "type": "qint64"
+                            },
+                            {
+                                "name": "totalProcessedTokens",
+                                "type": "qint64"
+                            },
+                            {
+                                "name": "modelContextWindow",
+                                "type": "qint64"
+                            }
+                        ],
+                        "index": 4,
+                        "lineNumber": 91,
+                        "name": "tokenUsageUpdated",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "threadId",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "turnId",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "itemId",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "questions",
+                                "type": "QVariantList"
+                            }
+                        ],
+                        "index": 5,
+                        "lineNumber": 93,
+                        "name": "userInputRequested",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "threadId",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "type",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "title",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "content",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "metadata",
+                                "type": "QVariantMap"
+                            }
+                        ],
+                        "index": 6,
+                        "lineNumber": 95,
+                        "name": "domainEvent",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "message",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 7,
+                        "lineNumber": 98,
+                        "name": "providerError",
+                        "returnType": "void"
+                    }
+                ],
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QObject"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "AgentProvider.h",
+        "outputRevision": 69
+    },
+    {
+        "classes": [
+            {
+                "className": "AppController",
+                "lineNumber": 20,
+                "methods": [
+                    {
+                        "access": "public",
+                        "index": 28,
+                        "lineNumber": 128,
+                        "name": "chooseProjectFolder",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "input",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 29,
+                        "lineNumber": 129,
+                        "name": "addProject",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 30,
+                        "lineNumber": 130,
+                        "name": "removeSelectedProject",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "index",
+                                "type": "int"
+                            }
+                        ],
+                        "index": 31,
+                        "lineNumber": 131,
+                        "name": "removeProject",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "index",
+                                "type": "int"
+                            }
+                        ],
+                        "index": 32,
+                        "lineNumber": 132,
+                        "name": "removeThread",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "projectIndex",
+                                "type": "int"
+                            },
+                            {
+                                "name": "threadId",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 33,
+                        "lineNumber": 133,
+                        "name": "removeProjectThread",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "index",
+                                "type": "int"
+                            }
+                        ],
+                        "index": 34,
+                        "lineNumber": 134,
+                        "name": "selectProject",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "projectIndex",
+                                "type": "int"
+                            },
+                            {
+                                "name": "threadId",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 35,
+                        "lineNumber": 135,
+                        "name": "selectProjectThread",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "index",
+                                "type": "int"
+                            }
+                        ],
+                        "index": 36,
+                        "lineNumber": 136,
+                        "name": "selectThread",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "modelId",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "reasoningEffort",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "permissionMode",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 37,
+                        "lineNumber": 137,
+                        "name": "createThread",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "text",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "imageValues",
+                                "type": "QVariantList"
+                            },
+                            {
+                                "name": "modelId",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "reasoningEffort",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "permissionMode",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "collaborationMode",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 38,
+                        "lineNumber": 139,
+                        "name": "sendPrompt",
+                        "returnType": "bool"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "text",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 39,
+                        "lineNumber": 143,
+                        "name": "copyText",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 40,
+                        "lineNumber": 144,
+                        "name": "pasteClipboardImage",
+                        "returnType": "QString"
+                    },
+                    {
+                        "access": "public",
+                        "index": 41,
+                        "lineNumber": 145,
+                        "name": "interruptTurn",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "answer",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 42,
+                        "lineNumber": 146,
+                        "name": "answerPendingUserInput",
+                        "returnType": "bool"
+                    },
+                    {
+                        "access": "public",
+                        "index": 43,
+                        "lineNumber": 147,
+                        "name": "refreshGit",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 44,
+                        "lineNumber": 148,
+                        "name": "generateCommitMessage",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "subject",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "body",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 45,
+                        "lineNumber": 149,
+                        "name": "commitAllAndPush",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "subject",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "body",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "branch",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "remote",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 46,
+                        "lineNumber": 150,
+                        "name": "commitFeatureBranch",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 47,
+                        "lineNumber": 152,
+                        "name": "retryLockedCommit",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 48,
+                        "lineNumber": 153,
+                        "name": "removeCommitLockAndRetry",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 49,
+                        "lineNumber": 154,
+                        "name": "cancelLockedCommit",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "message",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 50,
+                        "isConst": true,
+                        "lineNumber": 155,
+                        "name": "suggestBranch",
+                        "returnType": "QString"
+                    },
+                    {
+                        "access": "public",
+                        "index": 51,
+                        "lineNumber": 156,
+                        "name": "openProjectFolder",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 52,
+                        "lineNumber": 157,
+                        "name": "openProjectEditor",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 53,
+                        "lineNumber": 158,
+                        "name": "openTerminal",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 54,
+                        "lineNumber": 159,
+                        "name": "refreshMcpServers",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 55,
+                        "lineNumber": 160,
+                        "name": "reloadMcpServers",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "name",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 56,
+                        "lineNumber": 161,
+                        "name": "loginMcpServer",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "name",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "transport",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "target",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 57,
+                        "lineNumber": 162,
+                        "name": "addMcpServer",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "name",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 58,
+                        "lineNumber": 164,
+                        "name": "removeMcpServer",
+                        "returnType": "void"
+                    }
+                ],
+                "object": true,
+                "properties": [
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": false,
+                        "index": 0,
+                        "lineNumber": 22,
+                        "name": "projects",
+                        "override": false,
+                        "read": "projects",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "ProjectTreeModel*",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": false,
+                        "index": 1,
+                        "lineNumber": 23,
+                        "name": "conversation",
+                        "override": false,
+                        "read": "conversation",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "ConversationModel*",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 2,
+                        "lineNumber": 24,
+                        "name": "threads",
+                        "notify": "threadsChanged",
+                        "override": false,
+                        "read": "threads",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QVariantList",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 3,
+                        "lineNumber": 25,
+                        "name": "models",
+                        "notify": "modelsChanged",
+                        "override": false,
+                        "read": "models",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QVariantList",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 4,
+                        "lineNumber": 26,
+                        "name": "codingModelId",
+                        "notify": "settingsChanged",
+                        "override": false,
+                        "read": "codingModelId",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setCodingModelId"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 5,
+                        "lineNumber": 27,
+                        "name": "codingReasoningEffort",
+                        "notify": "settingsChanged",
+                        "override": false,
+                        "read": "codingReasoningEffort",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setCodingReasoningEffort"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 6,
+                        "lineNumber": 28,
+                        "name": "commitModelId",
+                        "notify": "settingsChanged",
+                        "override": false,
+                        "read": "commitModelId",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setCommitModelId"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 7,
+                        "lineNumber": 29,
+                        "name": "titleModelId",
+                        "notify": "settingsChanged",
+                        "override": false,
+                        "read": "titleModelId",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setTitleModelId"
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": false,
+                        "index": 8,
+                        "lineNumber": 30,
+                        "name": "editorOptions",
+                        "override": false,
+                        "read": "editorOptions",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QVariantList",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 9,
+                        "lineNumber": 31,
+                        "name": "selectedEditorId",
+                        "notify": "settingsChanged",
+                        "override": false,
+                        "read": "selectedEditorId",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setSelectedEditorId"
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": false,
+                        "index": 10,
+                        "lineNumber": 32,
+                        "name": "terminalOptions",
+                        "override": false,
+                        "read": "terminalOptions",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QVariantList",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 11,
+                        "lineNumber": 33,
+                        "name": "selectedTerminalId",
+                        "notify": "settingsChanged",
+                        "override": false,
+                        "read": "selectedTerminalId",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setSelectedTerminalId"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 12,
+                        "lineNumber": 34,
+                        "name": "selectedProjectIndex",
+                        "notify": "selectedProjectChanged",
+                        "override": false,
+                        "read": "selectedProjectIndex",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "int",
+                        "user": false,
+                        "virtual": false,
+                        "write": "selectProject"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 13,
+                        "lineNumber": 35,
+                        "name": "selectedProjectPath",
+                        "notify": "selectedProjectChanged",
+                        "override": false,
+                        "read": "selectedProjectPath",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 14,
+                        "lineNumber": 36,
+                        "name": "selectedProjectName",
+                        "notify": "selectedProjectChanged",
+                        "override": false,
+                        "read": "selectedProjectName",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 15,
+                        "lineNumber": 37,
+                        "name": "selectedProjectIsGit",
+                        "notify": "selectedProjectChanged",
+                        "override": false,
+                        "read": "selectedProjectIsGit",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 16,
+                        "lineNumber": 38,
+                        "name": "selectedThreadId",
+                        "notify": "selectedThreadChanged",
+                        "override": false,
+                        "read": "selectedThreadId",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 17,
+                        "lineNumber": 39,
+                        "name": "selectedThreadTitle",
+                        "notify": "selectedThreadChanged",
+                        "override": false,
+                        "read": "selectedThreadTitle",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 18,
+                        "lineNumber": 40,
+                        "name": "selectedThreadInfo",
+                        "notify": "selectedThreadChanged",
+                        "override": false,
+                        "read": "selectedThreadInfo",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QVariantMap",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 19,
+                        "lineNumber": 41,
+                        "name": "currentTasks",
+                        "notify": "currentTasksChanged",
+                        "override": false,
+                        "read": "currentTasks",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 20,
+                        "lineNumber": 42,
+                        "name": "currentPlan",
+                        "notify": "currentPlanChanged",
+                        "override": false,
+                        "read": "currentPlan",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QVariantList",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 21,
+                        "lineNumber": 43,
+                        "name": "currentPlanExplanation",
+                        "notify": "currentPlanChanged",
+                        "override": false,
+                        "read": "currentPlanExplanation",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 22,
+                        "lineNumber": 44,
+                        "name": "turnRunning",
+                        "notify": "turnRunningChanged",
+                        "override": false,
+                        "read": "turnRunning",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 23,
+                        "lineNumber": 45,
+                        "name": "workingThreadIds",
+                        "notify": "workingThreadsChanged",
+                        "override": false,
+                        "read": "workingThreadIds",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QStringList",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 24,
+                        "lineNumber": 46,
+                        "name": "completedThreadIds",
+                        "notify": "completedThreadsChanged",
+                        "override": false,
+                        "read": "completedThreadIds",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QStringList",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 25,
+                        "lineNumber": 47,
+                        "name": "hasPendingUserInput",
+                        "notify": "pendingUserInputChanged",
+                        "override": false,
+                        "read": "hasPendingUserInput",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 26,
+                        "lineNumber": 48,
+                        "name": "pendingUserInputQuestion",
+                        "notify": "pendingUserInputChanged",
+                        "override": false,
+                        "read": "pendingUserInputQuestion",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QVariantMap",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 27,
+                        "lineNumber": 49,
+                        "name": "pendingUserInputQuestionNumber",
+                        "notify": "pendingUserInputChanged",
+                        "override": false,
+                        "read": "pendingUserInputQuestionNumber",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "int",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 28,
+                        "lineNumber": 50,
+                        "name": "pendingUserInputQuestionCount",
+                        "notify": "pendingUserInputChanged",
+                        "override": false,
+                        "read": "pendingUserInputQuestionCount",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "int",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 29,
+                        "lineNumber": 51,
+                        "name": "turnElapsedText",
+                        "notify": "turnElapsedChanged",
+                        "override": false,
+                        "read": "turnElapsedText",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 30,
+                        "lineNumber": 52,
+                        "name": "providerReady",
+                        "notify": "providerReadyChanged",
+                        "override": false,
+                        "read": "providerReady",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 31,
+                        "lineNumber": 53,
+                        "name": "providerSetupRequired",
+                        "notify": "providerSetupChanged",
+                        "override": false,
+                        "read": "providerSetupRequired",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 32,
+                        "lineNumber": 54,
+                        "name": "providerSetupInstructions",
+                        "notify": "providerSetupChanged",
+                        "override": false,
+                        "read": "providerSetupInstructions",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 33,
+                        "lineNumber": 55,
+                        "name": "providerIssueText",
+                        "notify": "providerIssueChanged",
+                        "override": false,
+                        "read": "providerIssueText",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 34,
+                        "lineNumber": 56,
+                        "name": "providerVersion",
+                        "notify": "providerReadyChanged",
+                        "override": false,
+                        "read": "providerVersion",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 35,
+                        "lineNumber": 57,
+                        "name": "mcpServers",
+                        "notify": "mcpServersChanged",
+                        "override": false,
+                        "read": "mcpServers",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QVariantList",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 36,
+                        "lineNumber": 58,
+                        "name": "mcpBusy",
+                        "notify": "mcpServersChanged",
+                        "override": false,
+                        "read": "mcpBusy",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 37,
+                        "lineNumber": 59,
+                        "name": "mcpIssueText",
+                        "notify": "mcpServersChanged",
+                        "override": false,
+                        "read": "mcpIssueText",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 38,
+                        "lineNumber": 60,
+                        "name": "mcpLoginUrl",
+                        "notify": "mcpServersChanged",
+                        "override": false,
+                        "read": "mcpLoginUrl",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 39,
+                        "lineNumber": 61,
+                        "name": "statusText",
+                        "notify": "statusTextChanged",
+                        "override": false,
+                        "read": "statusText",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 40,
+                        "lineNumber": 62,
+                        "name": "contextTokens",
+                        "notify": "tokenUsageChanged",
+                        "override": false,
+                        "read": "contextTokens",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "qint64",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 41,
+                        "lineNumber": 63,
+                        "name": "totalProcessedTokens",
+                        "notify": "tokenUsageChanged",
+                        "override": false,
+                        "read": "totalProcessedTokens",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "qint64",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 42,
+                        "lineNumber": 64,
+                        "name": "modelContextWindow",
+                        "notify": "tokenUsageChanged",
+                        "override": false,
+                        "read": "modelContextWindow",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "qint64",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 43,
+                        "lineNumber": 65,
+                        "name": "contextUsagePercent",
+                        "notify": "tokenUsageChanged",
+                        "override": false,
+                        "read": "contextUsagePercent",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "int",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 44,
+                        "lineNumber": 66,
+                        "name": "hasTokenUsage",
+                        "notify": "tokenUsageChanged",
+                        "override": false,
+                        "read": "hasTokenUsage",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 45,
+                        "lineNumber": 67,
+                        "name": "diffText",
+                        "notify": "diffChanged",
+                        "override": false,
+                        "read": "diffText",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 46,
+                        "lineNumber": 68,
+                        "name": "gitStatusText",
+                        "notify": "diffChanged",
+                        "override": false,
+                        "read": "gitStatusText",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 47,
+                        "lineNumber": 69,
+                        "name": "gitRepositoryUrl",
+                        "notify": "gitRepositoryUrlChanged",
+                        "override": false,
+                        "read": "gitRepositoryUrl",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 48,
+                        "lineNumber": 70,
+                        "name": "hasGitChanges",
+                        "notify": "diffChanged",
+                        "override": false,
+                        "read": "hasGitChanges",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": false,
+                        "index": 49,
+                        "lineNumber": 71,
+                        "name": "databasePath",
+                        "override": false,
+                        "read": "databasePath",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    }
+                ],
+                "qualifiedClassName": "Artemis::AppController",
+                "signals": [
+                    {
+                        "access": "public",
+                        "index": 0,
+                        "lineNumber": 173,
+                        "name": "threadsChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "projectPath",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "threads",
+                                "type": "QVariantList"
+                            }
+                        ],
+                        "index": 1,
+                        "lineNumber": 174,
+                        "name": "projectThreadsLoaded",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "projectPath",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "threadId",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 2,
+                        "lineNumber": 175,
+                        "name": "projectThreadRemoved",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 3,
+                        "lineNumber": 176,
+                        "name": "modelsChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 4,
+                        "lineNumber": 177,
+                        "name": "settingsChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 5,
+                        "lineNumber": 178,
+                        "name": "selectedProjectChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 6,
+                        "lineNumber": 179,
+                        "name": "selectedThreadChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 7,
+                        "lineNumber": 180,
+                        "name": "currentTasksChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 8,
+                        "lineNumber": 181,
+                        "name": "currentPlanChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 9,
+                        "lineNumber": 182,
+                        "name": "taskPanelRequested",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 10,
+                        "lineNumber": 183,
+                        "name": "turnRunningChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 11,
+                        "lineNumber": 184,
+                        "name": "workingThreadsChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 12,
+                        "lineNumber": 185,
+                        "name": "completedThreadsChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 13,
+                        "lineNumber": 186,
+                        "name": "pendingUserInputChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 14,
+                        "lineNumber": 187,
+                        "name": "turnElapsedChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 15,
+                        "lineNumber": 188,
+                        "name": "providerReadyChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 16,
+                        "lineNumber": 189,
+                        "name": "providerSetupChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 17,
+                        "lineNumber": 190,
+                        "name": "providerIssueChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 18,
+                        "lineNumber": 191,
+                        "name": "mcpServersChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 19,
+                        "lineNumber": 192,
+                        "name": "statusTextChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "text",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 20,
+                        "lineNumber": 193,
+                        "name": "statusMessage",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 21,
+                        "lineNumber": 194,
+                        "name": "tokenUsageChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 22,
+                        "lineNumber": 195,
+                        "name": "diffChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 23,
+                        "lineNumber": 196,
+                        "name": "gitRepositoryUrlChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "success",
+                                "type": "bool"
+                            },
+                            {
+                                "name": "message",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 24,
+                        "lineNumber": 197,
+                        "name": "commitDraftFinished",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "success",
+                                "type": "bool"
+                            },
+                            {
+                                "name": "message",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 25,
+                        "lineNumber": 198,
+                        "name": "commitFinished",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "message",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 26,
+                        "lineNumber": 199,
+                        "name": "commitLockBlocked",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "text",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "images",
+                                "type": "QVariantList"
+                            }
+                        ],
+                        "index": 27,
+                        "lineNumber": 200,
+                        "name": "promptRestoreRequested",
+                        "returnType": "void"
+                    }
+                ],
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QObject"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "AppController.h",
+        "outputRevision": 69
+    },
+    {
+        "classes": [
+            {
+                "className": "ConversationModel",
+                "lineNumber": 16,
+                "object": true,
+                "qualifiedClassName": "Artemis::ConversationModel",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QAbstractListModel"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "ConversationModel.h",
+        "outputRevision": 69
+    },
+    {
+        "classes": [
+            {
+                "className": "ProjectTreeModel",
+                "lineNumber": 16,
+                "object": true,
+                "qualifiedClassName": "Artemis::ProjectTreeModel",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QAbstractListModel"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "ProjectTreeModel.h",
+        "outputRevision": 69
+    },
+    {
+        "classes": [
+            {
+                "className": "CodexClient",
+                "final": true,
+                "lineNumber": 12,
+                "object": true,
+                "properties": [
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 0,
+                        "lineNumber": 14,
+                        "name": "ready",
+                        "notify": "readyChanged",
+                        "override": false,
+                        "read": "ready",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 1,
+                        "lineNumber": 15,
+                        "name": "version",
+                        "notify": "versionChanged",
+                        "override": false,
+                        "read": "version",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false
+                    }
+                ],
+                "qualifiedClassName": "Artemis::CodexClient",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "fullyQualifiedName": "Artemis::AgentProvider",
+                        "name": "AgentProvider"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "CodexClient.h",
+        "outputRevision": 69
+    }
+]

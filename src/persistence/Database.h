@@ -20,6 +20,7 @@ public:
     bool removeProject(qint64 id, QString *error = nullptr);
     bool bindThread(qint64 projectId, const QString &threadId, const QString &workspacePath,
                     bool external, QString *error = nullptr);
+    bool touchProject(qint64 id, QString *error = nullptr);
     QVector<QVariantMap> threadBindings(qint64 projectId, QString *error = nullptr) const;
     QSet<QString> hiddenThreadIds(qint64 projectId, QString *error = nullptr) const;
     bool hideThread(qint64 projectId, const QString &threadId, QString *error = nullptr);

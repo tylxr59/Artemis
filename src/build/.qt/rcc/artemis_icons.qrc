@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/icons">
+    <file alias="artemis-bow-256.png">/home/tylxr/git/Artemis/src/artemis-git/resources/icons/artemis-bow-256.png</file>
+  </qresource>
+</RCC>
+

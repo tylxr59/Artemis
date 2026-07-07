@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/tylxr/git/Artemis/src/build/cmake_install.cmake",
+		"/home/tylxr/git/Artemis/src/build/tests/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

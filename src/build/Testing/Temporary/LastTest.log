@@ -1,0 +1,64 @@
+Start testing: Jul 03 08:19 EDT
+----------------------------------------------------------
+1/1 Testing: artemis-unit-tests
+1/1 Test: artemis-unit-tests
+Command: "/home/tylxr/git/Artemis/src/build/tests/artemis-unit-tests"
+Directory: /home/tylxr/git/Artemis/src/build/tests
+"artemis-unit-tests" start time: Jul 03 08:19 EDT
+Output:
+----------------------------------------------------------
+********* Start testing of TestCore *********
+Config: Using QtTest library 6.11.1, Qt 6.11.1 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 16.1.1 20260430), cachyos unknown
+PASS   : TestCore::initTestCase()
+PASS   : TestCore::branchSuggestion()
+PASS   : TestCore::conversationDeltasStayInTheirThread()
+PASS   : TestCore::conversationKeepsLatestDiffForTurn()
+Codex connected
+MCP is not supported by this provider
+PASS   : TestCore::concurrentThreadsKeepIndependentOutputAndRunningState()
+Codex connected
+MCP is not supported by this provider
+PASS   : TestCore::activeTurnElapsedTextAdvances()
+Codex connected
+MCP is not supported by this provider
+PASS   : TestCore::persistedConversationReloadDoesNotDuplicateRows()
+PASS   : TestCore::gitRepositoryDetection()
+PASS   : TestCore::gitStatusChangeDetection()
+PASS   : TestCore::gitIndexLockErrorDetection()
+PASS   : TestCore::databaseMigration()
+PASS   : TestCore::databaseMigrationIsIdempotent()
+PASS   : TestCore::asynchronousGitStartupFailureCompletes()
+PASS   : TestCore::terminalLauncherFallsBackToInstalledEmulator()
+PASS   : TestCore::selectedTerminalUsesDesktopWorkingDirectoryArgument()
+PASS   : TestCore::codexStartupFailureIsReported()
+PASS   : TestCore::codexRestartsAfterCrash()
+PASS   : TestCore::codexReportsSetupRequiredWhenNotAuthenticated()
+PASS   : TestCore::codexDetectsExpiredAuthenticationAfterStartup()
+PASS   : TestCore::codexFormatsPatchVerificationFailures()
+PASS   : TestCore::codexDisconnectCallbacksAreNotReentrant()
+PASS   : TestCore::codexUserInputRequestWritesProtocolResponse()
+Codex connected
+MCP is not supported by this provider
+PASS   : TestCore::delayedThreadCreationDoesNotChangeAnotherProject()
+Codex connected
+MCP is not supported by this provider
+PASS   : TestCore::planModeUserInputCollectsAnswers()
+Codex connected
+MCP is not supported by this provider
+Preparing commit snapshot…
+PASS   : TestCore::commitGenerationKeepsOriginalRepositoryContext()
+PASS   : TestCore::codexActiveTurnRequestsIncludeTurnId()
+PASS   : TestCore::commitAllPushesCurrentBranch()
+PASS   : TestCore::commitRecoversAfterExplicitLockRemoval()
+PASS   : TestCore::cleanupTestCase()
+Totals: 29 passed, 0 failed, 0 skipped, 0 blacklisted, 8546ms
+********* Finished testing of TestCore *********
+<end of output>
+Test time =   8.65 sec
+----------------------------------------------------------
+Test Passed.
+"artemis-unit-tests" end time: Jul 03 08:19 EDT
+"artemis-unit-tests" time elapsed: 00:00:08
+----------------------------------------------------------
+
+End testing: Jul 03 08:19 EDT

@@ -1,0 +1,16 @@
+-rootPath
+/home/tylxr/git/Artemis/src/artemis-git
+-cmake-output
+-output-file
+/home/tylxr/git/Artemis/src/build/.qt/qml_imports/artemis_conf.cmake
+-importPath
+/home/tylxr/git/Artemis/src/build
+-importPath
+/home/tylxr/git/Artemis/src/build/org/artemis
+-importPath
+/usr/lib/qt6/qml
+-qrcFiles
+/home/tylxr/git/Artemis/src/build/.qt/rcc/artemis_icons.qrc
+/home/tylxr/git/Artemis/src/build/.qt/rcc/qmake_org_artemis.qrc
+/home/tylxr/git/Artemis/src/build/.qt/rcc/artemis_raw_qml_0.qrc
+/home/tylxr/git/Artemis/src/build/.qt/rcc/artemis_raw_qml_0_extra_qmldirs.qrc
