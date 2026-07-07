@@ -171,6 +171,31 @@ private slots:
                  QStringLiteral("right thread"));
     }
 
+    void conversationAssistantItemsReplaceByItemId()
+    {
+        ConversationModel model;
+        model.setThread(QStringLiteral("thread-a"));
+        model.appendOrMergeDelta(
+            {QStringLiteral("thread-a"), QStringLiteral("assistant"),
+             QStringLiteral("Artemis"), QStringLiteral("partial"),
+             {{QStringLiteral("delta"), true},
+              {QStringLiteral("itemId"), QStringLiteral("message-a")}}});
+        model.appendOrMergeDelta(
+            {QStringLiteral("thread-a"), QStringLiteral("assistant"),
+             QStringLiteral("Artemis"), QStringLiteral("partial response"),
+             {{QStringLiteral("delta"), true},
+              {QStringLiteral("itemId"), QStringLiteral("message-a")}}});
+        model.appendOrMergeDelta(
+            {QStringLiteral("thread-a"), QStringLiteral("assistant"),
+             QStringLiteral("Artemis"), QStringLiteral("partial response"),
+             {{QStringLiteral("lifecycle"), QStringLiteral("completed")},
+              {QStringLiteral("itemId"), QStringLiteral("message-a")}}});
+
+        QCOMPARE(model.rowCount(), 1);
+        QCOMPARE(model.data(model.index(0), ConversationModel::ContentRole).toString(),
+                 QStringLiteral("partial response"));
+    }
+
     void conversationKeepsLatestDiffForTurn()
     {
         ConversationModel model;

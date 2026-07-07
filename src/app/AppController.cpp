@@ -1356,6 +1356,7 @@ void AppController::handleDomainEvent(const QString &threadId, const QString &ty
     const auto draftKey = threadId + QLatin1Char(':') + itemId;
     if (isAssistantDelta && !itemId.isEmpty()) {
         persistedContent = m_assistantDraftBuffers[draftKey] += event.content;
+        event.content = persistedContent;
     } else if (type == QStringLiteral("assistant") && !itemId.isEmpty()) {
         m_assistantDraftBuffers.remove(draftKey);
     }
