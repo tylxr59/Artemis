@@ -613,7 +613,7 @@ Window {
                             Layout.leftMargin: Kirigami.Units.largeSpacing
                             Layout.rightMargin: Kirigami.Units.largeSpacing
                             title: "Add server"
-                            subtitle: "Register an HTTP endpoint or stdio command."
+                            subtitle: "Register an MCP server for Codex."
 
                             Kirigami.FormLayout {
                                 Layout.fillWidth: true
@@ -632,7 +632,7 @@ Window {
                                     Layout.fillWidth: true
                                     model: [
                                         { value: "http", label: "HTTP URL" },
-                                        { value: "stdio", label: "Stdio command" }
+                                        { value: "stdio", label: "Command" }
                                     ]
                                     textRole: "label"
                                     valueRole: "value"
@@ -641,12 +641,27 @@ Window {
 
                                 TextField {
                                     id: mcpTarget
-                                    Kirigami.FormData.label: "Target:"
+                                    Kirigami.FormData.label: mcpTransport.currentValue === "http"
+                                                            ? "URL:" : "Command:"
                                     Layout.fillWidth: true
                                     placeholderText: mcpTransport.currentValue === "http"
-                                                     ? "https://example.com/mcp"
+                                                     ? "https://mcp.example.com/mcp"
                                                      : "npx -y @upstash/context7-mcp"
-                                    Accessible.name: "MCP server target"
+                                    Accessible.name: mcpTransport.currentValue === "http"
+                                                     ? "MCP server URL"
+                                                     : "MCP server command"
+                                }
+
+                                TextField {
+                                    id: mcpBearerToken
+                                    Kirigami.FormData.label: "Bearer token:"
+                                    Layout.fillWidth: true
+                                    visible: mcpTransport.currentValue === "http"
+                                    enabled: visible
+                                    echoMode: TextInput.Password
+                                    passwordMaskDelay: 0
+                                    placeholderText: "Optional API key"
+                                    Accessible.name: "MCP bearer token"
                                 }
                             }
 
@@ -665,9 +680,12 @@ Window {
                                         root.controller.addMcpServer(
                                                     mcpName.text,
                                                     mcpTransport.currentValue,
-                                                    mcpTarget.text)
+                                                    mcpTarget.text,
+                                                    mcpTransport.currentValue === "http"
+                                                    ? mcpBearerToken.text : "")
                                         mcpName.clear()
                                         mcpTarget.clear()
+                                        mcpBearerToken.clear()
                                     }
                                 }
                             }

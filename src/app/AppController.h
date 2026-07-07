@@ -13,6 +13,7 @@
 #include <QTimer>
 #include <QVariantList>
 
+#include <functional>
 #include <memory>
 
 namespace Artemis {
@@ -162,7 +163,8 @@ public:
     Q_INVOKABLE void reloadMcpServers();
     Q_INVOKABLE void loginMcpServer(const QString &name);
     Q_INVOKABLE void addMcpServer(const QString &name, const QString &transport,
-                                  const QString &target);
+                                  const QString &target,
+                                  const QString &bearerToken = {});
     Q_INVOKABLE void removeMcpServer(const QString &name);
     void setCodingModelId(const QString &modelId);
     void setCodingReasoningEffort(const QString &reasoningEffort);
@@ -245,7 +247,9 @@ private:
     QString cleanTitleDraft(const QString &raw) const;
     void persistConversationEvent(const ConversationEvent &event,
                                   const QString &contentOverride = {});
-    void runCodexMcpCommand(const QStringList &arguments, const QString &successMessage);
+    void runCodexMcpCommand(
+        const QStringList &arguments, const QString &successMessage,
+        std::function<bool(QString *)> afterSuccess = {});
 
     Database m_database;
     ProjectTreeModel m_projects;

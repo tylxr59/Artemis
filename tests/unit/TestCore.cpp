@@ -95,6 +95,16 @@ public:
         handler({}, {});
     }
 
+    void listMcpServers(ResultHandler handler) override
+    {
+        handler({{QStringLiteral("data"), QJsonArray{}}}, {});
+    }
+
+    void reloadMcpServers(ResultHandler handler) override
+    {
+        handler({}, {});
+    }
+
     QString itemContent(const QJsonObject &item) const override
     {
         return item.value(QStringLiteral("text")).toString();
@@ -921,6 +931,72 @@ private slots:
                  QStringLiteral("Focused"));
 
         qunsetenv("ARTEMIS_TEST_USER_INPUT_RESPONSE");
+        qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
+    }
+
+    void mcpHttpServerStoresBearerTokenHeader()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto executable = directory.filePath(QStringLiteral("fake-codex"));
+        const auto argumentsPath = directory.filePath(QStringLiteral("arguments.txt"));
+        const auto codexHome = directory.filePath(QStringLiteral("codex-home"));
+        QFile script(executable);
+        QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Text));
+        script.write(
+            "#!/bin/sh\n"
+            "printf '%s\\n' \"$@\" > \"$ARTEMIS_TEST_MCP_ARGS\"\n"
+            "mkdir -p \"$CODEX_HOME\"\n"
+            "printf '%s\\n' '[mcp_servers.authenticated-api]' "
+            "'url = \"https://example.com/mcp\"' > \"$CODEX_HOME/config.toml\"\n"
+            "exit 0\n");
+        script.close();
+        QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                      | QFileDevice::ExeOwner));
+
+        qputenv("ARTEMIS_CODEX_EXECUTABLE", executable.toUtf8());
+        qputenv("ARTEMIS_TEST_MCP_ARGS", argumentsPath.toUtf8());
+        qputenv("CODEX_HOME", codexHome.toUtf8());
+
+        FakeAgentProvider provider;
+        AppController controller(&provider);
+        QVERIFY(controller.initialize());
+        controller.addMcpServer(QStringLiteral("authenticated-api"), QStringLiteral("http"),
+                                QStringLiteral("https://example.com/mcp"),
+                                QStringLiteral("test-token"));
+
+        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(argumentsPath), 2000);
+        QFile argumentsFile(argumentsPath);
+        QVERIFY(argumentsFile.open(QIODevice::ReadOnly | QIODevice::Text));
+        const auto arguments = QString::fromUtf8(argumentsFile.readAll()).split(
+            QChar(u'\n'), Qt::SkipEmptyParts);
+        QCOMPARE(arguments,
+                 QStringList({QStringLiteral("mcp"), QStringLiteral("add"),
+                              QStringLiteral("authenticated-api"), QStringLiteral("--url"),
+                              QStringLiteral("https://example.com/mcp")}));
+        QVERIFY(!arguments.contains(QStringLiteral("test-token")));
+
+        const auto configPath = QDir(codexHome).filePath(QStringLiteral("config.toml"));
+        QTRY_VERIFY_WITH_TIMEOUT([&configPath] {
+            QFile config(configPath);
+            if (!config.open(QIODevice::ReadOnly | QIODevice::Text))
+                return false;
+            const auto configText = QString::fromUtf8(config.readAll());
+            return configText.contains(QStringLiteral(
+                       "[mcp_servers.authenticated-api.http_headers]"))
+                && configText.contains(
+                       QStringLiteral("Authorization = \"Bearer test-token\""));
+        }(), 2000);
+        QFile config(configPath);
+        QVERIFY(config.open(QIODevice::ReadOnly | QIODevice::Text));
+        const auto configText = QString::fromUtf8(config.readAll());
+        QVERIFY(configText.contains(QStringLiteral(
+            "[mcp_servers.authenticated-api.http_headers]")));
+        QVERIFY(configText.contains(
+            QStringLiteral("Authorization = \"Bearer test-token\"")));
+
+        qunsetenv("ARTEMIS_TEST_MCP_ARGS");
+        qunsetenv("CODEX_HOME");
         qunsetenv("ARTEMIS_CODEX_EXECUTABLE");
     }
 
