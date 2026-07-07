@@ -198,6 +198,7 @@ signals:
     void diffChanged();
     void gitRepositoryUrlChanged();
     void commitDraftFinished(bool success, const QString &message);
+    void commitProgressChanged(const QString &message);
     void commitFinished(bool success, const QString &message);
     void commitLockBlocked(const QString &message);
     void promptRestoreRequested(const QString &text, const QVariantList &images);

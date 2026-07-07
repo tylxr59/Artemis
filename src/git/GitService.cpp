@@ -17,20 +17,62 @@ struct GitService::MutationWorkflow {
     QString path;
     Handler handler;
     std::function<void()> resume;
+    QPointer<QProcess> process;
+    bool canceled = false;
 };
 
 GitService::GitService(QObject *parent) : QObject(parent) {}
+
+namespace {
+
+QProcessEnvironment gitEnvironment(QProcessEnvironment environment)
+{
+    if (environment.isEmpty())
+        environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("GIT_TERMINAL_PROMPT"), QStringLiteral("0"));
+    environment.insert(QStringLiteral("GCM_INTERACTIVE"), QStringLiteral("never"));
+    if (!environment.contains(QStringLiteral("GIT_SSH_COMMAND")))
+        environment.insert(QStringLiteral("GIT_SSH_COMMAND"),
+                           QStringLiteral("ssh -oBatchMode=yes"));
+    return environment;
+}
+
+QString mutationStepText(const QStringList &arguments)
+{
+    if (arguments.isEmpty())
+        return QStringLiteral("Running Git...");
+    const auto command = arguments.first();
+    if (command == QStringLiteral("add"))
+        return QStringLiteral("Staging changes...");
+    if (command == QStringLiteral("commit"))
+        return QStringLiteral("Creating commit...");
+    if (command == QStringLiteral("switch") && arguments.contains(QStringLiteral("-c")))
+        return QStringLiteral("Creating feature branch...");
+    if (command == QStringLiteral("branch"))
+        return QStringLiteral("Checking current branch...");
+    if (command == QStringLiteral("rev-parse"))
+        return QStringLiteral("Checking upstream branch...");
+    if (command == QStringLiteral("remote"))
+        return QStringLiteral("Checking remote...");
+    if (command == QStringLiteral("push") && arguments.contains(QStringLiteral("--set-upstream")))
+        return QStringLiteral("Pushing and setting upstream...");
+    if (command == QStringLiteral("push"))
+        return QStringLiteral("Pushing changes...");
+    return QStringLiteral("Running git %1...").arg(command);
+}
+
+} // namespace
 
 GitResult GitService::runSync(const QString &cwd, const QStringList &arguments,
                               const QProcessEnvironment &environment)
 {
     QProcess process;
     process.setWorkingDirectory(cwd);
-    if (!environment.isEmpty())
-        process.setProcessEnvironment(environment);
+    process.setProcessEnvironment(gitEnvironment(environment));
     process.start(QStringLiteral("git"), arguments);
     if (!process.waitForStarted(3000))
         return {-1, {}, process.errorString().toUtf8()};
+    process.closeWriteChannel();
     if (!process.waitForFinished(120000)) {
         process.kill();
         process.waitForFinished(1000);
@@ -42,16 +84,16 @@ GitResult GitService::runSync(const QString &cwd, const QStringList &arguments,
     return {process.exitCode(), process.readAllStandardOutput(), process.readAllStandardError()};
 }
 
-void GitService::run(const QString &cwd, const QStringList &arguments, Handler handler,
-                     const QProcessEnvironment &environment, int timeoutMs,
-                     qsizetype maxOutputBytes)
+QPointer<QProcess> GitService::run(const QString &cwd, const QStringList &arguments,
+                                   Handler handler,
+                                   const QProcessEnvironment &environment, int timeoutMs,
+                                   qsizetype maxOutputBytes)
 {
     auto *process = new QProcess(this);
     auto *timeout = new QTimer(process);
     timeout->setSingleShot(true);
     process->setWorkingDirectory(cwd);
-    if (!environment.isEmpty())
-        process->setProcessEnvironment(environment);
+    process->setProcessEnvironment(gitEnvironment(environment));
     auto output = std::make_shared<QByteArray>();
     auto error = std::make_shared<QByteArray>();
     auto outputTruncated = std::make_shared<bool>(false);
@@ -115,8 +157,10 @@ void GitService::run(const QString &cwd, const QStringList &arguments, Handler h
         process->kill();
         complete(-1, QByteArray("Git operation timed out"));
     });
+    connect(process, &QProcess::started, process, &QProcess::closeWriteChannel);
     process->start(QStringLiteral("git"), arguments);
     timeout->start(timeoutMs);
+    return process;
 }
 
 bool GitService::isRepository(const QString &path)
@@ -326,9 +370,15 @@ void GitService::startMutation(const QString &path, Handler handler,
 void GitService::runMutationStep(const Workflow &workflow, const QStringList &arguments,
                                  StepHandler handler, int retry)
 {
-    run(workflow->path, arguments,
+    if (workflow->canceled)
+        return;
+    emit mutationStepChanged(mutationStepText(arguments));
+    workflow->process = run(workflow->path, arguments,
         [this, workflow, arguments, handler = std::move(handler), retry](
             GitResult result) mutable {
+        workflow->process.clear();
+        if (workflow->canceled || m_activeMutation != workflow)
+            return;
         if (!result.ok() && isIndexLockError(result.error)) {
             result.failure = GitFailure::IndexLocked;
             if (retry < 2) {
@@ -413,8 +463,12 @@ void GitService::removeIndexLockAndRetry(Handler handler)
 
 void GitService::cancelLockedOperation()
 {
-    if (m_activeMutation)
+    if (m_activeMutation) {
+        m_activeMutation->canceled = true;
         m_activeMutation->resume = {};
+        if (m_activeMutation->process)
+            m_activeMutation->process->kill();
+    }
     m_activeMutation.reset();
 }
 

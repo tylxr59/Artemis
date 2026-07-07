@@ -157,6 +157,10 @@ void AppController::connectProvider()
     m_turnElapsedUpdateTimer.setInterval(1000);
     connect(&m_turnElapsedUpdateTimer, &QTimer::timeout,
             this, &AppController::turnElapsedChanged);
+    connect(&m_git, &GitService::mutationStepChanged, this, [this](const QString &message) {
+        emit commitProgressChanged(message);
+        setStatus(message);
+    });
     connect(m_provider, &AgentProvider::readyChanged, this, [this](bool ready) {
         emit providerReadyChanged();
         if (ready) {
@@ -1585,7 +1589,8 @@ QString AppController::commitPrompt(const QByteArray &snapshot, const QString &p
         "{\"subject\":\"...\",\"body\":\"...\"}.\n"
         "Rules:\n"
         "- subject must use imperative mood, be at most 72 characters, and have no trailing period\n"
-        "- body must be an empty string or 1-4 concise Markdown bullet points\n"
+        "- body must be an empty string when the subject is enough\n"
+        "- when useful, body must use the fewest Markdown bullets needed; do not force a fixed count\n"
         "- capture the primary user-visible or developer-visible change\n"
         "- explain what changed and why; do not produce a file-by-file inventory\n"
         "- omit details already clear from the subject\n"

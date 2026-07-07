@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QObject>
+#include <QPointer>
+#include <QProcess>
 #include <QProcessEnvironment>
 
 #include <functional>
@@ -12,6 +14,7 @@ enum class GitFailure {
     None,
     IndexLocked,
     MutationInProgress,
+    Canceled,
 };
 
 struct GitResult {
@@ -49,14 +52,17 @@ public:
     void removeIndexLockAndRetry(Handler handler);
     void cancelLockedOperation();
 
+signals:
+    void mutationStepChanged(const QString &message);
+
 private:
     struct MutationWorkflow;
     using Workflow = std::shared_ptr<MutationWorkflow>;
     using StepHandler = std::function<void(const GitResult &)>;
 
-    void run(const QString &cwd, const QStringList &arguments, Handler handler,
-             const QProcessEnvironment &environment = {}, int timeoutMs = 120000,
-             qsizetype maxOutputBytes = 0);
+    QPointer<QProcess> run(const QString &cwd, const QStringList &arguments, Handler handler,
+                           const QProcessEnvironment &environment = {},
+                           int timeoutMs = 120000, qsizetype maxOutputBytes = 0);
     void startMutation(const QString &path, Handler handler,
                        std::function<void(const Workflow &)> start);
     void runMutationStep(const Workflow &workflow, const QStringList &arguments,
