@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import "../components"
+import "../utils/AppHelpers.js" as AppHelpers
 
 ScrollView {
     id: root
@@ -69,34 +71,6 @@ ScrollView {
         if (controller.providerSetupRequired)
             return "dialog-warning"
         return "dialog-information"
-    }
-
-    function authText(status) {
-        const value = status || ""
-        if (value === "notLoggedIn")
-            return "Not logged in"
-        if (value === "unsupported")
-            return "Local"
-        if (value.length === 0)
-            return "Unknown"
-        return value.charAt(0).toUpperCase() + value.slice(1)
-    }
-
-    function authColor(status) {
-        return status === "notLoggedIn"
-                ? Kirigami.Theme.neutralTextColor
-                : Kirigami.Theme.positiveTextColor
-    }
-
-    function compactTokenCount(value) {
-        if (value >= 1000000) {
-            const millions = value / 1000000
-            return (millions >= 10 ? millions.toFixed(0) : millions.toFixed(1))
-                    .replace(/\.0$/, "") + "m"
-        }
-        if (value >= 1000)
-            return Math.round(value / 1000) + "k"
-        return value.toString()
     }
 
     ColumnLayout {
@@ -279,9 +253,9 @@ ScrollView {
                             Kirigami.FormData.label: "Context:"
                             Layout.fillWidth: true
                             text: controller.hasTokenUsage
-                                  ? root.compactTokenCount(controller.contextTokens)
+                                  ? AppHelpers.compactTokenCount(controller.contextTokens)
                                     + " / "
-                                    + root.compactTokenCount(controller.modelContextWindow)
+                                    + AppHelpers.compactTokenCount(controller.modelContextWindow)
                                   : "Unavailable"
                             textFormat: Text.PlainText
                         }
@@ -290,7 +264,7 @@ ScrollView {
                             Kirigami.FormData.label: "Processed:"
                             Layout.fillWidth: true
                             text: controller.hasTokenUsage
-                                  ? root.compactTokenCount(controller.totalProcessedTokens)
+                                  ? AppHelpers.compactTokenCount(controller.totalProcessedTokens)
                                     + " tokens"
                                   : "Unavailable"
                             textFormat: Text.PlainText
@@ -356,50 +330,15 @@ ScrollView {
                         Layout.fillWidth: true
                         spacing: 0
 
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Layout.topMargin: Kirigami.Units.smallSpacing
-                            Layout.bottomMargin: Kirigami.Units.smallSpacing
-                            spacing: Kirigami.Units.smallSpacing
-
-                            Kirigami.Icon {
-                                source: mcpRow.modelData.authStatus === "notLoggedIn"
-                                        ? "emblem-warning" : "dialog-ok-apply"
-                                color: root.authColor(mcpRow.modelData.authStatus)
-                                Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                                Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 1
-
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: mcpRow.modelData.title || mcpRow.modelData.name
-                                    textFormat: Text.PlainText
-                                    font.bold: true
-                                    elide: Text.ElideRight
-                                }
-
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: mcpRow.modelData.name
-                                          + " - "
-                                          + mcpRow.modelData.toolCount
-                                          + " tools - "
-                                          + mcpRow.modelData.resourceCount
-                                          + " resources"
-                                    textFormat: Text.PlainText
-                                    opacity: 0.62
-                                    font.pointSize: Kirigami.Theme.smallFont.pointSize
-                                    elide: Text.ElideRight
-                                }
-                            }
+                        McpServerRow {
+                            server: mcpRow.modelData
 
                             StatusPill {
-                                text: root.authText(mcpRow.modelData.authStatus)
-                                accentColor: root.authColor(mcpRow.modelData.authStatus)
+                                text: AppHelpers.authText(mcpRow.modelData.authStatus)
+                                accentColor: AppHelpers.authColor(
+                                                 mcpRow.modelData.authStatus,
+                                                 Kirigami.Theme.neutralTextColor,
+                                                 Kirigami.Theme.positiveTextColor)
                             }
                         }
 
@@ -420,59 +359,6 @@ ScrollView {
                 iconName: root.statusIcon()
                 text: root.statusText()
                 accentColor: root.statusColor()
-            }
-        }
-    }
-
-    component SectionFrame: Frame {
-        id: sectionFrame
-        property string title
-        property string subtitle: ""
-        default property alias content: contentArea.data
-        Layout.fillWidth: true
-        padding: 0
-
-        background: Rectangle {
-            color: Kirigami.Theme.backgroundColor
-            border.color: Qt.alpha(Kirigami.Theme.textColor, 0.16)
-            radius: Kirigami.Units.smallSpacing
-        }
-
-        contentItem: ColumnLayout {
-            spacing: 0
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.margins: Kirigami.Units.largeSpacing
-                spacing: 2
-
-                Label {
-                    Layout.fillWidth: true
-                    text: sectionFrame.title
-                    textFormat: Text.PlainText
-                    font.bold: true
-                    font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
-                    elide: Text.ElideRight
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    visible: sectionFrame.subtitle.length > 0
-                    text: sectionFrame.subtitle
-                    textFormat: Text.PlainText
-                    opacity: 0.64
-                    wrapMode: Text.Wrap
-                    font.pointSize: Kirigami.Theme.smallFont.pointSize
-                }
-            }
-
-            Kirigami.Separator { Layout.fillWidth: true }
-
-            ColumnLayout {
-                id: contentArea
-                Layout.fillWidth: true
-                Layout.margins: Kirigami.Units.largeSpacing
-                spacing: Kirigami.Units.largeSpacing
             }
         }
     }
@@ -498,37 +384,4 @@ ScrollView {
         }
     }
 
-    component MessageStrip: Frame {
-        id: messageStrip
-        property string iconName: "dialog-information"
-        property string text: ""
-        property color accentColor: Kirigami.Theme.textColor
-        Layout.fillWidth: true
-        padding: Kirigami.Units.smallSpacing
-
-        background: Rectangle {
-            color: Qt.alpha(messageStrip.accentColor, 0.08)
-            border.color: Qt.alpha(messageStrip.accentColor, 0.22)
-            radius: Kirigami.Units.smallSpacing
-        }
-
-        contentItem: RowLayout {
-            spacing: Kirigami.Units.smallSpacing
-
-            Kirigami.Icon {
-                source: messageStrip.iconName
-                color: messageStrip.accentColor
-                Layout.preferredWidth: Kirigami.Units.iconSizes.small
-                Layout.preferredHeight: Kirigami.Units.iconSizes.small
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: messageStrip.text
-                textFormat: Text.PlainText
-                wrapMode: Text.Wrap
-                color: messageStrip.accentColor
-            }
-        }
-    }
 }

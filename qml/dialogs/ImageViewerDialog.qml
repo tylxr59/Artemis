@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import "../utils/AppHelpers.js" as AppHelpers
 
 Dialog {
     id: root
@@ -15,10 +16,6 @@ Dialog {
         imagePath = path
         actualSize = false
         open()
-    }
-
-    function localImageUrl(path) {
-        return path.length > 0 ? "file://" + encodeURI(path) : ""
     }
 
     modal: true
@@ -74,7 +71,7 @@ Dialog {
                 y: Math.max(0, (imageViewport.height - height) / 2)
                 width: implicitWidth * (root.actualSize ? 1 : fitScale)
                 height: implicitHeight * (root.actualSize ? 1 : fitScale)
-                source: root.localImageUrl(root.imagePath)
+                source: AppHelpers.localImageUrl(root.imagePath)
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
                 cache: false

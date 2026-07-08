@@ -68,11 +68,15 @@ qt_add_qml_module(artemis
         qml/Main.qml
         qml/components/ConversationDelegate.qml
         qml/components/DiffView.qml
+        qml/components/MessageStrip.qml
+        qml/components/McpServerRow.qml
+        qml/components/SectionFrame.qml
         qml/components/ThreadPane.qml
         qml/dialogs/CommitDialog.qml
         qml/dialogs/ImageViewerDialog.qml
         qml/dialogs/SettingsDialog.qml
         qml/pages/DiagnosticsPage.qml
+        qml/utils/AppHelpers.js
 )
 
 target_include_directories(artemis PRIVATE src)

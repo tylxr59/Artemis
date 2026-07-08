@@ -3,6 +3,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import org.kde.kirigami as Kirigami
+import "../components"
+import "../utils/AppHelpers.js" as AppHelpers
 
 Window {
     id: root
@@ -34,17 +36,6 @@ Window {
         requestActivate()
     }
 
-    function modelIndex(modelId) {
-        const exact = codingModel.indexOfValue(modelId)
-        if (exact >= 0)
-            return exact
-        for (let i = 0; i < controller.models.length; ++i) {
-            if (controller.models[i].isDefault)
-                return i
-        }
-        return controller.models.length > 0 ? 0 : -1
-    }
-
     function pageTitle(index) {
         if (index === 0)
             return "Models"
@@ -69,71 +60,17 @@ Window {
         return "applications-utilities"
     }
 
-    function selectedCodingModel() {
-        if (codingModel.currentIndex < 0
-                || codingModel.currentIndex >= controller.models.length)
-            return null
-        return controller.models[codingModel.currentIndex]
-    }
-
-    function reasoningOptions() {
-        const selected = selectedCodingModel()
-        if (!selected)
-            return []
-        const defaultLabel = selected.defaultEffort
-                ? "Default (" + selected.defaultEffort + ")" : "Model default"
-        const options = [{ value: "", label: defaultLabel }]
-        const efforts = Array.from(selected.efforts || [])
-        for (let i = 0; i < efforts.length; ++i) {
-            options.push({
-                             value: efforts[i],
-                             label: efforts[i].charAt(0).toUpperCase()
-                                    + efforts[i].slice(1)
-                         })
-        }
-        return options
-    }
-
-    function reasoningIndex(reasoningEffort) {
-        const options = reasoningOptions()
-        for (let i = 0; i < options.length; ++i) {
-            if (options[i].value === reasoningEffort)
-                return i
-        }
-        return 0
-    }
-
-    function reasoningSupported(reasoningEffort) {
-        const options = reasoningOptions()
-        for (let i = 0; i < options.length; ++i) {
-            if (options[i].value === reasoningEffort)
-                return true
-        }
-        return false
-    }
-
-    function authText(status) {
-        const value = status || ""
-        if (value === "notLoggedIn")
-            return "Not logged in"
-        if (value === "unsupported")
-            return "Local"
-        if (value.length === 0)
-            return "Unknown"
-        return value.charAt(0).toUpperCase() + value.slice(1)
-    }
-
-    function authColor(status) {
-        return status === "notLoggedIn"
-                ? Kirigami.Theme.neutralTextColor
-                : Kirigami.Theme.positiveTextColor
-    }
-
     function loadValues() {
-        codingModel.currentIndex = modelIndex(controller.codingModelId)
-        reasoningPicker.currentIndex = reasoningIndex(controller.codingReasoningEffort)
-        commitModel.currentIndex = modelIndex(controller.commitModelId)
-        titleModel.currentIndex = modelIndex(controller.titleModelId)
+        codingModel.currentIndex = AppHelpers.modelIndex(
+                    codingModel, controller.models, controller.codingModelId)
+        reasoningPicker.currentIndex = AppHelpers.reasoningIndex(
+                    AppHelpers.selectedModel(controller.models,
+                                             codingModel.currentIndex),
+                    controller.codingReasoningEffort)
+        commitModel.currentIndex = AppHelpers.modelIndex(
+                    commitModel, controller.models, controller.commitModelId)
+        titleModel.currentIndex = AppHelpers.modelIndex(
+                    titleModel, controller.models, controller.titleModelId)
         const editorIndex = editorPicker.indexOfValue(controller.selectedEditorId)
         editorPicker.currentIndex = editorIndex >= 0 ? editorIndex : 0
         const terminalIndex = terminalPicker.indexOfValue(controller.selectedTerminalId)
@@ -378,7 +315,11 @@ Window {
                                     valueRole: "id"
                                     onActivated: {
                                         root.clearConfirmation()
-                                        if (!root.reasoningSupported(reasoningPicker.currentValue || ""))
+                                        if (!AppHelpers.reasoningSupported(
+                                                    AppHelpers.selectedModel(
+                                                        root.controller.models,
+                                                        codingModel.currentIndex),
+                                                    reasoningPicker.currentValue || ""))
                                             reasoningPicker.currentIndex = 0
                                     }
                                     Accessible.name: "Model for new threads"
@@ -388,11 +329,17 @@ Window {
                                     id: reasoningPicker
                                     Kirigami.FormData.label: "Reasoning effort:"
                                     Layout.fillWidth: true
-                                    model: root.reasoningOptions()
+                                    model: AppHelpers.reasoningOptions(
+                                               AppHelpers.selectedModel(
+                                                   root.controller.models,
+                                                   codingModel.currentIndex))
                                     textRole: "label"
                                     valueRole: "value"
                                     enabled: count > 1
-                                    currentIndex: root.reasoningIndex(
+                                    currentIndex: AppHelpers.reasoningIndex(
+                                                      AppHelpers.selectedModel(
+                                                          root.controller.models,
+                                                          codingModel.currentIndex),
                                                       root.controller.codingReasoningEffort)
                                     onActivated: root.clearConfirmation()
                                     Accessible.name: "Reasoning effort for new threads"
@@ -425,6 +372,7 @@ Window {
                                 iconName: "dialog-information"
                                 text: "Commit messages and thread titles run in separate, read-only ephemeral threads."
                                 accentColor: Kirigami.Theme.highlightColor
+                                useSmallFont: true
                             }
                         }
 
@@ -455,6 +403,7 @@ Window {
                             iconName: "dialog-error"
                             text: root.controller.mcpIssueText
                             accentColor: Kirigami.Theme.negativeTextColor
+                            useSmallFont: true
                         }
 
                         SectionFrame {
@@ -526,56 +475,27 @@ Window {
                                                        : "transparent"
                                             }
 
-                                            contentItem: RowLayout {
-                                                spacing: Kirigami.Units.smallSpacing
-
-                                                Kirigami.Icon {
-                                                    source: mcpServerRow.modelData.authStatus === "notLoggedIn"
-                                                            ? "emblem-warning" : "network-server"
-                                                    color: root.authColor(mcpServerRow.modelData.authStatus)
-                                                    Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                                                    Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                                                }
-
-                                                ColumnLayout {
-                                                    Layout.fillWidth: true
-                                                    spacing: 1
-
-                                                    Label {
-                                                        Layout.fillWidth: true
-                                                        text: mcpServerRow.modelData.title
-                                                              || mcpServerRow.modelData.name
-                                                        textFormat: Text.PlainText
-                                                        font.bold: true
-                                                        elide: Text.ElideRight
-                                                    }
-
-                                                    Label {
-                                                        Layout.fillWidth: true
-                                                        text: mcpServerRow.modelData.name
-                                                              + " - "
-                                                              + mcpServerRow.modelData.toolCount
-                                                              + " tools - "
-                                                              + mcpServerRow.modelData.resourceCount
-                                                              + " resources"
-                                                        textFormat: Text.PlainText
-                                                        font.pointSize: Kirigami.Theme.smallFont.pointSize
-                                                        opacity: 0.62
-                                                        elide: Text.ElideRight
-                                                    }
-                                                }
+                                            contentItem: McpServerRow {
+                                                server: mcpServerRow.modelData
 
                                                 Kirigami.Icon {
                                                     source: mcpServerRow.modelData.authStatus === "notLoggedIn"
                                                             ? "dialog-warning" : "dialog-ok-apply"
-                                                    color: root.authColor(mcpServerRow.modelData.authStatus)
+                                                    color: AppHelpers.authColor(
+                                                               mcpServerRow.modelData.authStatus,
+                                                               Kirigami.Theme.neutralTextColor,
+                                                               Kirigami.Theme.positiveTextColor)
                                                     Layout.preferredWidth: Kirigami.Units.iconSizes.small
                                                     Layout.preferredHeight: Kirigami.Units.iconSizes.small
                                                 }
 
                                                 Label {
-                                                    text: root.authText(mcpServerRow.modelData.authStatus)
-                                                    color: root.authColor(mcpServerRow.modelData.authStatus)
+                                                    text: AppHelpers.authText(
+                                                              mcpServerRow.modelData.authStatus)
+                                                    color: AppHelpers.authColor(
+                                                               mcpServerRow.modelData.authStatus,
+                                                               Kirigami.Theme.neutralTextColor,
+                                                               Kirigami.Theme.positiveTextColor)
                                                     font.pointSize: Kirigami.Theme.smallFont.pointSize
                                                     elide: Text.ElideRight
                                                 }
@@ -747,6 +667,7 @@ Window {
                                 iconName: "dialog-information"
                                 text: "Available editors, IDEs, and terminal emulators are detected from installed desktop applications."
                                 accentColor: Kirigami.Theme.highlightColor
+                                useSmallFont: true
                             }
                         }
 
@@ -819,82 +740,4 @@ Window {
         }
     }
 
-    component SectionFrame: ColumnLayout {
-        id: sectionFrame
-        property string title
-        property string subtitle: ""
-        default property alias content: contentArea.data
-        Layout.fillWidth: true
-        spacing: Kirigami.Units.smallSpacing
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 2
-
-            Label {
-                Layout.fillWidth: true
-                text: sectionFrame.title
-                textFormat: Text.PlainText
-                font.bold: true
-                font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
-                elide: Text.ElideRight
-            }
-
-            Label {
-                Layout.fillWidth: true
-                visible: sectionFrame.subtitle.length > 0
-                text: sectionFrame.subtitle
-                textFormat: Text.PlainText
-                opacity: 0.64
-                wrapMode: Text.Wrap
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-            }
-        }
-
-        Kirigami.Separator { Layout.fillWidth: true }
-
-        ColumnLayout {
-            id: contentArea
-            Layout.fillWidth: true
-            Layout.topMargin: Kirigami.Units.smallSpacing
-            Layout.leftMargin: Kirigami.Units.largeSpacing * 2
-            Layout.rightMargin: Kirigami.Units.largeSpacing * 2
-            spacing: Kirigami.Units.largeSpacing
-        }
-    }
-
-    component MessageStrip: Frame {
-        id: messageStrip
-        property string iconName: "dialog-information"
-        property string text: ""
-        property color accentColor: Kirigami.Theme.textColor
-        Layout.fillWidth: true
-        padding: Kirigami.Units.smallSpacing
-
-        background: Rectangle {
-            color: Qt.alpha(messageStrip.accentColor, 0.08)
-            border.color: Qt.alpha(messageStrip.accentColor, 0.22)
-            radius: Kirigami.Units.smallSpacing
-        }
-
-        contentItem: RowLayout {
-            spacing: Kirigami.Units.smallSpacing
-
-            Kirigami.Icon {
-                source: messageStrip.iconName
-                color: messageStrip.accentColor
-                Layout.preferredWidth: Kirigami.Units.iconSizes.small
-                Layout.preferredHeight: Kirigami.Units.iconSizes.small
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: messageStrip.text
-                textFormat: Text.PlainText
-                wrapMode: Text.Wrap
-                color: messageStrip.accentColor
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-            }
-        }
-    }
 }

@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import "../utils/AppHelpers.js" as AppHelpers
 
 Item {
     id: root
@@ -22,10 +23,6 @@ Item {
     readonly property bool isRunning: metadata && metadata.lifecycle === "started"
     readonly property string compactContent: content.replace(/\s+/g, " ").trim()
     readonly property var images: metadata && metadata.images ? metadata.images : []
-
-    function localImageUrl(path) {
-        return path.length > 0 ? "file://" + encodeURI(path) : ""
-    }
 
     implicitHeight: card.implicitHeight
     onImplicitHeightChanged: contentLayoutChanged()
@@ -294,7 +291,7 @@ Item {
                     Image {
                         id: thumbnail
                         anchors.fill: parent
-                        source: root.localImageUrl(imageThumbnail.modelData)
+                        source: AppHelpers.localImageUrl(imageThumbnail.modelData)
                         fillMode: Image.PreserveAspectFit
                         asynchronous: true
                         cache: false

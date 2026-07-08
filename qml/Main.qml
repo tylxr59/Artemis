@@ -6,6 +6,7 @@ import QtQuick.Layouts
 import QtQuick.Window
 import org.kde.kirigami as Kirigami
 import org.artemis
+import "utils/AppHelpers.js" as AppHelpers
 
 Kirigami.ApplicationWindow {
     id: root
@@ -68,62 +69,6 @@ Kirigami.ApplicationWindow {
         const updated = Object.assign({}, expandedProjects)
         updated[path] = expanded
         expandedProjects = updated
-    }
-
-    function modelIndex(modelId) {
-        const exact = modelPicker.indexOfValue(modelId)
-        if (exact >= 0)
-            return exact
-        for (let i = 0; i < appController.models.length; ++i) {
-            if (appController.models[i].isDefault)
-                return i
-        }
-        return appController.models.length > 0 ? 0 : -1
-    }
-
-    function selectedModel() {
-        if (modelPicker.currentIndex < 0
-                || modelPicker.currentIndex >= appController.models.length)
-            return null
-        return appController.models[modelPicker.currentIndex]
-    }
-
-    function reasoningOptions() {
-        const selected = selectedModel()
-        if (!selected)
-            return []
-        const defaultLabel = selected.defaultEffort
-                ? "Default (" + selected.defaultEffort + ")" : "Model default"
-        const options = [{ value: "", label: defaultLabel }]
-        const efforts = Array.from(selected.efforts || [])
-        for (let i = 0; i < efforts.length; ++i)
-            options.push({ value: efforts[i],
-                           label: efforts[i].charAt(0).toUpperCase() + efforts[i].slice(1) })
-        return options
-    }
-
-    function reasoningIndex(reasoningEffort) {
-        const options = reasoningOptions()
-        for (let i = 0; i < options.length; ++i) {
-            if (options[i].value === reasoningEffort)
-                return i
-        }
-        return 0
-    }
-
-    function localImageUrl(path) {
-        return path.length > 0 ? "file://" + encodeURI(path) : ""
-    }
-
-    function compactTokenCount(value) {
-        if (value >= 1000000) {
-            const millions = value / 1000000
-            return (millions >= 10 ? millions.toFixed(0) : millions.toFixed(1))
-                    .replace(/\.0$/, "") + "m"
-        }
-        if (value >= 1000)
-            return Math.round(value / 1000) + "k"
-        return value.toString()
     }
 
     function submitPendingQuestion() {
@@ -1197,7 +1142,7 @@ Kirigami.ApplicationWindow {
 
                                         Image {
                                             anchors.fill: parent
-                                            source: root.localImageUrl(modelData)
+                                            source: AppHelpers.localImageUrl(modelData)
                                             fillMode: Image.PreserveAspectCrop
                                             asynchronous: true
                                             cache: false
@@ -1285,12 +1230,17 @@ Kirigami.ApplicationWindow {
                                 model: appController.models
                                 textRole: "name"
                                 valueRole: "id"
-                                currentIndex: root.modelIndex(appController.codingModelId)
+                                currentIndex: AppHelpers.modelIndex(
+                                                  modelPicker, appController.models,
+                                                  appController.codingModelId)
                                 enabled: !appController.turnRunning
                                          && !appController.threadCreationPending
                                 onActivated: {
                                     appController.codingModelId = currentValue || ""
-                                    const options = root.reasoningOptions()
+                                    const options = AppHelpers.reasoningOptions(
+                                                AppHelpers.selectedModel(
+                                                    appController.models,
+                                                    modelPicker.currentIndex))
                                     let supported = false
                                     for (let i = 0; i < options.length; ++i) {
                                         if (options[i].value
@@ -1310,10 +1260,16 @@ Kirigami.ApplicationWindow {
                                 Layout.fillWidth: composerControls.compact
                                 Layout.minimumWidth: 0
                                 Layout.preferredWidth: composerControls.compact ? 0 : 150
-                                model: root.reasoningOptions()
+                                model: AppHelpers.reasoningOptions(
+                                           AppHelpers.selectedModel(
+                                               appController.models,
+                                               modelPicker.currentIndex))
                                 textRole: "label"
                                 valueRole: "value"
-                                currentIndex: root.reasoningIndex(
+                                currentIndex: AppHelpers.reasoningIndex(
+                                                  AppHelpers.selectedModel(
+                                                      appController.models,
+                                                      modelPicker.currentIndex),
                                                   appController.codingReasoningEffort)
                                 enabled: !appController.turnRunning
                                          && !appController.threadCreationPending
@@ -1448,17 +1404,17 @@ Kirigami.ApplicationWindow {
                                         }
                                         Label {
                                             text: appController.contextUsagePercent + "% · "
-                                                  + root.compactTokenCount(
+                                                  + AppHelpers.compactTokenCount(
                                                       appController.contextTokens)
                                                   + "/"
-                                                  + root.compactTokenCount(
+                                                  + AppHelpers.compactTokenCount(
                                                       appController.modelContextWindow)
                                                   + " context used"
                                             font.bold: true
                                         }
                                         Label {
                                             text: "Total processed: "
-                                                  + root.compactTokenCount(
+                                                  + AppHelpers.compactTokenCount(
                                                       appController.totalProcessedTokens)
                                                   + " tokens"
                                             opacity: 0.65
